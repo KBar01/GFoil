@@ -271,10 +271,10 @@ Real get_Ret(const Real th, const Real ds, const Real ue, const Param&param, Rea
         }
     }
     else {
-        Ret_U[0] = ue/param.mu0;
+        Ret_U[0] = param.rho0*ue/param.mu0;
         Ret_U[1] = 0;
         Ret_U[2] = 0;
-        Ret_U[3] = th/param.mu0 ;
+        Ret_U[3] = param.rho0*th/param.mu0 ;
     }
 
     return Ret ;
