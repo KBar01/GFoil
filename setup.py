@@ -22,15 +22,15 @@ class BuildWithCMake(build_py):
         # 2. Copy executables into the Python package
         output_bin_dir = os.path.join("gradfoil", "bin")
         os.makedirs(output_bin_dir, exist_ok=True)
-        shutil.copy(os.path.join(build_dir, "CFoil_fwd_codi"), output_bin_dir)
-        shutil.copy(os.path.join(build_dir, "CFoil_AD"), output_bin_dir)
+        shutil.copy(os.path.join(build_dir, "GFoil_fwd_codi"), output_bin_dir)
+        shutil.copy(os.path.join(build_dir, "GFoil_AD"), output_bin_dir)
         
         # 3. Continue with the normal Python build
         super().run()
 
 
 setup(
-    name="gradfoil",
+    name="GFoil",
     version="0.1.0",
     packages=find_packages(),
     cmdclass={
@@ -38,7 +38,7 @@ setup(
     },
     include_package_data=True,
     package_data={
-        'gradfoil': ['bin/*'],
+        'GFoil': ['bin/*'],
     },
     install_requires=[],
     python_requires=">=3.7",

@@ -8,8 +8,8 @@ from .inputs import Aerofoil, Acoustics, OperatingConds, WPSinfo
 
 # Dynamically locate the installed executable path (in gradfoil/bin/)
 BIN_DIR = os.path.join(os.path.dirname(__file__), "bin")
-EXEC_FWD_codi = os.path.join(BIN_DIR, "CFoil_fwd_codi")
-EXEC_AD = os.path.join(BIN_DIR, "CFoil_AD")
+EXEC_FWD_codi = os.path.join(BIN_DIR, "GFoil_fwd_codi")
+EXEC_AD = os.path.join(BIN_DIR, "GFoil_AD")
 
 
 

@@ -1,7 +1,7 @@
 
 
 cmake_minimum_required(VERSION 3.14)
-project(gradFoil)
+project(GFoil)
 
 set(CMAKE_CXX_STANDARD 17)
 
@@ -44,16 +44,16 @@ set(NOISE_INCLUDES_FWD ${PROJECT_SOURCE_DIR}/src/noise_includes)
 file(GLOB_RECURSE SOURCES src/*.cpp)
 list(REMOVE_ITEM SOURCES "${CMAKE_SOURCE_DIR}/src/main.cpp")
 
-add_executable(CFoil_fwd_codi src/main.cpp ${SOURCES})
-target_link_libraries(CFoil_fwd_codi PRIVATE Eigen3::Eigen CoDiPack nlohmann_json::nlohmann_json)
+add_executable(GFoil_fwd_codi src/main.cpp ${SOURCES})
+target_link_libraries(GFoil_fwd_codi PRIVATE Eigen3::Eigen CoDiPack nlohmann_json::nlohmann_json)
 
-target_include_directories(CFoil_fwd_codi PRIVATE
+target_include_directories(GFoil_fwd_codi PRIVATE
  ${COMMON_INCLUDES_FWD}
  ${NOISE_INCLUDES_FWD}
  ${codipack_SOURCE_DIR}/include
 )
 
-target_compile_definitions(CFoil_fwd_codi PRIVATE
+target_compile_definitions(GFoil_fwd_codi PRIVATE
   -DUSE_CODIPACK
   -DCODI_EnableEigen
   -DFWD_CODI_VERSION
@@ -61,7 +61,7 @@ target_compile_definitions(CFoil_fwd_codi PRIVATE
 )
 
 if(CMAKE_BUILD_TYPE STREQUAL "Release")
-  target_compile_options(CFoil_fwd_codi PRIVATE 
+  target_compile_options(GFoil_fwd_codi PRIVATE 
     -O2
     -fno-fast-math
   )
@@ -71,21 +71,21 @@ endif()
 
 set(COMMON_INCLUDES_AD ${PROJECT_SOURCE_DIR}/srcAD/include)
 set(NOISE_INCLUDES_AD ${PROJECT_SOURCE_DIR}/srcAD/noise_includes)
-add_executable(CFoil_AD srcAD/main.cpp srcAD/error_package.cpp)
-target_link_libraries(CFoil_AD PRIVATE Eigen3::Eigen CoDiPack nlohmann_json::nlohmann_json)
-target_include_directories(CFoil_AD PRIVATE
+add_executable(GFoil_AD srcAD/main.cpp srcAD/error_package.cpp)
+target_link_libraries(GFoil_AD PRIVATE Eigen3::Eigen CoDiPack nlohmann_json::nlohmann_json)
+target_include_directories(GFoil_AD PRIVATE
  ${COMMON_INCLUDES_AD}
  ${NOISE_INCLUDES_AD}
  ${codipack_SOURCE_DIR}/include
 )
-target_compile_definitions(CFoil_AD PRIVATE
+target_compile_definitions(GFoil_AD PRIVATE
   -DUSE_CODIPACK
   -DCODI_EnableEigen
   -DAD_VERSION
   -DDO_BL_GRADIENT=${DO_BL_GRADIENT_DEFINE}
 )
 if(CMAKE_BUILD_TYPE STREQUAL "Release")
-  target_compile_options(CFoil_AD PRIVATE 
+  target_compile_options(GFoil_AD PRIVATE 
     -O2
     -fno-fast-math
   )
