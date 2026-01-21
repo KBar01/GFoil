@@ -61,7 +61,12 @@ void calc_WPS_Kamruzzaman(Real theta,
     */
 
     Real H = deltaS/theta ;
-    Real beta_c = std::max((theta/tauWall)*(dpdx),-0.5);
+    
+    Real Cf = tauWall / (0.5*Ue*Ue*rho) ;
+    Real lambda_ = std::sqrt(2.0/Cf);
+    Real G = lambda_ * (1.0 - (1.0/H)) ;
+
+    Real beta_c = ((G+1.7) / 6.1)*((G+1.7) / 6.1) - 1.81 ;
     Real Pi = 0.227;
     if (beta_c > -0.5){
         Pi = 0.8*std::pow(beta_c+0.5, 0.75);
@@ -71,7 +76,7 @@ void calc_WPS_Kamruzzaman(Real theta,
     Real m = 0.5*std::pow(H/1.31, 0.3);
     Real a = 0.45*(1.75*std::pow(Pi*Pi*beta_c*beta_c, m) + 15);
     Real u_t = std::sqrt(tauWall/rho);
-    Real Rt = (deltaS/Ue) / (nu/(u_t*u_t));
+    Real Rt = (deltaS * u_t * u_t) / (nu*Ue);
     Real B3 = std::pow(1.15*Rt, -2.0/7.0);
    
     Real SS   = Ue / (tauWall*tauWall*deltaS);
@@ -230,7 +235,7 @@ void Integral_Length_scale(
     for (int i = 0; i < NblPoints; ++i)
     {
         l_mix[i] = (0.085 * delta * std::tanh( (k*y[i]) / (0.085*delta))) /
-                        std::sqrt( std::pow(1+B*(y[i]/delta), 6.0) );
+                        std::sqrt(1 + B*std::pow((y[i]/delta), 6.0));
         
         L2[i] = l_mix[i] / 0.41 ;
     }
@@ -258,6 +263,7 @@ void Energy_density_spectrum(
     }
 }
 
+
 template<typename Real>
 void calc_WPS_TNO(
     const Real delta,
@@ -284,7 +290,7 @@ void calc_WPS_TNO(
     // Compute shear velocity and min y from target y+
     Real u_t = std::sqrt(tauWall / rho);
 
-    const Real yplus_target = 1.0;  
+    const Real yplus_target = 3.0;  
     Real y_min = yplus_target * nu / u_t;
 
     
