@@ -424,6 +424,7 @@ void residual_transition(
 
 }
 
+/*
 template<typename Real>
 void residual_transition_forced(
     const Real* U1,
@@ -483,5 +484,94 @@ void residual_transition_forced(
     for (int i = 0; i < 3; ++i){
         R[i] = Rl[i] + Rt[i];
     }
+
+}
+*/
+
+template<typename Real>
+void residual_transition_forced(
+    const Real* U1,
+    const Real* U2,
+    const Real x1,
+    const Real x2,
+    const Param<Real>& param,
+    const Real transPos,
+    Real (&R)[3]) {
+
+    const Real dx = x2 - x1;
+
+    // ----------------------------
+    // Interpolate transition state (EXCEPT amplification)
+    // ----------------------------
+    Real xt = transPos;
+
+    Real w2 = (xt - x1) / dx;
+    Real w1 = 1.0 - w2;
+
+    Real Ut[4];
+    for (int i = 0; i < 4; ++i)
+        Ut[i] = w1*U1[i] + w2*U2[i];
+
+    // ----------------------------
+    // Solve for amplification A_t
+    // ----------------------------
+    Real Utl[4];
+    for (int i = 0; i < 4; ++i)
+        Utl[i] = Ut[i];
+
+    Real A_t = Ut[2]; // initial guess
+
+    Real Rl[3], Rl_U[24], Rl_x[6];
+
+    for (int iter = 0; iter < 10; ++iter) {
+
+        Utl[2] = A_t;
+
+        residual_station(U1, Utl, x1, xt,
+                            0.0, 0.0, false, false, false,
+                            param, Rl, Rl_U, Rl_x);
+
+        Real F = Rl[2];
+
+        // derivative wrt A_t (Utl[2])
+        Real dF = Rl_U[colMajorIndex(2, 2+4, 3)];
+
+        if (std::abs(F) < 1e-10) break;
+
+        A_t -= F / dF;
+    }
+
+    Utl[2] = A_t;
+
+
+    // Turbulent state (same as before)
+    // ----------------------------
+    Real Utt[4];
+    for (int i = 0; i < 4; ++i)
+        Utt[i] = Utl[i];
+
+    Real cttr, cttr_Ut[4]={0};
+    cttr = get_cttr(Utl[0],Utl[1],Utl[2],Utl[3],true,param,cttr_Ut);
+    Utt[2] = cttr;
+
+    // ----------------------------
+    // Residuals
+    // ----------------------------
+    Real Rt[3], Rt_U[24], Rt_x[6];
+
+    //residual_station(U1, Utl, x1, xt,
+    //                 0.0, 0.0, false, false, false,
+    //                 param, Rl, Rl_U, Rl_x);
+
+    residual_station(Utt, U2, xt, x2,
+                        0.0, 0.0, false, true, false,
+                        param, Rt, Rt_U, Rt_x);
+
+    for (int i = 0; i < 3; ++i)
+        R[i] = Rl[i] + Rt[i];
+
+    // ----------------------------
+    // (Jacobian assembly same as your working version)
+    // ----------------------------
 
 }

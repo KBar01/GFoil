@@ -958,7 +958,7 @@ void residual_transition(
     cnp::hstack<3,3>(R_x1,R_x2,R_x) ;
 }
 
-
+/*
 void residual_transition_forced(
     const Real* U1,
     const Real* U2,
@@ -996,6 +996,25 @@ void residual_transition_forced(
         Ut[i] = w1*U1[i] + w2*U2[i];
     }
     
+    // Setting Ut[2] to what it should be for 0 residual ::
+    // ----------------------------------------------------
+    Real Ramp_Utamp;
+    for (int iter=0; iter <10 ++ iter){
+        
+        Real Rtemp[3], Rtemp_U[24], Rtemp_x[6];
+        residual_station(U1, Ut, x1, xt,
+                         0.0, 0.0, false, false, false,
+                         param, Rtemp, Rtemp_U, Rtemp_x);
+
+        if (std::abs(Rtemp[2]) < 1e-10){
+            break;
+        }
+
+        Ut[2] -= (Rtemp[2] / Rtemp_U[colMajorIndex(2, 2+4, 3)]);
+    }
+    
+
+
     // gradient of how transition states change wrt starting and ending locations (linear variation across panel)
     Real Ut_x1[4]={0}, Ut_x2[4]={0};
     for (int i = 0; i < 4; ++i) {
@@ -1003,7 +1022,6 @@ void residual_transition_forced(
         Ut_x2[i] = (U2[i]-U1[i]) * (-w2) / dx;
     }
     
-
     // gradient of transition state wrt start and end states (again linear interp across)
     Real Ut_U1[16]={0}, Ut_U2[16]={0};
     for (int i = 0; i < 4; ++i) {
@@ -1032,7 +1050,6 @@ void residual_transition_forced(
         }
     }
     
-
     // We dont care about the laminar amplicifcation growth at transition as we force it, so remove 
     // residuals for that in Utl
     Utl_x1[2] = 0.0;
@@ -1055,7 +1072,6 @@ void residual_transition_forced(
         Utt_U1[colMajorIndex(2,j,4)] = cttr_Ut[j] * w1;
         Utt_U2[colMajorIndex(2,j,4)] = cttr_Ut[j] * w2;
     }
-    
     
 
     // using dUtt/dx1 [2,:] = dot(dcttr/dUt, dUt/dx1)
@@ -1134,6 +1150,260 @@ void residual_transition_forced(
     cnp::matmat_mul<3,4,1>(Rt_Utt,Utt_x1,tmp2); cnp::add_inplace<3>(R_x1,tmp2);
 
     cnp::add_inplace<3>(R_x2,Rt_xCol1);
+    cnp::matmat_mul<3,4,1>(Rl_Utl,Utl_x2,tmp2); cnp::add_inplace<3>(R_x2,tmp2);
+    cnp::matmat_mul<3,4,1>(Rt_Utt,Utt_x2,tmp2); cnp::add_inplace<3>(R_x2,tmp2);
+
+    cnp::hstack<3,3>(R_x1,R_x2,R_x) ;
+}
+*/
+
+void residual_transition_forced(
+    const Real* U1,
+    const Real* U2,
+    const Real x1,
+    const Real x2,
+    const Param& param,
+    const Real transPos,
+    Real (&R)[3],
+    Real (&R_U)[24],
+    Real (&R_x)[6]
+) {
+
+    const Real dx = x2 - x1;
+
+    // ----------------------------
+    // Interpolate transition state (EXCEPT amplification)
+    // ----------------------------
+    Real xt = transPos;
+
+    Real w2 = (xt - x1) / dx;
+    Real w1 = 1.0 - w2;
+
+    Real Ut[4];
+    for (int i = 0; i < 4; ++i)
+        Ut[i] = w1*U1[i] + w2*U2[i];
+
+    // ----------------------------
+    // Solve for amplification A_t
+    // ----------------------------
+    Real Utl[4];
+    for (int i = 0; i < 4; ++i)
+        Utl[i] = Ut[i];
+
+    Real A_t = Ut[2]; // initial guess
+
+    Real Rl[3], Rl_U[24], Rl_x[6];
+
+    for (int iter = 0; iter < 10; ++iter) {
+
+        Utl[2] = A_t;
+
+        residual_station(U1, Utl, x1, xt,
+                         0.0, 0.0, false, false, false,
+                         param, Rl, Rl_U, Rl_x);
+
+        Real F = Rl[2];
+
+        // derivative wrt A_t (Utl[2])
+        Real dF = Rl_U[colMajorIndex(2, 2+4, 3)];
+
+        if (std::abs(F) < 1e-10) break;
+
+        A_t -= F / dF;
+    }
+
+    Utl[2] = A_t;
+
+    // ----------------------------
+    // Compute sensitivities of A_t
+    // ----------------------------
+    Real dF_dA = Rl_U[colMajorIndex(2, 2+4, 3)];
+
+    Real dAt_dU1[4] = {0};
+    Real dAt_dU2[4] = {0};
+    Real dAt_dx1 = 0.0;
+    Real dAt_dx2 = 0.0;
+
+    for (int j = 0; j < 4; ++j) {
+
+        Real dF_dU1 = Rl_U[colMajorIndex(2, j, 3)];
+        Real dF_dUtl = Rl_U[colMajorIndex(2, j+4, 3)];
+
+        dAt_dU1[j] = -(dF_dU1 + dF_dUtl * w1) / dF_dA;
+        dAt_dU2[j] = -(dF_dUtl * w2) / dF_dA;
+    }
+    
+    // dF/dx
+    // compute dUtl/dx first (before overriding row 2)
+    Real dUtl_dx1_base[4], dUtl_dx2_base[4];
+
+    for (int i = 0; i < 4; ++i) {
+        dUtl_dx1_base[i] = (U2[i]-U1[i]) * (w2 - 1) / dx;
+        dUtl_dx2_base[i] = (U2[i]-U1[i]) * (-w2) / dx;
+    }
+
+    Real dF_dx1 = Rl_x[2];
+    Real dF_dx2 = Rl_x[2+3];
+
+    // add chain contribution
+    for (int k = 0; k < 4; ++k) {
+        Real dF_dUtl_k = Rl_U[colMajorIndex(2, k+4, 3)];
+
+        dF_dx1 += dF_dUtl_k * dUtl_dx1_base[k];
+        dF_dx2 += dF_dUtl_k * dUtl_dx2_base[k];
+    }
+
+    dAt_dx1 = - dF_dx1 / dF_dA;
+    dAt_dx2 = - dF_dx2 / dF_dA;
+
+    // ----------------------------
+    // Build Utl derivatives
+    // ----------------------------
+    Real Utl_U1[16] = {0}, Utl_U2[16] = {0};
+
+    for (int i = 0; i < 4; ++i) {
+        Utl_U1[colMajorIndex(i,i,4)] = w1;
+        Utl_U2[colMajorIndex(i,i,4)] = w2;
+    }
+
+    // override amplification row
+    for (int j = 0; j < 4; ++j) {
+        Utl_U1[colMajorIndex(2,j,4)] = dAt_dU1[j];
+        Utl_U2[colMajorIndex(2,j,4)] = dAt_dU2[j];
+    }
+
+    // x sensitivities
+    Real Utl_x1[4] = {0}, Utl_x2[4] = {0};
+
+    for (int i = 0; i < 4; ++i) {
+        Utl_x1[i] = (U2[i]-U1[i]) * (w2 - 1) / dx;
+        Utl_x2[i] = (U2[i]-U1[i]) * (-w2) / dx;
+    }
+
+    Utl_x1[2] = dAt_dx1;
+    Utl_x2[2] = dAt_dx2;
+
+    // ----------------------------
+    // Turbulent state (same as before)
+    // ----------------------------
+    Real Utt[4];
+    for (int i = 0; i < 4; ++i)
+        Utt[i] = Utl[i];
+
+    Real cttr, cttr_Ut[4]={0};
+    cttr = get_cttr(Utl[0],Utl[1],Utl[2],Utl[3],true,param,cttr_Ut);
+    Utt[2] = cttr;
+
+    Real Utt_U1[16] = {0}, Utt_U2[16] = {0};
+    Real Utt_x1[4] = {0}, Utt_x2[4] = {0};
+
+    // start from Utl derivatives
+    for (int i = 0; i < 16; ++i) {
+        Utt_U1[i] = Utl_U1[i];
+        Utt_U2[i] = Utl_U2[i];
+    }
+
+    for (int j = 0; j < 4; ++j) {
+
+        Utt_U1[colMajorIndex(2,j,4)] = 0.0;
+        Utt_U2[colMajorIndex(2,j,4)] = 0.0;
+
+        for (int k = 0; k < 4; ++k) {
+            Utt_U1[colMajorIndex(2,j,4)] += cttr_Ut[k] * Utl_U1[colMajorIndex(k,j,4)];
+            Utt_U2[colMajorIndex(2,j,4)] += cttr_Ut[k] * Utl_U2[colMajorIndex(k,j,4)];
+        }
+    }
+
+    // start by copying Utl_x
+    for (int i = 0; i < 4; ++i) {
+        Utt_x1[i] = Utl_x1[i];
+        Utt_x2[i] = Utl_x2[i];
+    }
+
+    // override amplification row (index 2)
+    Utt_x1[2] = 0.0;
+    Utt_x2[2] = 0.0;
+
+    for (int k = 0; k < 4; ++k) {
+        Utt_x1[2] += cttr_Ut[k] * Utl_x1[k];
+        Utt_x2[2] += cttr_Ut[k] * Utl_x2[k];
+    }
+
+    // ----------------------------
+    // Residuals
+    // ----------------------------
+    Real Rt[3], Rt_U[24], Rt_x[6];
+
+    //residual_station(U1, Utl, x1, xt,
+    //                 0.0, 0.0, false, false, false,
+    //                 param, Rl, Rl_U, Rl_x);
+
+    residual_station(Utt, U2, xt, x2,
+                     0.0, 0.0, false, true, false,
+                     param, Rt, Rt_U, Rt_x);
+
+    for (int i = 0; i < 3; ++i)
+        R[i] = Rl[i] + Rt[i];
+
+    // ----------------------------
+    // (Jacobian assembly same as your working version)
+    // ----------------------------
+
+    // R_U = dRl/dU1 + dRl/dU2 + dRt/dU1 + dRt/dU2
+    // Compute contributions using chain rule with intermediate derivatives
+
+    Real Rl_U1[12]={0}, Rl_Utl[12]={0};
+    Real Rt_Utt[12]={0}, Rt_U2[12]={0};
+    
+    // do with pointers ??
+    for (int r = 0; r < 3; ++r) {
+        for (int c = 0; c < 4; ++c){
+            Rl_U1[colMajorIndex(r,c,3)]    = Rl_U[colMajorIndex(r, c, 3)];
+            Rl_Utl[colMajorIndex(r,c,3)]   = Rl_U[colMajorIndex(r, c+4, 3)];
+            Rt_Utt[colMajorIndex(r,c,3)]   = Rt_U[colMajorIndex(r, c, 3)];
+            Rt_U2[colMajorIndex(r,c,3)]    = Rt_U[colMajorIndex(r,c+4,3)];
+        }
+    }
+
+    // R_x = dRl/dx1 + dRl/dx2 + dRt/dx1 + dRt/dx2
+    for (int i = 0; i < 3; ++i) {
+        R_x[i] = Rl_x[i]   + Rt_x[i];        // dR/dx1
+        R_x[i+3] = Rl_x[i+3] + Rt_x[i+3];    // dR/dx2
+    }
+
+
+    Real R_U1[12] = {0},R_U2[12] = {0},tmp1[12]={0};
+
+    // Calculate R_U1
+    cnp::add_inplace<12>(R_U1,Rl_U1);
+    cnp::matmat_mul<3,4,4>(Rl_Utl, Utl_U1, tmp1); cnp::add_inplace<12>(R_U1,tmp1);
+    const Real* Rl_xCol1 = Rl_x + 3;  // Rl_x[:,1]
+    cnp::matmat_mul<3,4,4>(Rt_Utt,Utt_U1, tmp1); cnp::add_inplace<12>(R_U1,tmp1);
+  
+    
+    // Calculate R_U2
+    cnp::add_inplace<12>(R_U2,Rt_U2);
+    cnp::matmat_mul<3,4,4>(Rl_Utl,Utl_U2, tmp1); cnp::add_inplace<12>(R_U2,tmp1);
+    const Real* Rt_xCol1 = Rt_x + 3;  // Rl_x[:,1]
+    cnp::matmat_mul<3,4,4>(Rt_Utt,Utt_U2, tmp1); cnp::add_inplace<12>(R_U2,tmp1);
+
+    cnp::hstack<12,12>(R_U1,R_U2,R_U); // R_U
+
+    // do R_x: 
+    Real R_x1[3]={0},R_x2[3]={0};
+    Real tmp2[3]={0};
+
+    cnp::add_inplace<3>(R_x1,Rl_x);
+    cnp::add_inplace<3>(R_x1, Rt_x);
+    //cnp::scalar_mul<3>(Rl_xCol1,xt_x1,tmp2); cnp::add_inplace<3>(R_x1,tmp2);
+    //cnp::scalar_mul<3>(Rt_x,xt_x1,tmp2); cnp::add_inplace<3>(R_x1,tmp2);
+    cnp::matmat_mul<3,4,1>(Rl_Utl,Utl_x1,tmp2); cnp::add_inplace<3>(R_x1,tmp2);
+    cnp::matmat_mul<3,4,1>(Rt_Utt,Utt_x1,tmp2); cnp::add_inplace<3>(R_x1,tmp2);
+
+    cnp::add_inplace<3>(R_x2, Rl_xCol1);
+    cnp::add_inplace<3>(R_x2, Rt_xCol1);
+    //cnp::scalar_mul<3>(Rl_xCol1,xt_x2,tmp2); cnp::add_inplace<3>(R_x2,tmp2);
+    //cnp::scalar_mul<3>(Rt_x,xt_x2,tmp2); cnp::add_inplace<3>(R_x2,tmp2);
     cnp::matmat_mul<3,4,1>(Rl_Utl,Utl_x2,tmp2); cnp::add_inplace<3>(R_x2,tmp2);
     cnp::matmat_mul<3,4,1>(Rt_Utt,Utt_x2,tmp2); cnp::add_inplace<3>(R_x2,tmp2);
 
