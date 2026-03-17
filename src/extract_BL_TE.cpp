@@ -249,8 +249,8 @@ void interpolate_at_95_both_surfaces(const Real* xcoords, const Real* states, co
             // simplest is to factor your current body into a helper,
             // but here we inline the code you already have:
             // -------------------------------------------------------
-            int foundIndexBot = find_interp_position(xcoords, 0, 30, xSamples[i]);
-            int foundIndexTop = find_interp_position(xcoords, Ncoords - 30, Ncoords - 1, xSamples[i]);
+            int foundIndexBot = find_interp_position(xcoords, 0, 98, xSamples[i]);
+            int foundIndexTop = find_interp_position(xcoords, Ncoords - 98, Ncoords - 1, xSamples[i]);
 
             int topIdx[4] = {0}, botIdx[4] = {0}, topN, botN;
             get_nodes(foundIndexTop, foundIndexBot, xSamples[i], topIdx, topN, botIdx, botN, vsol);
@@ -318,8 +318,8 @@ void interpolate_at_95_both_surfaces(const Real* xcoords, const Real* states, co
     /* State order: theta, delta*, tau_max, Ue, dpdx, tau_wall, delta 99% thickness*/
     
     // find index of node before sampling position (top and bottom)
-    int foundIndexBot = find_interp_position(xcoords,0,195,x_target);
-    int foundIndexTop = find_interp_position(xcoords,Ncoords-195, Ncoords-1,x_target);
+    int foundIndexBot = find_interp_position(xcoords,0,98,x_target);
+    int foundIndexTop = find_interp_position(xcoords,Ncoords-98, Ncoords-1,x_target);
 
     // find the indexes to to the interpolation over 
     int topIdx[4] = {0},botIdx[4] = {0}, topN, botN ;
