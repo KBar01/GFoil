@@ -133,8 +133,6 @@ void solve_sys_single(int* R_V_cols, int* R_V_rows, double* RV_vals, const int R
     x_eigen = x;
 }
 
-
-
 int main(){
 
 

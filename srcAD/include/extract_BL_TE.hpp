@@ -268,8 +268,8 @@ void interpolate_at_95_both_surfaces(const Real* xcoords, const Real* states, co
             // simplest is to factor your current body into a helper,
             // but here we inline the code you already have:
             // -------------------------------------------------------
-            int foundIndexBot = find_interp_position(xcoords, 0, 30, xSamples[i]);
-            int foundIndexTop = find_interp_position(xcoords, Ncoords - 30, Ncoords - 1, xSamples[i]);
+            int foundIndexBot = find_interp_position(xcoords, 0, 195, xSamples[i]);
+            int foundIndexTop = find_interp_position(xcoords, Ncoords - 195, Ncoords - 1, xSamples[i]);
 
             int topIdx[4] = {0}, botIdx[4] = {0}, topN, botN;
             get_nodes(foundIndexTop, foundIndexBot, xSamples[i], topIdx, topN, botIdx, botN, turb);
