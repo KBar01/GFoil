@@ -129,7 +129,7 @@ void residual_station_full(
     const bool wake,
     const bool turb,
     const bool simi,
-    const Param&param,
+    const Param<Real>&param,
     Real (&R)[3],
     Real (&R_U)[24],
     Real (&R_x)[6])
