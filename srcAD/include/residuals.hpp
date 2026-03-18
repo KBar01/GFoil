@@ -434,54 +434,73 @@ void residual_transition_forced(
     const Real transPos,
     Real (&R)[3]) {
 
+    const int nNewton = 20;
+
     const Real dx = x2 - x1;
-    Real ncrit = param.ncrit;
+    const Real xt = transPos;
+    const Real dxt = xt - x1;
 
-    // Extract elements of BL States
-    Real th1 = U1[0],th2 = U2[0];
-    Real ds1 = U1[1],ds2 = U2[1];
-    Real sa1 = U1[2],sa2 = U2[2];
-    Real ue1 = U1[3],ue2 = U2[3];
-    Real Ut[4]={0}; // state at transiton (initially laminar)
-    
-    // position is fixed, giving fixed weightings 
-    Real xt = transPos;
-   
-    // Fixed weights and interpolated state
-    Real w2 = (xt - x1) / dx;
-    Real w1 = 1.0 - w2;
+    const Real w2 = (xt - x1) / dx;
+    const Real w1 = 1.0 - w2;
 
-    for (int i = 0; i < 4; ++i){
-        Ut[i] = w1*U1[i] + w2*U2[i];
+    // transition state with implicit amplification
+    Real Ut[4] = {0};
+    Ut[0] = w1*U1[0] + w2*U2[0];
+    Ut[1] = w1*U1[1] + w2*U2[1];
+    Ut[3] = w1*U1[3] + w2*U2[3];
+
+
+    // solve for sat = Ut[2] from Ramp = 0
+    Real sat = w1*U1[2] + w2*U2[2];   // initial guess
+
+    Real damp1 = 0.0, dampt = 0.0, damp = 0.0;
+    Real damp1_U1[4] = {0}, dampt_Ut[4] = {0}, damp_U[8] = {0};
+    Real Ramp = 0.0, Ramp_sat = 0.0;
+
+    for (int iNewton = 0; iNewton < nNewton; ++iNewton) {
+        Ut[2] = sat;
+
+        damp1 = get_damp(U1[0], U1[1], U1[2], U1[3], param, damp1_U1);
+        dampt = get_damp(Ut[0], Ut[1], Ut[2], Ut[3], param, dampt_Ut);
+        damp  = upwind_half(damp1, damp1_U1, dampt, dampt_Ut, damp_U);
+
+        Ramp = sat - U1[2] - damp*dxt;
+        Ramp_sat = 1.0 - dxt * damp_U[4 + 2]; // d Ramp d / Ut[2]
+
+        Real dsat = -Ramp / Ramp_sat;
+
+        Real dmax = 0.5;  // optional safeguard
+        if (std::abs(dsat) > dmax) dsat *= dmax / std::abs(dsat);
+
+        sat += dsat;
+
+        if (std::abs(Ramp) < 1e-12) break;
     }
-    
-    // Copy to Utl, Utt (laminar and turbulent transition states)
+
+    Ut[2] = sat;
+
+    // laminar and turbulent states at transition
     Real Utl[4] = {0}, Utt[4] = {0};
 
-    // coptying lam/turb states at the transition point
     for (int i = 0; i < 4; ++i) {
         Utl[i] = Ut[i];
         Utt[i] = Ut[i];
     }
-    
-    // initialise the turb state with value of shear stress coeff (note Ut[2] has no effect)
-    Real cttr, cttr_Ut[4]={0};
-    cttr = get_cttr(Ut[0],Ut[1],Ut[2],Ut[3],true,param,cttr_Ut);
+
+    // turbulent shear initialization
+    Real cttr = 0.0, cttr_Ut[4] = {0};
+    cttr = get_cttr(Ut[0], Ut[1], Ut[2], Ut[3], true, param, cttr_Ut);
     Utt[2] = cttr;
 
-   
-    // residual for laminar section (remember that dont care about amplifcation residual here)
-    Real Rl[3]={0};
+    // laminar residual on [x1, xt]
+    Real Rl[3] = {0};
     residual_station(U1, Utl, x1, xt, Real(0.0), Real(0.0), false, false, false, param, Rl);
-    Rl[2] = 0.0;
-    
-    // residual for the turbulent section, here residual for shear stress matters
-    Real Rt[3]={0};
+
+    // turbulent residual on [xt, x2]
+    Real Rt[3] = {0};
     residual_station(Utt, U2, xt, x2, Real(0.0), Real(0.0), false, true, false, param, Rt);
 
-    // sum residuals for total panel residuals
-    for (int i = 0; i < 3; ++i){
+    for (int i = 0; i < 3; ++i) {
         R[i] = Rl[i] + Rt[i];
     }
-
 }
