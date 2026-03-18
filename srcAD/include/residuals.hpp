@@ -820,13 +820,14 @@ void residual_transition_forced(
     Real A_t = Ut[2]; // initial guess
 
     Real Rl[3], Rl_U[24], Rl_x[6];
-
+    const Real aux = 0.0;
     for (int iter = 0; iter < 10; ++iter) {
 
         Utl[2] = A_t;
-
+        
+        
         residual_station_full(U1, Utl, x1, xt,
-                            0.0, 0.0, false, false, false,
+                            aux, aux, false, false, false,
                             param, Rl,Rl_U,Rl_x);
 
         Real F = Rl[2];
@@ -862,7 +863,7 @@ void residual_transition_forced(
     //                 param, Rl, Rl_U, Rl_x);
 
     residual_station(Utt, U2, xt, x2,
-                        0.0, 0.0, false, true, false,
+                        aux, aux, false, true, false,
                         param, Rt);
 
     for (int i = 0; i < 3; ++i)
