@@ -330,8 +330,14 @@ void residual_station_full(
     Real cfxt1_x, cfxt2_x, cfxtm_x;
     cfxt1 = get_cfxt(th1,ds1,sa1,ue1,x1,turb,wake,param, cfxt1_U, cfxt1_x);
     cfxt2 = get_cfxt(th2,ds2,sa2,ue2,x2,turb,wake,param, cfxt2_U, cfxt2_x);
-    cfxtm = get_cfxt(0.5*(th1+th2), 0.5*(ds1+ds2), 0.5*(sa1+sa2), 0.5*(ue1+ue2),
-                     0.5*(x1+x2),turb,wake,param,cfxtm_U,cfxtm_x);
+    
+    Real th05 = 0.5*(th1+th2);
+    Real ds05 =  0.5*(ds1+ds2);
+    Real sa05 =  0.5*(sa1+sa2);
+    Real ue05 = 0.5*(ue1+ue2);
+    Real x05 = 0.5*(x1+x2);
+    cfxtm = get_cfxt(th05, ds05, sa05, ue05,
+                     x05,turb,wake,param,cfxtm_U,cfxtm_x);
     
     Real cfxt = 0.25 * cfxt1 + 0.5 * cfxtm + 0.25 * cfxt2;
     Real cfxt_U[8]={0}, cfxt_x[2]={0};
