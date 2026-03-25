@@ -259,9 +259,9 @@ def custom_spectra_run(data: customSpectrainfo):
     in_json_path = os.path.join(cwd, "input.json")
     data = {
         
-        "custWPSLower":  data.WPSLower,
-        "custWPSUpper":  data.WPSUpper,
-        "custFreq":     data.Freq,
+        "custWPSLower":  data.WPSLower.tolist(),
+        "custWPSUpper":  data.WPSUpper.tolist(),
+        "custFreq":     data.Freq.tolist(),
         "Re":            data.Re,
         "rho":           data.rho,
         "nu":            data.nu,
