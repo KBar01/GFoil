@@ -102,8 +102,10 @@ Real calc_OASPL(const Real* botStates, const Real* topStates, const Real chordSc
     }
 
     Real farfieldSpectra[Nsound] ;
+    Real FF_up[Nsound] ;
+    Real FF_down[Nsound] ;
     TE_noise_outer((Uinf/340),Uinf,X,Y,Z,chordScale/2,0.0,chordScale,S,340,rho,nu,
-                omega,WPSLower,WPSUpper,farfieldSpectra);
+                omega,WPSLower,WPSUpper,farfieldSpectra,FF_up,FF_down);
 
     // integrate S_pp over frequency:
     Real integral = 0.0;
@@ -123,16 +125,24 @@ Real calc_OASPL(const Real* botStates, const Real* topStates, const Real chordSc
         std::vector<double> wpsupper_d(Nsound);
         std::vector<double> wpslower_d(Nsound);
         std::vector<double> spectra_d(Nsound);
+
+        std::vector<double> spectra_up(Nsound);
+        std::vector<double> spectra_down(Nsound);
+        
         for (int i=0; i<Nsound; ++i){
             freq_d[i]     = Freq[i].getValue();
             wpsupper_d[i] = (WPSUpper[i].getValue())/prefSqrd;
             wpslower_d[i] = (WPSLower[i].getValue())/prefSqrd;
             spectra_d[i]  = (farfieldSpectra[i].getValue())/prefSqrd;
+            spectra_up[i]  = (FF_up[i].getValue())/prefSqrd;
+            spectra_down[i]  = (FF_down[i].getValue())/prefSqrd;
         }
         j["frequency_Hz"]        = freq_d;
         j["WPS_upper/prefSqrd"]  = wpsupper_d;
         j["WPS_lower/prefSqrd"]  = wpslower_d;
         j["FF_spectra/prefSqrd"] = spectra_d;
+        j["FF_spectra_up/prefSqrd"] = spectra_up;
+        j["FF_spectra_down/prefSqrd"] = spectra_down;
         j["OASPL_dB"]     = OASPL.getValue();
 
         std::ofstream file("WPS.json");

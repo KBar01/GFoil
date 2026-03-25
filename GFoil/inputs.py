@@ -139,3 +139,23 @@ class WPSinfo:
             arr = _as_1d_float_array(getattr(self, name), f"WPSinfo.{name}")
             arr = _require_length(arr, 2, f"WPSinfo.{name}")
             setattr(self, name, arr)
+
+
+@dataclass
+class customSpectrainfo:
+    
+    omega: np.ndarray
+    WPSUpper: np.ndarray
+    WPSLower: np.ndarray
+    Re: float
+    observerXYZ: np.ndarray
+    chord: Optional[float] = 1.0
+    span: Optional[float] = 2.0
+    rho: Optional[float] = 1.225
+    nu: Optional[float] = 1.5e-5
+
+    def __post_init__(self):
+        self.observerXYZ = _as_1d_float_array(self.observerXYZ, "WPSinfo.observerXYZ")
+        _require_length(self.observerXYZ, 3, "WPSinfo.observerXYZ")
+        self.observerXYZ = self.observerXYZ.reshape(3,)
+

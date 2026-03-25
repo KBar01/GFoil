@@ -784,7 +784,9 @@ void TE_noise_outer(
     Real (&WPS_lower)[Nsound], Real (&WPS_upper)[Nsound],
 
     // Output wall-pressure spectrum:
-    Real (&farfieldSpectra)[Nsound]
+    Real (&farfieldSpectra)[Nsound],
+    Real (&farfieldSpectra_up)[Nsound],
+    Real (&farfieldSpectra_down)[Nsound]
 )
 {
 
@@ -856,7 +858,6 @@ void TE_noise_outer(
 
 
     // far field spectra (eq 18 in R&M) :
-
     for (int i=0;i<Nsound;++i){
         
         Real term1 = std::pow((omega[i]*c*z)/(c0*2.0*2.0*M_PI*S0*S0), 2.0);
@@ -864,6 +865,8 @@ void TE_noise_outer(
         Real Spp_upper = term1*2.0*M_PI*span*I_abs2[i]*(WPS_upper[i]*l_y[i]/M_PI);
         Real Spp_lower = term1*2.0*M_PI*span*I_abs2[i]*(WPS_lower[i]*l_y[i]/M_PI);
 
+        farfieldSpectra_up[i] = Spp_upper;
+        farfieldSpectra_down[i] = Spp_lower;
         farfieldSpectra[i] = Spp_upper + Spp_lower ;
     }
 

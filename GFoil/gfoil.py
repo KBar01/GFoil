@@ -3,7 +3,7 @@ import subprocess
 import numpy as np
 import os
 from dataclasses import dataclass, field
-from .inputs import Aerofoil, Acoustics, OperatingConds, WPSinfo
+from .inputs import Aerofoil, Acoustics, OperatingConds, WPSinfo, customSpectrainfo
 
 
 # Dynamically locate the installed executable path (in gradfoil/bin/)
@@ -50,7 +50,8 @@ def standard_run(aerofoil: Aerofoil,
         "forcetrans":    force,
         "model":  acoustics.model,
         "chord": aerofoil.chord,
-        "WPSonly":0
+        "WPSonly":0,
+        "custSpectra":   0
     }
 
     # Write JSON input file
@@ -221,6 +222,7 @@ def WPS_run(data: WPSinfo):
         "model":         data.model,
         "chord":         data.chord,
         "WPSonly":       1,
+        "custSpectra":   0,
         
         # -------- TOP boundary layer states --------
         "topdstar":   data.DispThick[0],
@@ -239,6 +241,37 @@ def WPS_run(data: WPSinfo):
         "bottaumax":  data.maxShear[1],
         "botue":      data.edgeVel[1],
         "botdpdx":    data.dpdx[1]
+    }
+
+    # Write JSON input file
+    with open(in_json_path, "w") as f:
+        json.dump(data, f,indent=4)
+
+    # Run the executable for first time, no restarting, use codi version to ensure output match to AD version of code
+    initResult = subprocess.run([EXEC_FWD_codi],cwd=os.getcwd(), capture_output=True, text=True)
+    initConvergence = initResult.returncode
+    if initConvergence==1:
+        return True
+    
+
+def custom_spectra_run(data: customSpectrainfo):
+    cwd = os.getcwd()
+    in_json_path = os.path.join(cwd, "input.json")
+    data = {
+        
+        "custWPSLower":  data.WPSLower,
+        "custWPSUpper":  data.WPSUpper,
+        "custOmega":     data.omega,
+        "Re":            data.Re,
+        "rho":           data.rho,
+        "nu":            data.nu,
+        "X":             data.observerXYZ[0],
+        "Y":             data.observerXYZ[1],
+        "Z":             data.observerXYZ[2],
+        "S":             data.span,
+        "chord":         data.chord,
+        "WPSonly":       0,
+        "custSpectra":   1
     }
 
     # Write JSON input file

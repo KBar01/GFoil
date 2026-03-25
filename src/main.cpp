@@ -7,6 +7,7 @@
 #include "main_func.h"
 #include "get_funcs.h"
 #include "panel_funcs.h"
+#include "amiet.h"
 #include <chrono>
 #include <fstream>
 #include <sstream>
@@ -306,6 +307,7 @@ int main(){
     infile >> j;
 
     const int doWPSonly = j["WPSonly"].get<int>();
+    const int doCustWPS = j["custSpectra"].get<int>();
 
     if (doWPSonly){
 
@@ -352,6 +354,77 @@ int main(){
 
         Real Uinf = (Re*kinViscInf)/(chordScaling) ;
         Real OASPL = calc_OASPL(botsurf,topsurf,chordScaling,Uinf,X,Y,Z,S,kinViscInf,rhoInf,1,model);
+        return 1 ;
+    }
+
+    if (doCustWPS){
+
+        Real rhoInf = j["rho"].get<double>();
+        Real kinViscInf = j["nu"].get<double>();
+        Real chordScaling = j["chord"].get<double>();
+        Real Re = j["Re"].get<double>();
+        const Real X = j["X"].get<double>();
+        const Real Y = j["Y"].get<double>();
+        const Real Z = j["Z"].get<double>();
+        const Real S = j["S"].get<double>();
+        Real Uinf = (Re*kinViscInf)/(chordScaling) ;
+
+        Real WPSUpper[Nsound];
+        Real WPSLower[Nsound];
+        Real omega[Nsound];
+
+        for (int i=0;i<Nsound;++i){
+            WPSLower[i] = j["custWPSLower"][i].get<double>();
+            WPSUpper[i] = j["custWPSUpper"][i].get<double>();
+            omega[i]    = j["custOmega"][i].get<double>();
+        }
+        
+        Real farfieldSpectra[Nsound] ;
+        Real FF_up[Nsound] ;
+        Real FF_down[Nsound] ;
+        TE_noise_outer((Uinf/340),Uinf,X,Y,Z,chordScaling/2,0.0,chordScaling,S,340,rhoInf,kinViscInf,
+                omega,WPSLower,WPSUpper,farfieldSpectra,FF_up,FF_down);
+
+        // integrate S_pp over frequency:
+        Real integral = 0.0;
+        for (int i = 0; i < Nsound - 1; ++i) {
+            Real df = Freq[i+1] - Freq[i];
+            integral += 0.5 * (farfieldSpectra[i] + farfieldSpectra[i+1]) * 8*M_PI* df;
+        }
+
+        // Now convert to dB re 20 µPa:
+        Real pref2 = (20e-6)*(20e-6); // reference pressure squared
+        Real OASPL = 10.0 * std::log10(integral / pref2);
+        json j;
+        double prefSqrd = pref2.getValue();
+        std::vector<double> freq_d(Nsound);
+        std::vector<double> wpsupper_d(Nsound);
+        std::vector<double> wpslower_d(Nsound);
+        std::vector<double> spectra_d(Nsound);
+
+        std::vector<double> spectra_up(Nsound);
+        std::vector<double> spectra_down(Nsound);
+        
+        for (int i=0; i<Nsound; ++i){
+            freq_d[i]     = Freq[i].getValue();
+            wpsupper_d[i] = (WPSUpper[i].getValue())/prefSqrd;
+            wpslower_d[i] = (WPSLower[i].getValue())/prefSqrd;
+            spectra_d[i]  = (farfieldSpectra[i].getValue())/prefSqrd;
+            spectra_up[i]  = (FF_up[i].getValue())/prefSqrd;
+            spectra_down[i]  = (FF_down[i].getValue())/prefSqrd;
+        }
+        j["frequency_Hz"]        = freq_d;
+        j["WPS_upper/prefSqrd"]  = wpsupper_d;
+        j["WPS_lower/prefSqrd"]  = wpslower_d;
+        j["FF_spectra/prefSqrd"] = spectra_d;
+        j["FF_spectra_up/prefSqrd"] = spectra_up;
+        j["FF_spectra_down/prefSqrd"] = spectra_down;
+        j["OASPL_dB"]     = OASPL.getValue();
+
+        std::ofstream file("cutomSpectra.json");
+        file << j.dump(4);     // pretty print, 4 spaces
+        file.close();
+
         return 1 ;
     }
     else{

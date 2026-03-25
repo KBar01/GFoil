@@ -85,7 +85,9 @@ void TE_noise_outer(
     Real (&WPS_lower)[Nsound], Real (&WPS_upper)[Nsound],
 
     // Output wall-pressure spectrum:
-    Real (&farfieldSpectra)[Nsound]
+    Real (&farfieldSpectra)[Nsound],
+    Real (&farfieldSpectra_up)[Nsound],
+    Real (&farfieldSpectra_down)[Nsound]
 );
 
 #endif
