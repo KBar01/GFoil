@@ -371,12 +371,14 @@ int main(){
 
         Real WPSUpper[Nsound];
         Real WPSLower[Nsound];
+        Real Freq[Nsound];
         Real omega[Nsound];
 
         for (int i=0;i<Nsound;++i){
             WPSLower[i] = j["custWPSLower"][i].get<double>();
             WPSUpper[i] = j["custWPSUpper"][i].get<double>();
-            omega[i]    = j["custOmega"][i].get<double>();
+            Freq[i]    = j["custFreq"][i].get<double>();
+            omega[i] = Freq[i] * 2.0 * M_PI;
         }
         
         Real farfieldSpectra[Nsound] ;

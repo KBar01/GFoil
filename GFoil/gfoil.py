@@ -261,7 +261,7 @@ def custom_spectra_run(data: customSpectrainfo):
         
         "custWPSLower":  data.WPSLower,
         "custWPSUpper":  data.WPSUpper,
-        "custOmega":     data.omega,
+        "custFreq":     data.Freq,
         "Re":            data.Re,
         "rho":           data.rho,
         "nu":            data.nu,

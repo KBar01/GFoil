@@ -144,7 +144,7 @@ class WPSinfo:
 @dataclass
 class customSpectrainfo:
     
-    omega: np.ndarray
+    Freq: np.ndarray
     WPSUpper: np.ndarray
     WPSLower: np.ndarray
     Re: float
