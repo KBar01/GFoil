@@ -23,8 +23,6 @@ class BuildWithCMake(build_py):
         output_bin_dir = os.path.join("GFoil", "bin")
         os.makedirs(output_bin_dir, exist_ok=True)
         shutil.copy(os.path.join(build_dir, "GFoil_fwd_codi"), output_bin_dir)
-        shutil.copy(os.path.join(build_dir, "GFoil_AD"), output_bin_dir)
-        
         # 3. Continue with the normal Python build
         super().run()
 

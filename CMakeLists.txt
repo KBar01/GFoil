@@ -66,27 +66,3 @@ if(CMAKE_BUILD_TYPE STREQUAL "Release")
     -fno-fast-math
   )
 endif()
-
-######## the AD version ######
-
-set(COMMON_INCLUDES_AD ${PROJECT_SOURCE_DIR}/srcAD/include)
-set(NOISE_INCLUDES_AD ${PROJECT_SOURCE_DIR}/srcAD/noise_includes)
-add_executable(GFoil_AD srcAD/main.cpp srcAD/error_package.cpp)
-target_link_libraries(GFoil_AD PRIVATE Eigen3::Eigen CoDiPack nlohmann_json::nlohmann_json)
-target_include_directories(GFoil_AD PRIVATE
- ${COMMON_INCLUDES_AD}
- ${NOISE_INCLUDES_AD}
- ${codipack_SOURCE_DIR}/include
-)
-target_compile_definitions(GFoil_AD PRIVATE
-  -DUSE_CODIPACK
-  -DCODI_EnableEigen
-  -DAD_VERSION
-  -DDO_BL_GRADIENT=${DO_BL_GRADIENT_DEFINE}
-)
-if(CMAKE_BUILD_TYPE STREQUAL "Release")
-  target_compile_options(GFoil_AD PRIVATE 
-    -O2
-    -fno-fast-math
-  )
-endif()
