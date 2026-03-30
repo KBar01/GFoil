@@ -126,7 +126,7 @@ Real calc_OASPL_AD(const Real* botStates, const Real* topStates, const Real chor
     Real integral = 0.0;
     for (int i = 0; i < Nsound - 1; ++i) {
         Real df = Freq[i+1] - Freq[i];
-        integral += 0.5 * (farfieldSpectra[i] + farfieldSpectra[i+1]) * 8*M_PI* df;
+        integral += 0.5 * (farfieldSpectra[i] + farfieldSpectra[i+1]) * 2*M_PI* df;
     }
 
     // Now convert to dB re 20 µPa:
