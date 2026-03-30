@@ -169,7 +169,19 @@ double partialOutputspartialInputs(
     }
 
     interpolate_at_95_both_surfaces(xcoords,glob.U,post.cp,oper,turb,param,topsurf,botsurf,Uinf,sampleTE,chordScaling);
-    Real OASPL = calc_OASPL_AD(botsurf,topsurf,chordScaling,Uinf,X,Y,Z,S,kinViscInf,rhoInf,model);
+    //Real OASPL = calc_OASPL_AD(botsurf,topsurf,chordScaling,Uinf,X,Y,Z,S,kinViscInf,rhoInf,model);
+
+    const bool doRotation = true ;
+    Real OASPL = 0.0;
+    if (doRotation){
+
+        Real obsX = -Z*std::sin(alpha);
+        Real obsZ = Z*std::cos(alpha);
+        OASPL = calc_OASPL(botsurf,topsurf,chordScaling,Uinf,obsX,Y,obsZ,S,kinViscInf,rhoInf,doCps,model);
+    }
+    else{
+        OASPL = calc_OASPL(botsurf,topsurf,chordScaling,Uinf,X,Y,Z,S,kinViscInf,rhoInf,doCps,model);
+    }
 
     Real outputs[2] = {post.cl,OASPL} ;
 

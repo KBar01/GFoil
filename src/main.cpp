@@ -178,8 +178,23 @@ bool runCode(
         ycoords[i] = flattenedCoords[colMajorIndex(1,i,2)];
     }
 
+    
+
+
     interpolate_at_95_both_surfaces(xcoords,glob.U,post.cp,oper,vsol,param,topsurf,botsurf,Uinf,sampleTE,chordScaling);
-    Real OASPL = calc_OASPL(botsurf,topsurf,chordScaling,Uinf,X,Y,Z,S,kinViscInf,rhoInf,doCps,model);
+    
+
+    const bool doRotation = true ;
+    Real OASPL = 0.0;
+    if (doRotation){
+
+        Real obsX = -Z*std::sin(alpha);
+        Real obsZ = Z*std::cos(alpha);
+        OASPL = calc_OASPL(botsurf,topsurf,chordScaling,Uinf,obsX,Y,obsZ,S,kinViscInf,rhoInf,doCps,model);
+    }
+    else{
+        OASPL = calc_OASPL(botsurf,topsurf,chordScaling,Uinf,X,Y,Z,S,kinViscInf,rhoInf,doCps,model);
+    }
 
     // check OASPL validity
     if (std::isnan(OASPL) || std::isinf(OASPL)) {
@@ -315,6 +330,8 @@ int main(){
         Real kinViscInf = j["nu"].get<double>();
         Real chordScaling = j["chord"].get<double>();
         Real Re = j["Re"].get<double>();
+        Real alphad - j["alpha_degrees"].get<double>();
+        Real alpha = (alphad/180)*M_PI;
         const Real X = j["X"].get<double>();
         const Real Y = j["Y"].get<double>();
         const Real Z = j["Z"].get<double>();
@@ -353,7 +370,19 @@ int main(){
         botsurf[6] = botdelta;
 
         Real Uinf = (Re*kinViscInf)/(chordScaling) ;
-        Real OASPL = calc_OASPL(botsurf,topsurf,chordScaling,Uinf,X,Y,Z,S,kinViscInf,rhoInf,1,model);
+        //Real OASPL = calc_OASPL(botsurf,topsurf,chordScaling,Uinf,X,Y,Z,S,kinViscInf,rhoInf,1,model);
+
+        const bool doRotation = true ;
+        if (doRotation){
+
+            Real obsX = -Z*std::sin(alpha);
+            Real obsZ = Z*std::cos(alpha);
+            Real OASPL = calc_OASPL(botsurf,topsurf,chordScaling,Uinf,obsX,Y,obsZ,S,kinViscInf,rhoInf,1,model);
+        }
+        else{
+            Real OASPL = calc_OASPL(botsurf,topsurf,chordScaling,Uinf,X,Y,Z,S,kinViscInf,rhoInf,1,model);
+        }
+
         return 1 ;
     }
 
@@ -368,6 +397,8 @@ int main(){
         const Real Z = j["Z"].get<double>();
         const Real S = j["S"].get<double>();
         Real Uinf = (Re*kinViscInf)/(chordScaling) ;
+        Real alphad - j["alpha_degrees"].get<double>();
+        Real alpha = (alphad/180)*M_PI;
 
         Real WPSUpper[Nsound];
         Real WPSLower[Nsound];
@@ -384,9 +415,21 @@ int main(){
         Real farfieldSpectra[Nsound] ;
         Real FF_up[Nsound] ;
         Real FF_down[Nsound] ;
-        TE_noise_outer((Uinf/340),Uinf,X,Y,Z,chordScaling/2,0.0,chordScaling,S,340,rhoInf,kinViscInf,
-                omega,WPSLower,WPSUpper,farfieldSpectra,FF_up,FF_down);
+        
+        const bool doRotation = true ;
+        if (doRotation){
 
+            Real obsX = -Z*std::sin(alpha);
+            Real obsZ = Z*std::cos(alpha);
+            TE_noise_outer((Uinf/340),Uinf,obsX,Y,obsZ,chordScaling/2,0.0,chordScaling,S,340,rhoInf,kinViscInf,
+                omega,WPSLower,WPSUpper,farfieldSpectra,FF_up,FF_down);
+        }
+        else{
+            TE_noise_outer((Uinf/340),Uinf,X,Y,Z,chordScaling/2,0.0,chordScaling,S,340,rhoInf,kinViscInf,
+                omega,WPSLower,WPSUpper,farfieldSpectra,FF_up,FF_down);
+        }
+        
+        
         // integrate S_pp over frequency:
         Real integral = 0.0;
         for (int i = 0; i < Nsound - 1; ++i) {
