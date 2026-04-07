@@ -50,8 +50,8 @@ Real calc_OASPL(const Real* botStates, const Real* topStates, const Real chordSc
     const Real X,const Real Y,const Real Z, const Real S, const Real nu, const Real rho,
     const int WPSjson,const std::string& model){
 
-    const Real f_min = 100.0;
-    const Real f_max = 20000.0;
+    const Real f_min = 200.0;
+    const Real f_max = 15000.0;
 
     Real omega[Nsound];
     Real Freq[Nsound];
