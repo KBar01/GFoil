@@ -66,14 +66,28 @@ Real calc_OASPL_AD(const Real* botStates, const Real* topStates, const Real chor
     const std::string& model){
 
     const Real f_min = 200.0;
-    const Real df    = 100.0;
+    const Real f_max = 10000.0;
 
     Real omega[Nsound];
     Real Freq[Nsound];
 
-    for (int i = 0; i < Nsound; ++i) {
-        Freq[i]  = f_min + i * df;
-        omega[i] = Freq[i] * 2.0 * M_PI;
+    //for (int i = 0; i < Nsound; ++i) {
+    //    Freq[i]  = f_min + i * df;
+    //    omega[i] = Freq[i] * 2.0 * M_PI;
+    //}
+
+    // Log spacing setup
+    Real log_fmin = std::log10(f_min);
+    Real log_fmax = std::log10(f_max);
+
+    Real count = 0.0;
+    for (int i = 0; i < Nfreq; ++i) {
+        Real frac = count / (Nfreq - 1);  // 0 → 1
+        Real logf = log_fmin + frac * (log_fmax - log_fmin);
+
+        Freq[i]  = std::pow(10.0, logf);
+        omega[i] = 2.0 * M_PI * Freq[i];
+        count +=1.0;
     }
 
     //Real SppUpper[Nsound]={0}, SppLower[Nsound]={0};
