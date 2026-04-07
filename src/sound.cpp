@@ -66,7 +66,8 @@ Real calc_OASPL(const Real* botStates, const Real* topStates, const Real chordSc
     Real log_fmax = std::log10(f_max);
 
     Real count = 0.0;
-    for (int i = 0; i < Nfreq; ++i) {
+    const Real Nfreq = 250.0;
+    for (int i = 0; i < Nsound; ++i) {
         Real frac = count / (Nfreq - 1);  // 0 → 1
         Real logf = log_fmin + frac * (log_fmax - log_fmin);
 

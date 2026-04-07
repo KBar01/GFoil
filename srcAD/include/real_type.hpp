@@ -16,6 +16,6 @@ Real norm2(const Real* x) {
 #define Ncoords 200
 #define Nfine 501
 #define Nin 301
-#define Nsound 99
+#define Nsound 250
 #define NblPoints 250
 
