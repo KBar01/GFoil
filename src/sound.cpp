@@ -50,16 +50,15 @@ Real calc_OASPL(const Real* botStates, const Real* topStates, const Real chordSc
     const Real X,const Real Y,const Real Z, const Real S, const Real nu, const Real rho,
     const int WPSjson,const std::string& model){
 
-    const Real startExp = 2.0; // start exp : 2 (100Hz)
-    const Real endExp = 4.30103; // final exp : 4.30103 (20,000 Hz)
+    const Real f_min = 200.0;
+    const Real df    = 100.0;
 
     Real omega[Nsound];
     Real Freq[Nsound];
 
     for (int i = 0; i < Nsound; ++i) {
-        Real exponent = startExp + (endExp - startExp) * i / (Nsound - 1);
-        Freq[i]  = std::pow(10.0, exponent);
-        omega[i] =  Freq[i] * 2.0 * M_PI;
+        Freq[i]  = f_min + i * df;
+        omega[i] = Freq[i] * 2.0 * M_PI;
     }
 
     //Real SppUpper[Nsound]={0}, SppLower[Nsound]={0};
