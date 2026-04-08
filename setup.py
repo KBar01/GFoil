@@ -17,7 +17,7 @@ class BuildWithCMake(build_py):
 
         # builds the executables using cmake
         subprocess.check_call(["cmake", ".."] + cmake_args, cwd=build_dir)
-        subprocess.check_call(["cmake", "--build", "."], cwd=build_dir)
+        subprocess.check_call(["cmake", "--build", ".", "--parallel"], cwd=build_dir)
 
         # 2. Copy executables into the Python package
         output_bin_dir = os.path.join("GFoil", "bin")
