@@ -97,7 +97,7 @@ Real calc_OASPL_AD(const Real* botStates, const Real* topStates, const Real chor
     Real theta = topStates[0];
     Real deltaS = topStates[1];
     Real tauMax = topStates[2];
-    Real edgeVel = topStates[3];
+    Real edgeVel_top = topStates[3];
     Real dpdx = topStates[4];
     Real tauWall = topStates[5];
     Real delta = topStates[6];    
@@ -108,15 +108,18 @@ Real calc_OASPL_AD(const Real* botStates, const Real* topStates, const Real chor
     
     if (tauMax > 0.0){ 
         
-        calc_WPS(model,theta,deltaS,delta,tauWall,tauMax,edgeVel,dpdx,
+        calc_WPS(model,theta,deltaS,delta,tauWall,tauMax,edgeVel_top,dpdx,
                     omega,nu,Uinf,X,Y,Z,S,rho,1,WPSUpper);
+    }
+    else{  
+        edgeVel_top = Uinf;
     }
     
     
     theta = botStates[0];
     deltaS = botStates[1];
     tauMax = botStates[2];
-    edgeVel = botStates[3];
+    Real edgeVel_bot = botStates[3];
     dpdx = botStates[4];
     tauWall = botStates[5];
     delta = botStates[6];  
@@ -126,16 +129,19 @@ Real calc_OASPL_AD(const Real* botStates, const Real* topStates, const Real chor
     }
 
     if (tauMax > 0.0){ 
-        calc_WPS(model,theta,deltaS,delta,tauWall,tauMax,edgeVel,dpdx,
+        calc_WPS(model,theta,deltaS,delta,tauWall,tauMax,edgeVel_bot,dpdx,
                     omega,nu,Uinf,X,Y,Z,S,rho,0,WPSLower);
         botStates[3] = Uinf;
+    }
+    else{
+        edgeVel_bot = Uinf;
     }
 
     Real farfieldSpectra[Nsound] ;
 
     Real c = Uinf/340.0;
     TE_noise_outer<Real>(c,Uinf,X,Y,Z,chordScale/2,0.0,chordScale,S,340.0,rho,nu,
-                omega,botStates[3],topStates[3],WPSLower,WPSUpper,farfieldSpectra);
+                omega,edgeVel_bot,edgeVel_top,WPSLower,WPSUpper,farfieldSpectra);
 
     // integrate S_pp over frequency:
     Real integral = 0.0;
