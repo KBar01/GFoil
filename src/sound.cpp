@@ -116,7 +116,6 @@ Real calc_OASPL(const Real* botStates, const Real* topStates, const Real chordSc
     if (tauMax > 0.0){ 
         calc_WPS(model,theta,deltaS,delta,tauWall,tauMax,edgeVel_bot,dpdx,
                     omega,nu,Uinf,X,Y,Z,S,rho,0,WPSLower);
-        botStates[3] = Uinf;
     }
     else{
         edgeVel_bot = Uinf;
