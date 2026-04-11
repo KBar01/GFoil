@@ -854,8 +854,7 @@ void TE_noise_outer(
     Real b_c = 1.47; // corcos constant
     Real K_2 = 0.0;
     
-    Real l_y_bot[Nsound];
-    Real l_y_top[Nsound];
+    Real l_y[Nsound];
     for (int i=0;i<Nsound;++i){
         
         Real top = omega[i] / (b_c*U_c);
