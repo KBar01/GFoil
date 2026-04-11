@@ -82,6 +82,7 @@ void TE_noise_outer(
 
     // Array of frequencies:
     const Real omega[Nsound],
+    const Real Ue_bot, const Real Ue_top,
     Real (&WPS_lower)[Nsound], Real (&WPS_upper)[Nsound],
 
     // Output wall-pressure spectrum:

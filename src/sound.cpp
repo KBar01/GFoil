@@ -117,7 +117,7 @@ Real calc_OASPL(const Real* botStates, const Real* topStates, const Real chordSc
 
     Real farfieldSpectra[Nsound] ;
     TE_noise_outer((Uinf/340),Uinf,X,Y,Z,chordScale/2,0.0,chordScale,S,340,rho,nu,
-                omega,WPSLower,WPSUpper,farfieldSpectra);
+                omega,botStates[3],topStates[3],WPSLower,WPSUpper,farfieldSpectra);
 
     // integrate S_pp over frequency:
     Real integral = 0.0;

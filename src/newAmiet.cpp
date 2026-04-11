@@ -781,6 +781,7 @@ void TE_noise_outer(
 
     // Array of frequencies:
     const Real omega[Nsound],
+    const Real Ue_bot, const Real Ue_top,
     Real (&WPS_lower)[Nsound], Real (&WPS_upper)[Nsound],
 
     // Output wall-pressure spectrum:
@@ -789,12 +790,19 @@ void TE_noise_outer(
 {
 
 
+    Real Ue[2] = {Ue_top,Ue_bot};
+
+
+    for (int surf=0;surf<2;++surf){
+
     // Finding wavenumbers etc /////////////////////////////////
     Real beta = std::sqrt(1.0 - M*M);
     // distance to observer
     Real S0 = std::sqrt(x*x + beta*beta * (y*y + z*z));
+
     // convection velocity
-    Real U_c = 0.7 * U; 
+    Real U_c = 0.7 * Ue[surf]; 
+
     Real alpha = U / U_c;
 
     // Outputs (arrays):
@@ -846,7 +854,8 @@ void TE_noise_outer(
     Real b_c = 1.47; // corcos constant
     Real K_2 = 0.0;
     
-    Real l_y[Nsound];
+    Real l_y_bot[Nsound];
+    Real l_y_top[Nsound];
     for (int i=0;i<Nsound;++i){
         
         Real top = omega[i] / (b_c*U_c);
@@ -861,10 +870,15 @@ void TE_noise_outer(
         
         Real term1 = std::pow((omega[i]*c*z)/(c0*2.0*2.0*M_PI*S0*S0), 2.0);
 
-        Real Spp_upper = term1*2.0*M_PI*span*I_abs2[i]*(WPS_upper[i]*l_y[i]/M_PI);
-        Real Spp_lower = term1*2.0*M_PI*span*I_abs2[i]*(WPS_lower[i]*l_y[i]/M_PI);
-
-        farfieldSpectra[i] = Spp_upper + Spp_lower ;
+        Real Spp = 0.0;
+        if (surf==0){
+            farfieldSpectra[i] = 0.0;
+            farfieldSpectra[i] += term1*2.0*M_PI*span*I_abs2[i]*(WPS_upper[i]*l_y[i]/M_PI);
+        }
+        else{
+            farfieldSpectra[i] += term1*2.0*M_PI*span*I_abs2[i]*(WPS_lower[i]*l_y[i]/M_PI);
+        }
+    }
     }
 
 }
