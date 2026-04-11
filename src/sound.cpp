@@ -113,9 +113,12 @@ Real calc_OASPL(const Real* botStates, const Real* topStates, const Real chordSc
     if (tauMax > 0.0){ 
         calc_WPS(model,theta,deltaS,delta,tauWall,tauMax,edgeVel,dpdx,
                     omega,nu,Uinf,X,Y,Z,S,rho,0,WPSLower);
+        botStates[3] = Uinf;
     }
 
     Real farfieldSpectra[Nsound] ;
+
+    
     TE_noise_outer((Uinf/340),Uinf,X,Y,Z,chordScale/2,0.0,chordScale,S,340,rho,nu,
                 omega,botStates[3],topStates[3],WPSLower,WPSUpper,farfieldSpectra);
 
