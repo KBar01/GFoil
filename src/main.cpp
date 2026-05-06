@@ -1,18 +1,33 @@
 #include <iostream>
 #include <vector>
 #include <cmath>
-#include "codi.hpp"
-#include "real_type.h"
-#include "data_structs.h"
-#include "main_func.h"
-#include "get_funcs.h"
-#include "panel_funcs.h"
 #include <chrono>
 #include <fstream>
 #include <sstream>
 #include <string>
 
-#include "nlohmann/json.hpp"  // nlohmann/json
+// Unified physics headers
+#include "codi.hpp"
+using Real = codi::RealReverse;
+using Tape = typename Real::Tape;
+
+#include "real_type.hpp"
+#include "data_structs.hpp"
+#include "spline.hpp"
+#include "main_func.hpp"
+#include "get_funcs.hpp"
+#include "panel_funcs.hpp"
+#include "calc_ue_m.hpp"
+#include "solve_inv.hpp"
+#include "build_global_sys.hpp"
+#include "solve_glob.hpp"
+#include "clear_RV.hpp"
+#include "stagmove.hpp"
+#include "coupled.hpp"
+#include "init_BL.hpp"
+#include "extract_BL_TE.hpp"
+#include "sound.hpp"
+#include "nlohmann/json.hpp"
 
 using json = nlohmann::json;
 
@@ -48,10 +63,10 @@ bool runCode(
 
     ){
     Real alpha = (alphad/180)*M_PI;
-    Oper oper(alpha,Re,Ma);
+    Oper<Real> oper(alpha,Re,Ma);
     oper.rho = rhoInf;
 
-    Geom geom;
+    Geom<Real> geom;
 
     Real flattenedCoords[2*Ncoords]={0};
     Real inCoords[2*Nin]={0};
@@ -59,27 +74,26 @@ bool runCode(
         inCoords[colMajorIndex(0,i,2)] = inXcoords[i];
         inCoords[colMajorIndex(1,i,2)] = inYcoords[i];
     }
-    make_panels(inCoords,flattenedCoords,Ufac,TEfac); // does spline to redist nodes over aerofoil for fixed number of 200 nodes
+    make_panels<Real>(inCoords,flattenedCoords,Ufac,TEfac);
 
-    Foil foil(flattenedCoords);
-    Isol isol;
-    Param param;
+    Foil<Real> foil(flattenedCoords);
+    Isolc<Real> isolc;
+    Isolv<Real> isol_v;
+    Param<Real> param;
     param.ncrit = nCrit;
-    Wake wake;
-    Vsol vsol;
-    Glob glob;
+    Wake<Real> wake;
+    Vsol<Real> vsol;
+    Glob<Real> glob;
 
+    build_gamma_codi<Real>(isolc,foil,oper);
+    init_thermo<Real>(oper,param,geom);
+    build_wake<Real>(foil,geom,oper,isolc,wake);
+    stagpoint_find<Real>(isolc,isol_v,foil,wake);
+    identify_surfaces<Real>(isol_v,vsol);
+    set_wake_gap<Real>(foil,isol_v,vsol);
 
-    build_gamma_codi(isol,foil,oper);
-    init_thermo(oper,param,geom);
-    build_wake(foil,geom,oper,isol,wake);
-    stagpoint_find(isol,foil,wake);
-    identify_surfaces(isol,vsol);
-    set_wake_gap(foil,isol,vsol);
-
-    // Find forced transition node positions after surface identification so that
-    // searches are restricted to the correct surface node lists (vsol.Is[0] for
-    // lower, vsol.Is[1] for upper). geom.chord is also correct after init_thermo.
+    // Find forced transition nodes after surface identification so searches use
+    // the correct surface node lists. geom.chord is correct after init_thermo.
     Real xTransTop = topTransPos * geom.chord;
     Real xTransBot = botTransPos * geom.chord;
 
@@ -87,62 +101,39 @@ bool runCode(
     int idx_closest_top = vsol.Is[1].empty() ? Ncoords - 1 : vsol.Is[1].back();
 
     if (force) {
-        // Lower surface nodes in vsol.Is[0] run from stagnation toward lower TE,
-        // so x increases monotonically — find first node at or beyond xTransBot.
         for (int i : vsol.Is[0]) {
-            if (flattenedCoords[colMajorIndex(0, i, 2)] >= xTransBot) {
-                idx_closest_bot = i;
-                break;
-            }
+            if (flattenedCoords[colMajorIndex(0,i,2)] >= xTransBot) { idx_closest_bot=i; break; }
         }
-        // Upper surface nodes in vsol.Is[1] run from stagnation toward upper TE,
-        // so x increases monotonically — find first node at or beyond xTransTop.
         for (int i : vsol.Is[1]) {
-            if (flattenedCoords[colMajorIndex(0, i, 2)] >= xTransTop) {
-                idx_closest_top = i;
-                break;
-            }
+            if (flattenedCoords[colMajorIndex(0,i,2)] >= xTransTop) { idx_closest_top=i; break; }
         }
     }
 
-    Trans tdata;
+    Trans<Real> tdata;
     tdata.transNode[0] = idx_closest_bot;
     tdata.transNode[1] = idx_closest_top;
     tdata.transPos[0] = xTransBot;
     tdata.transPos[1] = xTransTop;
-    calc_ue_m(foil,wake,isol,vsol);
-    rebuild_ue_m(foil,wake,isol,vsol,false);
+
+    calc_ue_m<Real>(foil,wake,isolc,vsol);
+    rebuild_ue_m<Real>(foil,wake,isol_v,vsol,false);
 
     if (fromRestart){
-
         std::ifstream prevfile("restart.json");
-
-        json j;
-        prevfile >> j;
-
-        for (int i = 0; i < RVdimension; ++i) {
-        double val = j["states"][i].get<double>();
-        glob.U[i] = val;  // assigns numeric value to RealReverse
-        }
-
-        for (int i = 0; i < (Ncoords + Nwake); ++i) {
-            bool val = j["turb"][i].get<bool>();
-            vsol.turb[i] = val;
-        }
-
-        if (force){
-            tdata.isForced[0]  = 1;
-            tdata.isForced[1]  = 1;
-        }
+        json j; prevfile >> j;
+        const int nsys = (Ncoords+Nwake);
+        for (int i=0;i<4*nsys;++i) glob.U[i] = j["states"][i].get<double>();
+        for (int i=0;i<nsys;++i) vsol.turb[i] = j["turb"][i].get<int>();
+        isol_v.stagIndex[0] = j["stag"][0]; isol_v.stagIndex[1] = j["stag"][1];
+        if (force) { tdata.isForced[0]=1; tdata.isForced[1]=1; }
+    } else {
+        init_boundary_layer<Real>(oper,foil,param,isolc,isol_v,vsol,glob,tdata,force);
     }
-    else {
-        init_boundary_layer(oper,foil,param,isol,vsol,glob,tdata,force);
-    }
-    
-    stagpoint_move(isol,glob,foil,wake,vsol);
-    bool converged = solve_coupled(oper,foil,wake,param,vsol,isol,glob,tdata,force);
-    Post post;
-    calc_force(oper,geom,param,isol,foil,glob,post);
+
+    stagpoint_move<Real>(isol_v,glob,foil,wake,vsol);
+    bool converged = solve_coupled<Real>(oper,foil,wake,param,vsol,isolc,isol_v,glob,tdata,force);
+    Post<Real> post;
+    calc_force<Real>(oper,geom,param,foil,glob,post);
     
     ////////////////////////////// Aero done, now acoustics ///////////////////////////////////////////////////////////////////
 
@@ -174,8 +165,8 @@ bool runCode(
         ycoords[i] = flattenedCoords[colMajorIndex(1,i,2)];
     }
 
-    interpolate_at_95_both_surfaces(xcoords,glob.U,post.cp,oper,vsol,param,topsurf,botsurf,Uinf,sampleTE,chordScaling);
-    Real OASPL = calc_OASPL(botsurf,topsurf,chordScaling,Uinf,X,Y,Z,S,kinViscInf,rhoInf,doCps,model);
+    interpolate_at_95_both_surfaces<Real>(xcoords,glob.U.data(),post.cp.data(),oper,vsol.turb.data(),param,topsurf,botsurf,Uinf,sampleTE,chordScaling);
+    Real OASPL = calc_OASPL_AD<Real>(botsurf,topsurf,chordScaling,Uinf,X,Y,Z,S,kinViscInf,rhoInf,model);
 
     // check OASPL validity
     if (std::isnan(OASPL) || std::isinf(OASPL)) {
@@ -199,18 +190,18 @@ bool runCode(
 
             //  calc transition point
             Real botTransX = geom.chord;
-            for(int i=0;i<isol.stagIndex[0];++i){
-                int isTurb = vsol.turb[isol.stagIndex[0] - i];
+            for(int i=0;i<isol_v.stagIndex[0];++i){
+                int isTurb = vsol.turb[isol_v.stagIndex[0] - i];
                 if (isTurb){
-                    botTransX = foil.x[colMajorIndex(0,isol.stagIndex[0]-i,2)];
+                    botTransX = foil.x[colMajorIndex(0,isol_v.stagIndex[0]-i,2)];
                     break;
                 } 
             }
             Real topTransX = geom.chord;
-            for(int i=0;i<200-isol.stagIndex[1];++i){
-                int isTurb = vsol.turb[isol.stagIndex[1] + i];
+            for(int i=0;i<200-isol_v.stagIndex[1];++i){
+                int isTurb = vsol.turb[isol_v.stagIndex[1] + i];
                 if (isTurb){
-                    topTransX = foil.x[colMajorIndex(0,isol.stagIndex[1]+i,2)];
+                    topTransX = foil.x[colMajorIndex(0,isol_v.stagIndex[1]+i,2)];
                     break;
                 } 
             }
@@ -230,7 +221,7 @@ bool runCode(
             out["Cp"] = cps;
             out["tauWall"] = tauWallOut;
             
-            out["stagnation"] = isol.stagIndex;
+            out["stagnation"] = isol_v.stagIndex;
             out["topTransX"]  = topTransX.getValue();
             out["botTransX"]  = botTransX.getValue();
             
@@ -336,7 +327,7 @@ int main(){
         botsurf[6] = botdelta;
 
         Real Uinf = (Re*kinViscInf)/(chordScaling) ;
-        Real OASPL = calc_OASPL(botsurf,topsurf,chordScaling,Uinf,X,Y,Z,S,kinViscInf,rhoInf,1,model);
+        Real OASPL = calc_OASPL_AD<Real>(botsurf,topsurf,chordScaling,Uinf,X,Y,Z,S,kinViscInf,rhoInf,model);
         return 1 ;
     }
     else{

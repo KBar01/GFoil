@@ -1,21 +1,21 @@
 #include <iostream>
 #include <vector>
 #include <cmath>
-#include "codi.hpp"
-#include "real_type.hpp"
-#include "ADfuncs.hpp"
 #include <chrono>
 #include <fstream>
 #include <sstream>
 #include <string>
-
-#include <cmath>
+#include <cassert>
 #include <Eigen/Dense>
 #include <Eigen/LU>
 #include <Eigen/Sparse>
 #include <Eigen/SparseLU>
-#include <cassert>
-#include "nlohmann/json.hpp"  // nlohmann/json
+
+// Unified physics headers
+#include "codi.hpp"
+#include "real_type.hpp"   // defines Ncoords, Nwake, RVdimension, colMajorIndex, norm2
+#include "ADfuncs.hpp"     // top-level AD functions (already Phase-1 fixed)
+#include "nlohmann/json.hpp"
 
 using json = nlohmann::json;
 
