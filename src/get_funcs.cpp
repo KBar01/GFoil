@@ -26,7 +26,9 @@ void get_ueinv(const Isol& isol, Real* ueinv){
         ueinv[Ncoords+i] = isol.uewi[i] ;
     }
 
-    ueinv[Ncoords] = ueinv[Ncoords-1]; // continuity of upper surface and wake velocity
+    // Approximation: first wake node inviscid velocity set equal to last upper-surface node.
+    // This is a continuity assumption that may be inaccurate near the TE at high AoA.
+    ueinv[Ncoords] = ueinv[Ncoords-1];
 };
 
 

@@ -16,9 +16,6 @@ template<typename T>
 using Vector = Eigen::Matrix<T, Eigen::Dynamic, 1>;
  
 
-int colMajorIndex(int row, int col, int num_rows) {
-    return row + col*num_rows;
-}
 
 #ifndef USE_CODIPACK
     void solve_sys(Isol &isol, const Real* RHS) {

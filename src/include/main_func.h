@@ -18,7 +18,7 @@ struct Wake;
 struct Glob;
 struct Trans;
 
-int colMajorIndex(int row, int col, int num_rows);
+inline int colMajorIndex(int row, int col, int num_rows) { return row + col * num_rows; }
 
 void make_panels(const Real (&inCoords)[2*Nin], Real (&outCoords)[2*Ncoords],const Real Ufac,const Real TEfac);
 

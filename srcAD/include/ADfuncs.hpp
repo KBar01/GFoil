@@ -195,8 +195,9 @@ double partialOutputspartialInputs(
         jacobianOASPL_states[i] = (states[i].getGradient()[1]);
     }
 
-    return post.cl.getValue();
+    double result = post.cl.getValue();
     tape.reset();
+    return result;
 
 };
 
@@ -249,20 +250,6 @@ void partialRpartialx(
 
     make_panels(inCoords,flattenedCoords,Ufac,TEfac); // does spline to redist nodes over aerofoil for fixed number of 200 nodes
    
-    // finding node positions to force transition ------------------------
-    Real xTransTop = topTransPos * geom.chord ;
-    Real xTransBot = botTransPos * geom.chord ;
-    
-    int idx_closest_bot = 0;
-    int idx_closest_top = Ncoords - 1;  // top TE node
-    
-    Trans<Real> tdata;
-
-    tdata.transNode[0] = idx_closest_bot;
-    tdata.transNode[1] = idx_closest_top;
-    tdata.transPos[0] = xTransBot ;
-    tdata.transPos[1] = xTransTop ;
-
     Foil<Real> foil(flattenedCoords);
     Isolc<Real> isolc;
     Isolv<Real> isol_pre;
@@ -270,7 +257,7 @@ void partialRpartialx(
     Param<Real> param;
     param.ncrit = nCrit;
     Wake<Real> wake;
-  
+
     Glob<Real> glob;
     for (int i=0;i<RVdimension;++i){glob.U[i] = states[i];}
     for (int i=0;i<(Ncoords+Nwake);++i){vsol.turb[i] = turb[i];}
@@ -281,6 +268,33 @@ void partialRpartialx(
     stagpoint_find(isolc,isol_pre,foil,wake);
     identify_surfaces(isol_pre,vsol);
     set_wake_gap(foil,isol_pre,vsol);
+
+    // Find forced transition nodes after surface identification so searches use
+    // the correct surface node lists. geom.chord is valid after init_thermo.
+    Real xTransTop = topTransPos * geom.chord;
+    Real xTransBot = botTransPos * geom.chord;
+
+    int idx_closest_bot = vsol.Is.size() > 0 && !vsol.Is[0].empty() ? vsol.Is[0].front() : 0;
+    int idx_closest_top = vsol.Is.size() > 1 && !vsol.Is[1].empty() ? vsol.Is[1].back() : Ncoords - 1;
+
+    for (int i : vsol.Is[0]) {
+        if (flattenedCoords[colMajorIndex(0, i, 2)] >= xTransBot) {
+            idx_closest_bot = i;
+            break;
+        }
+    }
+    for (int i : vsol.Is[1]) {
+        if (flattenedCoords[colMajorIndex(0, i, 2)] >= xTransTop) {
+            idx_closest_top = i;
+            break;
+        }
+    }
+
+    Trans<Real> tdata;
+    tdata.transNode[0] = idx_closest_bot;
+    tdata.transNode[1] = idx_closest_top;
+    tdata.transPos[0] = xTransBot;
+    tdata.transPos[1] = xTransTop;
     calc_ue_m(foil,wake,isolc,vsol);
     Isolv<Real> isol_final;
     stagpoint_move_AD(isol_final,glob,foil,wake,vsol,currStag);

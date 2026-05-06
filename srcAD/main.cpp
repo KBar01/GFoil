@@ -45,9 +45,10 @@ void solve_sys(int* R_V_cols, int* R_V_rows, double* RV_vals, const int RVlatest
         triplets.emplace_back(row, col, val);
     }
 
-    // === 2. Create sparse matrix ===
-    MatrixSparse A_sparse(RVdimension, RVdimension);
-    A_sparse.setFromTriplets(triplets.begin(), triplets.end());
+    // === 2. Create sparse matrix and transpose for adjoint system ===
+    MatrixSparse A_primal(RVdimension, RVdimension);
+    A_primal.setFromTriplets(triplets.begin(), triplets.end());
+    MatrixSparse A_sparse = A_primal.transpose();
 
     // === 3. Map RHS vectors ===
     VectorD rhs1(RVdimension);
@@ -229,10 +230,9 @@ int main(){
     int latetsEntry = jr["RVnz"] ;
 
     for (int i=0;i<latetsEntry;++i){
-
-        dRdU_rows[i] = jr["RVcols"][i].get<int>() ;
-        dRdU_cols[i] = jr["RVrows"][i].get<int>() ;
-        dRdU_vals[i] = jr["RVvals"][i] ;
+        dRdU_rows[i] = jr["RVrows"][i].get<int>();
+        dRdU_cols[i] = jr["RVcols"][i].get<int>();
+        dRdU_vals[i] = jr["RVvals"][i];
     }
     
     double d_CL_d_y[Nin];

@@ -99,10 +99,9 @@ void equate_block_inplace_sparse(
             //}
 
             //if (!found){
-            glob.R_V_rows[glob.R_V_latest] = globalRow;
-            glob.R_V_cols[glob.R_V_latest] = globalCol;
-            glob.R_V_vals[glob.R_V_latest] = val;
-            glob.R_V_latest += 1;
+            glob.R_V_rows.push_back(globalRow);
+            glob.R_V_cols.push_back(globalCol);
+            glob.R_V_vals.push_back(val);
             //}
         }
     }
@@ -115,7 +114,7 @@ inline void findColumnIndices(
     indicesOut.clear();
     // Reserve a bit to avoid reallocation:
     indicesOut.reserve(6); // typical number of entries in a column
-    for (int k = 0; k < glob.R_V_latest; ++k){
+    for (int k = 0; k < (int)glob.R_V_vals.size(); ++k){
         if (glob.R_V_cols[k] == colIndex){
             indicesOut.push_back(k); // index in vals/rows/cols arrays
         }
@@ -146,10 +145,9 @@ inline void addColumnValues(
 
         if (!found){
             // add new
-            glob.R_V_rows[glob.R_V_latest] = row;
-            glob.R_V_cols[glob.R_V_latest] = colIndex;
-            glob.R_V_vals[glob.R_V_latest] = val;
-            ++glob.R_V_latest;
+            glob.R_V_rows.push_back(row);
+            glob.R_V_cols.push_back(colIndex);
+            glob.R_V_vals.push_back(val);
         }
     }
 }
@@ -351,15 +349,14 @@ void build_glob_RV(const Foil&foil, const Vsol&vsol,const Isol&isol,Glob&glob, P
     addColumnValues(glob, (4*isol.stagIndex[0] + 3), colIdxList, R_st, 3*(Ncoords+Nwake));
 
 
-    Real scale = isol.sstag_ue[1] / isol.sstag_ue[0] ;
+    if (std::abs(isol.sstag_ue[0]) > 1e-14) {
+        Real scale = isol.sstag_ue[1] / isol.sstag_ue[0];
 
-    cnp::scalar_mul_inplace<RXsize>(R_st,scale);
+        cnp::scalar_mul_inplace<RXsize>(R_st,scale);
 
-    //rvColPointer = &glob.R_V[colMajorIndex(0,(4*isol.stagIndex[1] + 3),RVsize)];
-    //cnp::add_inplace<RXsize>(rvColPointer,R_st);
-
-    std::vector<int> colIdxList2;
-    findColumnIndices(glob, (4*isol.stagIndex[1] + 3), colIdxList2);
-    addColumnValues(glob, (4*isol.stagIndex[1] + 3), colIdxList2, R_st, 3*(Ncoords+Nwake));
+        std::vector<int> colIdxList2;
+        findColumnIndices(glob, (4*isol.stagIndex[1] + 3), colIdxList2);
+        addColumnValues(glob, (4*isol.stagIndex[1] + 3), colIdxList2, R_st, 3*(Ncoords+Nwake));
+    }
 
 }

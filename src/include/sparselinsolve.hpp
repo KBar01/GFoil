@@ -7,9 +7,6 @@
 #include "real_type.h"
 #include "data_structs.h"
 
-// You already have these
-inline int colMajorIndex(int i, int j, int n) { return i + j * n; };
-
 // -----------------------------
 // External-function data
 // -----------------------------
@@ -20,7 +17,7 @@ struct ImplicitSparseSolveData {
   using Tape       = typename Active::Tape;
 
   int n;      // system size
-  int nnz;    // number of stored entries (glob.R_V_latest)
+  int nnz;    // number of stored entries (glob.R_V_vals.size())
 
   // Passive data needed in reverse
   Eigen::SparseMatrix<double> A; // n x n
@@ -122,7 +119,7 @@ void solve_sys_sparse(Glob &glob) {
   using Tape   = typename Active::Tape;
 
   Tape& tape = Active::getTape();
-  const int nnz = glob.R_V_latest;
+  const int nnz = (int)glob.R_V_vals.size();
 
   // ---- Build passive sparse A from triplets ----
   std::vector<Eigen::Triplet<double>> triplets;

@@ -90,10 +90,9 @@ void solve_glob(const Foil&foil, const Isol&isol, Glob& glob, Vsol& vsol, const 
             
             //glob.R_V[colMajorIndex(rowStart+row,colindex,4*Nsys)] = (row == col ? 1.0 : 0.0) - vsol.ue_m[colMajorIndex(row,col,Nsys)]*ds[col];
             Real zero = 0.0;
-            glob.R_V_vals[glob.R_V_latest] = (row == col ? 1.0 : zero) - vsol.ue_m[colMajorIndex(row,col,Nsys)]*ds[col];
-            glob.R_V_rows[glob.R_V_latest] = rowStart+row;
-            glob.R_V_cols[glob.R_V_latest] = colindex;
-            glob.R_V_latest += 1 ;
+            glob.R_V_vals.push_back((row == col ? 1.0 : zero) - vsol.ue_m[colMajorIndex(row,col,Nsys)]*ds[col]);
+            glob.R_V_rows.push_back(rowStart+row);
+            glob.R_V_cols.push_back(colindex);
         }
     }
 
@@ -103,10 +102,9 @@ void solve_glob(const Foil&foil, const Isol&isol, Glob& glob, Vsol& vsol, const 
         int colindex = 4*col + 1;
         for (int row = 0;row<Nsys;++row){
             //glob.R_V[colMajorIndex(rowStart+row,colindex,4*Nsys)] =  - vsol.ue_m[colMajorIndex(row,col,Nsys)]*ue[col];
-            glob.R_V_vals[glob.R_V_latest] = - vsol.ue_m[colMajorIndex(row,col,Nsys)]*ue[col];
-            glob.R_V_rows[glob.R_V_latest] = rowStart+row;
-            glob.R_V_cols[glob.R_V_latest] = colindex;
-            glob.R_V_latest += 1 ;
+            glob.R_V_vals.push_back(- vsol.ue_m[colMajorIndex(row,col,Nsys)]*ue[col]);
+            glob.R_V_rows.push_back(rowStart+row);
+            glob.R_V_cols.push_back(colindex);
         }
     }
 

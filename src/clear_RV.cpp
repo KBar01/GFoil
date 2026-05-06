@@ -11,15 +11,9 @@
 
 void clear_RV(Glob&glob, const Isol&isol,const Vsol&vsol, const Foil&foil,const Param&param){
 
-    int lastIndex = glob.R_V_latest;
-
-    for (int i=0;i<lastIndex;++i){
-        glob.R_V_vals[i] = 0.0;
-        glob.R_V_rows[i] = 0;
-        glob.R_V_cols[i] = 0;
-    }
-
-    glob.R_V_latest = 0;
+    glob.R_V_vals.clear();
+    glob.R_V_rows.clear();
+    glob.R_V_cols.clear();
 
 }
 

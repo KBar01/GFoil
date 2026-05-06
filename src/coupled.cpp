@@ -55,18 +55,19 @@ bool solve_coupled(const Oper& oper, const Foil& foil, const Wake& wake,
             restart["turb"]   = vsol.turb;
             restart["stag"] = isol.stagIndex;
 
-            std::vector<double> jac_vec(glob.R_V_latest);
-            std::vector<int> jac_row_vec(glob.R_V_latest);
-            std::vector<int> jac_col_vec(glob.R_V_latest);
-            for (int k = 0; k < glob.R_V_latest; ++k){
+            const int nnz = (int)glob.R_V_vals.size();
+            std::vector<double> jac_vec(nnz);
+            std::vector<int> jac_row_vec(nnz);
+            std::vector<int> jac_col_vec(nnz);
+            for (int k = 0; k < nnz; ++k){
                 jac_vec[k] = glob.R_V_vals[k].getValue();
-                jac_row_vec[k] = glob.R_V_rows[k] ;
-                jac_col_vec[k] = glob.R_V_cols[k] ;
+                jac_row_vec[k] = glob.R_V_rows[k];
+                jac_col_vec[k] = glob.R_V_cols[k];
             }
             restart["RVvals"] = jac_vec;
             restart["RVrows"] = jac_row_vec;
             restart["RVcols"] = jac_col_vec;
-            restart["RVnz"] = glob.R_V_latest;
+            restart["RVnz"] = nnz;
             // Write JSON file
             std::ofstream fout("restart.json");
             fout << restart.dump(4); 

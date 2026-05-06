@@ -1101,13 +1101,6 @@ void residual_transition_forced(
         }
     }
 
-    // R_x = dRl/dx1 + dRl/dx2 + dRt/dx1 + dRt/dx2
-    for (int i = 0; i < 3; ++i) {
-        R_x[i] = Rl_x[i];       // dR/dx1
-        R_x[i+3] = Rl_x[i+3];  // dR/dx2
-    }
-
-
     Real R_U1[12] = {0},R_U2[12] = {0},tmp1[12]={0};
 
     // Calculate R_U1

@@ -167,15 +167,14 @@ struct Vsol {
 
 struct Glob {
     Real U[4*(Ncoords+Nwake)] = {0};  // Primary states (th, ds, sa, ue)
-    Real dU[4*(Ncoords+Nwake)] = {0}; // Primary state update                   // Converged flag
+    Real dU[4*(Ncoords+Nwake)] = {0}; // Primary state update
     Real R[4*(Ncoords+Nwake)] = {0.0};                 // Residuals
-    
-    Real R_V_vals[119700] = {0.0}; // Global Jacobian vals (using 20% density)
-    int R_V_rows[119700] = {0}; // Global Jacobian vals (using 20% density)
-    int R_V_cols[119700] = {0}; // Global Jacobian vals (using 20% density)
-    int R_V_latest = 0 ;
 
-    int convergenceIteration = 100 ;
+    std::vector<Real> R_V_vals; // Global Jacobian COO values
+    std::vector<int>  R_V_rows; // Global Jacobian COO row indices
+    std::vector<int>  R_V_cols; // Global Jacobian COO column indices
+
+    int convergenceIteration = -1; // sentinel: -1 means not yet converged
 
     bool doADrestartExtract = false;
     Real ADrestartRnorm = 1.0e-10;

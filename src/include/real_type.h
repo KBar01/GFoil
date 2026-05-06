@@ -9,8 +9,8 @@ using Tape = typename Real::Tape;
 
 #define IDX(i,j,nrow) ((i)+(j)*(nrow)) // For col-major access
 #define Nwake 30
-#define RVdimension 920
 #define Ncoords 200
+constexpr int RVdimension = 4 * (Ncoords + Nwake);
 #define Nfine 501
 #define Nin 301
 #define Nsound 250

@@ -52,7 +52,7 @@ bool runCode(
     oper.rho = rhoInf;
 
     Geom geom;
-    
+
     Real flattenedCoords[2*Ncoords]={0};
     Real inCoords[2*Nin]={0};
     for (int i=0;i<Nin;++i){
@@ -60,43 +60,6 @@ bool runCode(
         inCoords[colMajorIndex(1,i,2)] = inYcoords[i];
     }
     make_panels(inCoords,flattenedCoords,Ufac,TEfac); // does spline to redist nodes over aerofoil for fixed number of 200 nodes
-    
-    // finding node positions to force transition ------------------------
-    Real xTransTop = topTransPos * geom.chord ;
-    Real xTransBot = botTransPos * geom.chord ;
-    
-    int idx_closest_bot = 0;
-    int idx_closest_top = Ncoords - 1;  // top TE node
-    
-    if (force) {
-        
-        // Bottom surface: from bottom TE forward
-        for (int i = 1; i < Ncoords; ++i) {
-            Real x = flattenedCoords[colMajorIndex(0, i, 2)];
-            Real dist = x - xTransBot;
-            if (dist < 0.0) {
-                idx_closest_bot = i;
-                break;
-            }
-        }
-
-        // Top surface: from top TE backward
-        for (int i = Ncoords - 2; i >= 0; --i) {
-            Real x = flattenedCoords[colMajorIndex(0, i, 2)];
-            Real dist = x - xTransTop;
-            if (dist < 0.0) {
-                idx_closest_top = i;
-                break;
-            }
-        }
-    }
-
-    Trans tdata;
-
-    tdata.transNode[0] = idx_closest_bot;
-    tdata.transNode[1] = idx_closest_top;
-    tdata.transPos[0] = xTransBot ;
-    tdata.transPos[1] = xTransTop ;
 
     Foil foil(flattenedCoords);
     Isol isol;
@@ -113,6 +76,40 @@ bool runCode(
     stagpoint_find(isol,foil,wake);
     identify_surfaces(isol,vsol);
     set_wake_gap(foil,isol,vsol);
+
+    // Find forced transition node positions after surface identification so that
+    // searches are restricted to the correct surface node lists (vsol.Is[0] for
+    // lower, vsol.Is[1] for upper). geom.chord is also correct after init_thermo.
+    Real xTransTop = topTransPos * geom.chord;
+    Real xTransBot = botTransPos * geom.chord;
+
+    int idx_closest_bot = vsol.Is[0].empty() ? 0 : vsol.Is[0].front();
+    int idx_closest_top = vsol.Is[1].empty() ? Ncoords - 1 : vsol.Is[1].back();
+
+    if (force) {
+        // Lower surface nodes in vsol.Is[0] run from stagnation toward lower TE,
+        // so x increases monotonically — find first node at or beyond xTransBot.
+        for (int i : vsol.Is[0]) {
+            if (flattenedCoords[colMajorIndex(0, i, 2)] >= xTransBot) {
+                idx_closest_bot = i;
+                break;
+            }
+        }
+        // Upper surface nodes in vsol.Is[1] run from stagnation toward upper TE,
+        // so x increases monotonically — find first node at or beyond xTransTop.
+        for (int i : vsol.Is[1]) {
+            if (flattenedCoords[colMajorIndex(0, i, 2)] >= xTransTop) {
+                idx_closest_top = i;
+                break;
+            }
+        }
+    }
+
+    Trans tdata;
+    tdata.transNode[0] = idx_closest_bot;
+    tdata.transNode[1] = idx_closest_top;
+    tdata.transPos[0] = xTransBot;
+    tdata.transPos[1] = xTransTop;
     calc_ue_m(foil,wake,isol,vsol);
     rebuild_ue_m(foil,wake,isol,vsol,false);
 
@@ -199,18 +196,6 @@ bool runCode(
         out["OASPL"] = OASPL.getValue();
 
         if (doCps){
-            
-            json restart;
-            //std::vector<double> states_d(RVdimension);
-            // Extract numeric values from CoDiPack types
-            //for (size_t i = 0; i < RVdimension; ++i){
-            //    states_d[i] = glob.U[i].getValue();
-            //} 
-            //restart["states"] = states_d;
-            //restart["turb"]   = vsol.turb;
-            //std::ofstream restartFile("restart.json");
-            //restartFile << restart.dump(4);  // pretty print with 4 spaces indentation
-            //restartFile.close();
 
             //  calc transition point
             Real botTransX = geom.chord;
