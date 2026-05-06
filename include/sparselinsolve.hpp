@@ -147,18 +147,26 @@ void solve_sys_sparse(Glob<Real>& glob) {
   lu.compute(A);
 
   if (lu.info() != Eigen::Success) {
-      // Find near-zero diagonals to identify the bad pivot
-      std::vector<double> diag(Nsize, 0.0);
-      for (int k = 0; k < Nsize; ++k) {
-          double v = A.coeff(k,k);
-          diag[k] = std::abs(v);
+      // Count entries per column
+      std::vector<int> colNnz(Nsize, 0);
+      for (int k=0; k<nnz; ++k) colNnz[glob.R_V_cols[k]]++;
+      int zeroCols=0;
+      for (int c=0; c<Nsize; ++c) {
+          if (colNnz[c]==0) {
+              int node=c/4, eq=c%4;
+              std::cerr << "  ZERO COL " << c << " (node=" << node << " state=" << eq << ")\n";
+              if (++zeroCols>=8) { std::cerr << "  ...\n"; break; }
+          }
       }
-      std::vector<int> idx(Nsize); std::iota(idx.begin(),idx.end(),0);
-      std::sort(idx.begin(),idx.end(),[&](int a,int b){return diag[a]<diag[b];});
-      std::cerr << "SparseLU failed. Smallest diagonal entries:\n";
-      for (int i=0;i<std::min(5,(int)Nsize);++i)
-          std::cerr << "  row " << idx[i] << " (node=" << idx[i]/4 << " eq=" << idx[i]%4
-                    << "): diag=" << diag[idx[i]] << "\n";
+      // Also print column norm extremes
+      std::vector<double> colNorm(Nsize, 0.0);
+      for (int k=0; k<nnz; ++k)
+          colNorm[glob.R_V_cols[k]] += std::abs(triplets[k].value());
+      auto minIt = std::min_element(colNorm.begin(), colNorm.end());
+      int minCol = minIt - colNorm.begin();
+      std::cerr << "SparseLU failed: zeroCols=" << zeroCols
+                << " minColNorm=" << *minIt << " at col=" << minCol
+                << " (node=" << minCol/4 << " state=" << minCol%4 << ")\n";
       for (int i=0;i<Nsize;++i) glob.dU[i] = Active(0.0);
       return;
   }
