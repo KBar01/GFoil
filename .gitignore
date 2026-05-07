@@ -1,0 +1,33 @@
+# Build
+build/
+_deps/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+*.o
+*.a
+*.so
+compile_commands.json
+
+# Binaries
+GFoil_fwd_codi
+GFoil_AD
+gfoil_core*.so
+
+# Runtime JSON
+input.json
+output.json
+out.json
+restart.json
+ad_gradients.json
+WPS.json
+
+# Python
+__pycache__/
+*.pyc
+
+# Editor
+.vscode/
+*.swp
+*~
