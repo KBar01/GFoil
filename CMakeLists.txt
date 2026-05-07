@@ -40,14 +40,19 @@ FetchContent_MakeAvailable(json)
 
 set(COMMON_INCLUDES_FWD ${PROJECT_SOURCE_DIR}/src/include)
 set(NOISE_INCLUDES_FWD ${PROJECT_SOURCE_DIR}/src/noise_includes)
+set(UNIFIED_INCLUDES ${PROJECT_SOURCE_DIR}/include)
 
 file(GLOB_RECURSE SOURCES src/*.cpp)
 list(REMOVE_ITEM SOURCES "${CMAKE_SOURCE_DIR}/src/main.cpp")
+list(REMOVE_ITEM SOURCES "${CMAKE_SOURCE_DIR}/src/newAmiet.cpp")
+list(REMOVE_ITEM SOURCES "${CMAKE_SOURCE_DIR}/src/sound.cpp")
+list(REMOVE_ITEM SOURCES "${CMAKE_SOURCE_DIR}/src/WPSmodels.cpp")
 
 add_executable(GFoil_fwd_codi src/main.cpp ${SOURCES})
 target_link_libraries(GFoil_fwd_codi PRIVATE Eigen3::Eigen CoDiPack nlohmann_json::nlohmann_json)
 
 target_include_directories(GFoil_fwd_codi PRIVATE
+ ${UNIFIED_INCLUDES}
  ${COMMON_INCLUDES_FWD}
  ${NOISE_INCLUDES_FWD}
  ${codipack_SOURCE_DIR}/include
@@ -74,6 +79,7 @@ set(NOISE_INCLUDES_AD ${PROJECT_SOURCE_DIR}/srcAD/noise_includes)
 add_executable(GFoil_AD srcAD/main.cpp srcAD/error_package.cpp)
 target_link_libraries(GFoil_AD PRIVATE Eigen3::Eigen CoDiPack nlohmann_json::nlohmann_json)
 target_include_directories(GFoil_AD PRIVATE
+ ${UNIFIED_INCLUDES}
  ${COMMON_INCLUDES_AD}
  ${NOISE_INCLUDES_AD}
  ${codipack_SOURCE_DIR}/include

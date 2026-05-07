@@ -6,6 +6,7 @@
 #include <cmath>
 #include "real_type.h"
 #include "panel_funcs.h"
+#include "../../include/sound.hpp"
 
 struct Isol;
 struct Vsol;
@@ -72,9 +73,6 @@ void interpolate_at_95_both_surfaces(const Real* xcoords, const Real* states, co
     Real (&topBLStates)[7],Real (&botBLStates)[7],const Real Uinf, const Real x_target, const Real chordScale);
 
 
-Real calc_OASPL(const Real* botStates, const Real* topStates, const Real chordScale, const Real Uinf,
-    const Real X,const Real Y,const Real Z, const Real S, const Real nu, const Real rho,
-    const int WPSjson,const std::string& model);
 
 
 #endif

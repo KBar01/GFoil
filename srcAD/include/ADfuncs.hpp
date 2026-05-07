@@ -169,7 +169,7 @@ double partialOutputspartialInputs(
     }
 
     interpolate_at_95_both_surfaces(xcoords,glob.U,post.cp,oper,turb,param,topsurf,botsurf,Uinf,sampleTE,chordScaling);
-    Real OASPL = calc_OASPL_AD(botsurf,topsurf,chordScaling,Uinf,X,Y,Z,S,kinViscInf,rhoInf,model);
+    Real OASPL = calc_OASPL(botsurf,topsurf,chordScaling,Uinf,X,Y,Z,S,kinViscInf,rhoInf,0,model);
 
     Real outputs[2] = {post.cl,OASPL} ;
 
@@ -195,8 +195,9 @@ double partialOutputspartialInputs(
         jacobianOASPL_states[i] = (states[i].getGradient()[1]);
     }
 
-    return post.cl.getValue();
+    double result = post.cl.getValue();
     tape.reset();
+    return result;
 
 };
 
