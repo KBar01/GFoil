@@ -1,6 +1,9 @@
 #include <cmath>
 #include "real_type.h"
 
+// Goody (2004) "Empirical Spectral Model of Surface Pressure Fluctuations"
+// AIAA Journal Vol. 42 No. 9 — outer-layer scaling with Reynolds-number correction
+// via Rt = (δ/Ue)/(ν/u_τ²).
 void calc_WPS_Goody(Real theta,
                     Real deltaS,
                     Real delta,
@@ -36,6 +39,9 @@ void calc_WPS_Goody(Real theta,
 
 }
 
+// Kamruzzaman et al. (2017) "A semi-empirical surface pressure spectrum model for
+// airfoil trailing-edge noise prediction" — APG correction via β_c and
+// wake-function parameter G; scaled on displacement thickness δ*.
 void calc_WPS_Kamruzzaman(Real theta,
                     Real deltaS,
                     Real tauWall,
@@ -86,6 +92,9 @@ void calc_WPS_Kamruzzaman(Real theta,
 
 }
 
+// Rozenberg et al. (2012) "Wall-pressure spectral model including the adverse
+// pressure gradient effects" AIAA Journal — extends Goody (2004) with β_c,
+// δ/δ* shape-factor scaling, and tauMax in the denominator.
 void calc_WPS_Rozenburg(Real theta,
                     Real deltaS,
                     Real delta,
@@ -143,6 +152,9 @@ void calc_WPS_Rozenburg(Real theta,
 }
 
 
+// Lee — "Comparison and Assessment of Recent Empirical Models for Turbulent Boundary
+// Layer Wall Pressure Spectrum" — APG-extended Rozenberg (2012) model with modified
+// shape factors d*, h* and amplitude a* (Table 1 of the Lee comparison paper).
 void calc_WPS_Lee(Real theta,
                     Real deltaS,
                     Real delta,
@@ -155,12 +167,12 @@ void calc_WPS_Lee(Real theta,
                     Real nu,
                     Real (&phiqq)[Nsound]){
 
-    
-    
+
+
     /*
-    Wall-Pressure Spectral Model Including the Adverse
-    Pressure Gradient Effects
-    Yannick Rozenberg, 2012
+    Lee — modified Rozenberg (2012) model.
+    See: "Comparison and Assessment of Recent Empirical Models for Turbulent
+    Boundary Layer Wall Pressure Spectrum" (Table 1).
     */
 
     Real Delta = delta/deltaS  ;
@@ -215,7 +227,7 @@ void mean_velocity_profile(const Real (&y)[NblPoints],
                            Real (&dUdy)[NblPoints])
 {
 
-    // Following Eq 19
+    // Lee (2016) Eqs. 19-20 — log-law with Coles wake function mean-velocity profile
 
     const Real kappa = 0.41;
     const Real B = 5.5;
@@ -259,7 +271,7 @@ void Turb_shear_stress(
     Real (&u22)[NblPoints])
 {
    
-    // Using Eq 25-27
+    // Lee (2016) Eqs. 25-27 — turbulent shear stress via eddy-viscosity mixing-length model
     for (int i = 0; i < NblPoints; ++i)
     {
        Real nu_t = l_mix[i]*l_mix[i]*std::sqrt(dUdy[i]*dUdy[i]);
@@ -283,7 +295,7 @@ void Integral_Length_scale(
     Real (&l_mix)[NblPoints])
 {
 
-    // Using Eq 22-24
+    // Lee (2016) Eqs. 22-24 — integral length scale L₂ and mixing length l_mix
     const Real k = 0.41;
     const Real B = 5.5 ;
 
@@ -307,7 +319,7 @@ void Energy_density_spectrum(
     Real (&phi22)[NblPoints])
 {
 
-    // Using Eq 28-32
+    // Lee (2016) Eqs. 28-32 — spectral energy density Φ₂₂(k₁)
     Real beta1 = 1.0;
     Real beta3 = 0.75;
 
@@ -320,6 +332,10 @@ void Energy_density_spectrum(
 }
 
 
+// Lee (2016) "Source Characterization of Turbulent Boundary Layer Trailing Edge Noise
+// Using an Improved TNO Model" — TNO-Blake model with Lee's improved mean-velocity
+// profile (Eqs. 19-20), length scales (Eqs. 22-24), turbulence (Eqs. 25-27),
+// spectral energy density (Eqs. 28-32), and wall-pressure integral (Eq. 37).
 void calc_WPS_TNO(
     const Real delta,
     Real tauWall,
@@ -395,7 +411,7 @@ void calc_WPS_TNO(
     for (int w = 0; w < Nsound; ++w)
     {
         
-        // Using Eq 37
+        // Lee (2016) Eq. 37 — frequency-loop wall-normal integration for Φ_pp(ω)
         Real k1 = omega[w] / Uc;
         Real k = std::abs(k1);
 
