@@ -276,7 +276,7 @@ void partialRpartialx(
     for (int i=0;i<RVdimension;++i){glob.U[i] = states[i];}
     for (int i=0;i<(Ncoords+Nwake);++i){vsol.turb[i] = turb[i];}
 
-    build_gamma_codi(isolc,foil,oper);
+    build_gamma_codi<Real>(isolc,foil,oper);
     init_thermo(oper,param,geom);
     build_wake(foil,geom,oper,isolc,wake);
     stagpoint_find(isolc,isol_pre,foil,wake);

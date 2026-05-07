@@ -1,28 +1,25 @@
 #pragma once
 
+// Shared inviscid-solve header — used by both GFoil_fwd_codi and GFoil_AD.
+//
+// solve_sys_inv : CoDiPack-aware linear solve for the AIC system.
+//   typename Real  — CoDiPack active type (deduced from RHS array)
+//   typename IsolT — duck-typed: accepts Isol (fwd) or Isolc<Real> (AD)
+//                    both provide infMatrix[] and gammasRef[].
+//
+// build_gamma_codi : assemble AIC matrix and call solve_sys_inv.
+//   typename IsolT, FoilT, OperT — duck-typed for the same reason.
+//
+// Callers must include the appropriate real_type and data_structs headers
+// before including this header.  panel_funcs.hpp is included here because
+// the panel geometry functions are needed inside build_gamma_codi.
+
 #include <codi.hpp>
 #include <Eigen/Dense>
-
-#include <iostream>
 #include <cmath>
-#include "real_type.hpp"
-#include "data_structs.hpp"
-#include "get_funcs.hpp"
 #include "panel_funcs.hpp"
 
-
-template<typename Real> struct Isolc;
-template<typename Real> struct Isolv;
-template<typename Real> struct Vsol;
-template<typename Real> struct Foil;
-template<typename Real> struct Param;
-template<typename Real> struct Post;
-template<typename Real> struct Oper;
-template<typename Real> struct Geom;
-template<typename Real> struct Wake;
-template<typename Real> struct Glob;
-template<typename Real> struct Trans;
-
+// ── CoDiPack external-function data and callbacks (identical for fwd and AD) ──
 
 template<typename Active>
 struct ImplicitInvSolveData {
@@ -103,8 +100,12 @@ static void implicit_inv_solve_delete(typename Active::Tape*, void* d)
   delete static_cast<ImplicitInvSolveData<Active>*>(d);
 }
 
-template<typename Real>
-void solve_sys_inv(Isolc<Real> &isol, const Real* RHS)
+// ── solve_sys_inv ─────────────────────────────────────────────────────────────
+// IsolT accepts Isol (forward) or Isolc<Real> (AD) — both expose infMatrix[]
+// and gammasRef[].  Real is deduced from the RHS pointer type.
+
+template<typename Real, typename IsolT>
+void solve_sys_inv(IsolT& isol, const Real* RHS)
 {
   constexpr int n = Ncoords + 1;
   using Active = Real;
@@ -170,23 +171,17 @@ void solve_sys_inv(Isolc<Real> &isol, const Real* RHS)
   );
 }
 
+// ── build_gamma_codi ──────────────────────────────────────────────────────────
+// Assembles the AIC matrix, builds the RHS, and calls solve_sys_inv.
+// IsolT, FoilT, OperT are duck-typed: works with the non-template
+// (Isol, Foil, Oper) forward structs and the template (Isolc<Real>, Foil<Real>,
+// Oper<Real>) AD structs provided they expose the same member names.
 
-template<typename Real>
-void build_gamma_codi(Isolc<Real> &isol, const Foil<Real>& foil, const Oper<Real>& op) {
-    // Build and solve the inviscid linear system for alpha=0,90,input
-    // INPUT
-    //   isol: Invisid solution structure
-    //   foil: Aerofoil data  structure
-    //   alpha: angle of attack (Radians)
-    // OUTPUT
-    //   isol.gamref: 0,90deg vorticity distributions at each node (Nx2)
-    //   isol.gam: gamma for the particular input angle, alpha
-    //   isol.infMatrix: aerodynamic influence coefficient matrix, filled in
+template<typename Real, typename IsolT, typename FoilT, typename OperT>
+void build_gamma_codi(IsolT& isol, const FoilT& foil, const OperT& op)
+{
+    Real rhs[2*(Ncoords + 1)];
 
-    // Initialize matrices A and rhs
-    Real rhs[2*(Ncoords + 1)] ; 
-
-    // Initialise the panelinfo struct and influence coeffs used inside loop
     PanelInfo<Real> panelInfo;
     Real aij = 1.0;
     Real bij = 1.0;
@@ -194,55 +189,51 @@ void build_gamma_codi(Isolc<Real> &isol, const Foil<Real>& foil, const Oper<Real
     Real a_vortex = 1.0;
     Real b_vortex = 1.0;
 
-    // Build influence matrix and rhs
-    for (int i = 0; i < Ncoords; i++) {  // Loop over nodes
+    for (int i = 0; i < Ncoords; i++) {
 
-        for (int j = 0; j < Ncoords-1; j++) {  // Loop over panels
-            // panel_linvortex_stream should be implemented to return aij and bij
-            panel_linvortex_stream(foil.x[colMajorIndex(0,j,2)], foil.x[colMajorIndex(1,j,2)],
-            foil.x[colMajorIndex(0,j+1,2)], foil.x[colMajorIndex(1,j+1,2)],
-            foil.x[colMajorIndex(0,i,2)], foil.x[colMajorIndex(1,i,2)],
-            panelInfo, aij, bij);
-            
+        for (int j = 0; j < Ncoords-1; j++) {
+            panel_linvortex_stream(
+                foil.x[colMajorIndex(0,j,2)],   foil.x[colMajorIndex(1,j,2)],
+                foil.x[colMajorIndex(0,j+1,2)], foil.x[colMajorIndex(1,j+1,2)],
+                foil.x[colMajorIndex(0,i,2)],   foil.x[colMajorIndex(1,i,2)],
+                panelInfo, aij, bij);
+
             isol.infMatrix[colMajorIndex(i,j,Ncoords+1)]   += aij;
             isol.infMatrix[colMajorIndex(i,j+1,Ncoords+1)] += bij;
         }
 
-        isol.infMatrix[colMajorIndex(i,Ncoords,Ncoords+1)] = -1.0;  // Last unknown = streamfunction value on surface
-        
-        // Right-hand sides
+        isol.infMatrix[colMajorIndex(i,Ncoords,Ncoords+1)] = -1.0;
+
         rhs[colMajorIndex(i,0,Ncoords+1)] = -foil.x[colMajorIndex(1,i,2)];
-        rhs[colMajorIndex(i,1,Ncoords+1)] = foil.x[colMajorIndex(0,i,2)];
+        rhs[colMajorIndex(i,1,Ncoords+1)] =  foil.x[colMajorIndex(0,i,2)];
 
-        // TE source influence
-        panel_constsource_stream(foil.x[colMajorIndex(0,Ncoords-1,2)], foil.x[colMajorIndex(1,Ncoords-1,2)],
-                              foil.x[colMajorIndex(0,0,2)], foil.x[colMajorIndex(1,0,2)],
-                              foil.x[colMajorIndex(0,i,2)], foil.x[colMajorIndex(1,i,2)],
-                              panelInfo, a);
-        
-        isol.infMatrix[colMajorIndex(i,0,Ncoords+1)] += -a*(0.5 * foil.te.tcp);
-        isol.infMatrix[colMajorIndex(i,Ncoords-1,Ncoords+1)] += a*(0.5 * foil.te.tcp);
+        panel_constsource_stream(
+            foil.x[colMajorIndex(0,Ncoords-1,2)], foil.x[colMajorIndex(1,Ncoords-1,2)],
+            foil.x[colMajorIndex(0,0,2)],          foil.x[colMajorIndex(1,0,2)],
+            foil.x[colMajorIndex(0,i,2)],          foil.x[colMajorIndex(1,i,2)],
+            panelInfo, a);
 
-        // TE vortex panel 
-        panel_linvortex_stream(foil.x[colMajorIndex(0,Ncoords-1,2)], foil.x[colMajorIndex(1,Ncoords-1,2)],
-        foil.x[colMajorIndex(0,0,2)], foil.x[colMajorIndex(1,0,2)],
-        foil.x[colMajorIndex(0,i,2)], foil.x[colMajorIndex(1,i,2)],
-        panelInfo, a_vortex, b_vortex);
-        
-        isol.infMatrix[colMajorIndex(i,0,Ncoords+1)] += -(a_vortex + b_vortex)*(-0.5 * foil.te.tdp);
-        isol.infMatrix[colMajorIndex(i,Ncoords-1,Ncoords+1)] += (a_vortex + b_vortex)*(-0.5 * foil.te.tdp);
+        isol.infMatrix[colMajorIndex(i,0,Ncoords+1)]         += -a*(0.5 * foil.te.tcp);
+        isol.infMatrix[colMajorIndex(i,Ncoords-1,Ncoords+1)] +=  a*(0.5 * foil.te.tcp);
+
+        panel_linvortex_stream(
+            foil.x[colMajorIndex(0,Ncoords-1,2)], foil.x[colMajorIndex(1,Ncoords-1,2)],
+            foil.x[colMajorIndex(0,0,2)],          foil.x[colMajorIndex(1,0,2)],
+            foil.x[colMajorIndex(0,i,2)],          foil.x[colMajorIndex(1,i,2)],
+            panelInfo, a_vortex, b_vortex);
+
+        isol.infMatrix[colMajorIndex(i,0,Ncoords+1)]         += -(a_vortex+b_vortex)*(-0.5*foil.te.tdp);
+        isol.infMatrix[colMajorIndex(i,Ncoords-1,Ncoords+1)] +=  (a_vortex+b_vortex)*(-0.5*foil.te.tdp);
     }
 
     // Kutta condition
-    isol.infMatrix[colMajorIndex(Ncoords, 0, Ncoords+1)] = 1;
+    isol.infMatrix[colMajorIndex(Ncoords, 0,         Ncoords+1)] = 1;
     isol.infMatrix[colMajorIndex(Ncoords, Ncoords-1, Ncoords+1)] = 1;
-    //solve_sys(isol,rhs);   // Solves the linear sys using Eigen, and puts gammas in isol struct
 
-    
-    solve_sys_inv(isol,rhs);
-
+    solve_sys_inv(isol, rhs);
 
     for (int i = 0; i < Ncoords; ++i) {
-        isol.gammas[i] = isol.gammasRef[colMajorIndex(i,0,Ncoords)]*std::cos(op.alpha) + isol.gammasRef[colMajorIndex(i,1,Ncoords)]*std::sin(op.alpha);
+        isol.gammas[i] = isol.gammasRef[colMajorIndex(i,0,Ncoords)] * std::cos(op.alpha)
+                       + isol.gammasRef[colMajorIndex(i,1,Ncoords)] * std::sin(op.alpha);
     }
-};
+}
