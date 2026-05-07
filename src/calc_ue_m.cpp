@@ -44,7 +44,7 @@ void calc_ue_m(const Foil&foil,const Wake&wake,Isol&isol,Vsol &vsol) {
     // Allocate B: (Ncoords+1) x npan
     Real B[(Ncoords+1) * nPanels] = {0.0};
 
-    PanelInfo info;
+    PanelInfo<Real> info;
     for (int i = 0; i < Ncoords; ++i) {
         
         Real foilPoint[2] = {foil.x[colMajorIndex(0, i, 2)], foil.x[colMajorIndex(1, i, 2)]};

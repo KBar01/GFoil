@@ -4,6 +4,7 @@
 #include "codi.hpp"
 #include "real_type.h"
 #include "data_structs.h"
+#include "spline.hpp"
 #include "main_func.h"
 #include "get_funcs.h"
 #include "panel_funcs.h"

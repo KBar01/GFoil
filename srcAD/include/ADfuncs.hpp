@@ -6,6 +6,7 @@
 #include "data_structs.hpp"
 #include "spline.hpp"
 #include "solve_inv.hpp"
+#include "panel_funcs_foil.hpp"
 #include "calc_ue_m.hpp"
 #include "main_func.hpp"
 

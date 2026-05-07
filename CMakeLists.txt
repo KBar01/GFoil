@@ -71,11 +71,13 @@ endif()
 
 set(COMMON_INCLUDES_AD ${PROJECT_SOURCE_DIR}/srcAD/include)
 set(NOISE_INCLUDES_AD ${PROJECT_SOURCE_DIR}/srcAD/noise_includes)
-add_executable(GFoil_AD srcAD/main.cpp srcAD/error_package.cpp)
+add_executable(GFoil_AD srcAD/main.cpp src/error_package.cpp)
 target_link_libraries(GFoil_AD PRIVATE Eigen3::Eigen CoDiPack nlohmann_json::nlohmann_json)
 target_include_directories(GFoil_AD PRIVATE
  ${COMMON_INCLUDES_AD}
+ ${COMMON_INCLUDES_FWD}
  ${NOISE_INCLUDES_AD}
+ ${NOISE_INCLUDES_FWD}
  ${codipack_SOURCE_DIR}/include
 )
 target_compile_definitions(GFoil_AD PRIVATE

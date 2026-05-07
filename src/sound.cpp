@@ -1,8 +1,9 @@
 #include <iostream>
 #include <cmath>
 #include "data_structs.h"
-#include "amiet.h"
 #include "real_type.h"
+#include "WPSmodels.hpp"
+#include "newAmiet.hpp"
 #include <fstream>
 #include <sstream>
 
@@ -123,7 +124,7 @@ Real calc_OASPL(const Real* botStates, const Real* topStates, const Real chordSc
 
     Real farfieldSpectra[Nsound] ;
 
-    TE_noise_outer((Uinf/340),Uinf,X,Y,Z,chordScale/2,0.0,chordScale,S,340,rho,nu,
+    TE_noise_outer<Real>((Uinf/340),Uinf,X,Y,Z,chordScale/2,0.0,chordScale,S,340,rho,nu,
                 omega,edgeVel_bot,edgeVel_top,WPSLower,WPSUpper,farfieldSpectra);
 
     // integrate S_pp over frequency:

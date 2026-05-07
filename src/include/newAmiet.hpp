@@ -2,25 +2,12 @@
 
 #include <cmath>
 #include <complex>
+#include <codi.hpp>  // for codi::StatementPushHelper in errFunc
 #include "Faddeeva.hh"
-#include "real_type.hpp"
 
 
 using std::complex;
 using std::exp;
-
-template<typename Real> struct Isolc;
-template<typename Real> struct Isolv;
-template<typename Real> struct Vsol;
-template<typename Real> struct Foil;
-template<typename Real> struct Param;
-template<typename Real> struct Post;
-template<typename Real> struct Oper;
-template<typename Real> struct Geom;
-template<typename Real> struct Wake;
-template<typename Real> struct Glob;
-template<typename Real> struct Trans;
-
 
 // multiply (ar + i ai)*(br + i bi)
 template<typename Real>
@@ -54,6 +41,7 @@ inline void csqrt(Real ar, Real ai, Real &sr, Real &si) {
     si = std::sqrt(r)*std::sin(t);
 }
 
+
 template<typename Real>
 inline void complex_sqrt(Real ar, Real ai,
                          Real &br, Real &bi)
@@ -82,56 +70,45 @@ inline void complex_sqrt(Real ar, Real ai,
     }
 }
 
+
 template<typename Real>
 void errFunc(Real in_r,Real in_i, Real &out_r, Real &out_i){
 
-    
-    # ifdef USE_CODIPACK
-        double x_val = in_r.getValue() ;
-        //double x_val = in_r ;
-        double y_val = in_i.getValue() ;
-        //double y_val = in_i ;
-        complex<double> z(x_val,y_val) ;
-        complex<double> w = Faddeeva::erf(z);
-        
-        std::complex<double> dw_dz = (2.0 / sqrt(M_PI)) * exp(-z * z); // Derivative
-
-        // Compute real and imag parts of Jacobian
-        double du_dx = dw_dz.real();        // ∂Re(w)/∂x
-        double du_dy = -dw_dz.imag();       // ∂Re(w)/∂y
-        double dv_dx = dw_dz.imag();        // ∂Im(w)/∂x
-        double dv_dy = dw_dz.real();        // ∂Im(w)/∂y
-        
-        // Push statement for u = Re(w)
-        codi::StatementPushHelper<Real> ph;
-        ph.startPushStatement();
-        ph.pushArgument(in_r, du_dx);
-        ph.pushArgument(in_i, du_dy);
-        ph.endPushStatement(out_r, w.real());
-
-
-        // Push statement for v = Im(w)
-
-        codi::StatementPushHelper<Real> phIm;
-        phIm.startPushStatement();
-        phIm.pushArgument(in_r, dv_dx);
-        phIm.pushArgument(in_i, dv_dy);
-        phIm.endPushStatement(out_i, w.imag());
-    #else
-
-    complex<double> z(in_r,in_i) ;
+    double x_val = in_r.getValue() ;
+    //double x_val = in_r ;
+    double y_val = in_i.getValue() ;
+    //double y_val = in_i ;
+    complex<double> z(x_val,y_val) ;
     complex<double> w = Faddeeva::erf(z);
+    
+    std::complex<double> dw_dz = (2.0 / sqrt(M_PI)) * exp(-z * z); // Derivative
 
-    out_r = w.real();
-    out_i = w.imag();
+    // Compute real and imag parts of Jacobian
+    double du_dx = dw_dz.real();        // ∂Re(w)/∂x
+    double du_dy = -dw_dz.imag();       // ∂Re(w)/∂y
+    double dv_dx = dw_dz.imag();        // ∂Im(w)/∂x
+    double dv_dy = dw_dz.real();        // ∂Im(w)/∂y
+    
+    // Push statement for u = Re(w)
+    codi::StatementPushHelper<Real> ph;
+    ph.startPushStatement();
+    ph.pushArgument(in_r, du_dx);
+    ph.pushArgument(in_i, du_dy);
+    ph.endPushStatement(out_r, w.real());
 
-    #endif
 
+    // Push statement for v = Im(w)
 
+    codi::StatementPushHelper<Real> phIm;
+    phIm.startPushStatement();
+    phIm.pushArgument(in_r, dv_dx);
+    phIm.pushArgument(in_i, dv_dy);
+    phIm.endPushStatement(out_i, w.imag());
 }
 
 
 /////////////////////////////////////////// This is amiet model as given in R&M ///////////////////
+
 template<typename Real>
 void wavesnumbers(
     // wavesnumbers: compute wavenumber-related quantities from input scalars
@@ -201,6 +178,8 @@ void wavesnumbers(
 }
 
 
+// Roger & Moreau (2005) — E*(x), defined in text between Eq. 3 and Eq. 4.
+// E*(x) = erfc((1-i)sqrt(x/2)) / (1+i),  equivalently (1+i)E*(x) - 1 = -erf((1-i)sqrt(x/2)).
 // x is real Real
 template<typename Real>
 void Fresnel_int(Real x,
@@ -214,15 +193,19 @@ void Fresnel_int(Real x,
 
     // Step 2: call your complex erf wrapper
     Real erf_real, erf_imag;
-    errFunc(z_real, z_imag, erf_real, erf_imag);
+    errFunc<Real>(z_real, z_imag, erf_real, erf_imag);
 
-    // Step 3: divide by (1 - i)
-    // (a+ib)/(1-i) = [(a+ib)(1+i)]/2
-    Real denom = 2.0; // |1-i|^2
-    E_real = ( erf_real*1.0 - erf_imag*1.0 ) / denom;
-    E_imag = ( erf_real*1.0 + erf_imag*1.0 ) / denom;
+    // Step 3: compute (1 - erf(z)) / (1+i)
+    // (1+i)E*(x) - 1 = -erf((1-i)sqrt(x/2))  =>  E*(x) = [1 - erf(z)] / (1+i)
+    // (a+ib)/(1+i) = ((a+b) + i(b-a))/2
+    Real one_minus_r = 1.0 - erf_real;
+    Real one_minus_i = 0.0 - erf_imag;
+    E_real = (one_minus_r + one_minus_i) / 2.0;
+    E_imag = (one_minus_i - one_minus_r) / 2.0;
 }
 
+// Roger & Moreau (2005) — complex-argument form of E*(x) for use in Radiation_integral1/2.
+// Evaluates E_s*(xr + i*xi) where the argument is a complex wavenumber combination.
 // x is real (Real)
 template<typename Real>
 inline void Fresnel_int_conj(Real xr, Real xi,
@@ -240,7 +223,7 @@ inline void Fresnel_int_conj(Real xr, Real xi,
 
     // erfz of that complex number
     Real erf_r, erf_i;
-    errFunc(mr, mi, erf_r, erf_i);  // you provide this
+    errFunc<Real>(mr, mi, erf_r, erf_i);  // you provide this
 
     // temp = -(1 - erfz(...))
     Real temp_r = -(1.0 - erf_r);
@@ -270,15 +253,18 @@ inline void Phi_0_img_new(Real sqrt_r, Real sqrt_i,
     Real xr = b;
     Real xi = -a;
 
-    // Fresnel_int_conj(x) returning Er+ iEi
+    // Fresnel_int_conj<Real>(x) returning Er+ iEi
     Real Er, Ei;
-    Fresnel_int_conj(xr, xi, Er, Ei);
+    Fresnel_int_conj<Real>(xr, xi, Er, Ei);
 
     // (1+i)*(Er+iEi) = (Er - Ei) + i(Er+Ei)
     Phi_r = Er - Ei;
     Phi_i = Er + Ei;
 }
 
+// Roger & Moreau (2005) Eq. 13 — chordwise radiation integral f1.
+// Primary trailing-edge scattering term for the supercritical regime.
+// B = K̄₁ + Mμ̄ + k̄  (supercritical real wavenumber),  C from Eq. 12.
 template<typename Real>
 inline void Radiation_integral1(Real B, Real C,
                                 Real &f1r, Real &f1i)
@@ -287,13 +273,13 @@ inline void Radiation_integral1(Real B, Real C,
     Real a_r,a_i; Fresnel_int_conj<Real>(2.0*(B-C),0.0,a_r,a_i);
     Real b_r,b_i; Fresnel_int_conj<Real>(2.0*B,0.0,b_r,b_i);
 
-    // prefactor = -exp(2 i C)/(i C)
+    // prefactor = -exp(-2iC)/(iC)
     Real cos2C=std::cos(2.0*C), sin2C=std::sin(2.0*C);
     // exp(2iC)=cos2C+i sin2C
     // (iC)=i*C so 1/(iC)=-i/C
     // so prefactor = -exp(2iC)/(iC)= -exp(2iC)*(-i/C)= i*exp(2iC)/C
-    Real pref_r = -sin2C/C;   // real part of i*exp(2iC)/C
-    Real pref_i =  cos2C/C;   // imag part
+    Real pref_r = -sin2C/C;   // real part of -exp(-2iC)/(iC)
+    Real pref_i = -cos2C/C;   // imag part
 
     // (1+i)
     Real onepI_r=1.0, onepI_i=1.0;
@@ -317,7 +303,7 @@ inline void Radiation_integral1(Real B, Real C,
     // divide a/sc
     //Real a_div_r=a_r/sc, a_div_i=a_i/sc;
     Real a_div_r, a_div_i;
-    cdiv(a_r, a_i, sc_r, sc_i, a_div_r, a_div_i);
+    cdiv<Real>(a_r, a_i, sc_r, sc_i, a_div_r, a_div_i);
     
     
     // multiply tmp * a_div
@@ -337,6 +323,10 @@ inline void Radiation_integral1(Real B, Real C,
     f1i=pref_r*br_i + pref_i*br_r;
 }
 
+
+// Roger & Moreau (2005) Eq. 14 — back-scattering correction integral f2.
+// G is the sum of sub-integrals G_a..G_e (the five bracketed terms in the paper).
+// H is the correction prefactor; ε (error parameter) is defined by Eq. 9.
 template<typename Real>
 void Radiation_integral2(
     Real B, Real K_bar, Real k_min_bar, Real mu_bar, Real S0,
@@ -346,7 +336,7 @@ void Radiation_integral2(
     Real error = std::pow(1.0 + 1.0/(4.0*mu_bar), -0.5);   // Eq.9
     Real D = k_min_bar - mu_bar * x / S0;
 
-    // --- E = exp(4i*k_min_bar)*(1 - (1+i)*Fresnel_int_conj(4*k_min_bar))
+    // --- E = exp(4i*k_min_bar)*(1 - (1+i)*Fresnel_int_conj<Real>(4*k_min_bar))
     Real Fr,Fi;
     Fresnel_int_conj<Real>(4.0*k_min_bar,0.0,Fr,Fi);
     // (1+i)*Fresnel
@@ -425,7 +415,7 @@ void Radiation_integral2(
 
     // now sqrt that quotient:
     Real sqrtfactor_r, sqrtfactor_i;
-    complex_sqrt(quot_r, quot_i, sqrtfactor_r, sqrtfactor_i);
+    complex_sqrt<Real>(quot_r, quot_i, sqrtfactor_r, sqrtfactor_i);
 
 
 
@@ -487,6 +477,9 @@ void Radiation_integral2(
     f2i=Hr*totali + Hi*totalr;
 }
 
+// Roger & Moreau (2005) Eq. 15 — subcritical chordwise radiation integral f1.
+// Subcritical analogue of Radiation_integral1 when k̄² < 0; argument A1'
+// is complex:  A1' = K̄₁ + Mμ̄ - ik̄'.
 template<typename Real>
 void Radiation_integral1_subcrit(
     Real C,
@@ -520,13 +513,13 @@ void Radiation_integral1_subcrit(
     Real onep_i_real = 1.0;
     Real onep_i_imag = 1.0;
 
-    // Fresnel_int_conj(temp1)
+    // Fresnel_int_conj<Real>(temp1)
     Real Fres_real, Fres_imag;
-    Fresnel_int_conj(temp1_real, temp1_imag, Fres_real, Fres_imag);
+    Fresnel_int_conj<Real>(temp1_real, temp1_imag, Fres_real, Fres_imag);
 
     // sqrt(temp1) for denominator (complex)
     Real sqrt1_real, sqrt1_imag;
-    complex_sqrt(temp1_real, temp1_imag, sqrt1_real, sqrt1_imag);
+    complex_sqrt<Real>(temp1_real, temp1_imag, sqrt1_real, sqrt1_imag);
 
     // (1+i)*Fres
     Real t1_real = onep_i_real * Fres_real - onep_i_imag * Fres_imag;
@@ -541,7 +534,7 @@ void Radiation_integral1_subcrit(
 
     // sqrt(temp2) (complex now)
     Real sqrt_temp2_r, sqrt_temp2_i;
-    complex_sqrt(temp2_r, temp2_i, sqrt_temp2_r, sqrt_temp2_i);
+    complex_sqrt<Real>(temp2_r, temp2_i, sqrt_temp2_r, sqrt_temp2_i);
 
     // multiply by sqrt(temp2)
     Real t1ds_r = t1d_real * sqrt_temp2_r - t1d_imag * sqrt_temp2_i;
@@ -555,9 +548,9 @@ void Radiation_integral1_subcrit(
     Real arg_r = -A1prime_i * 2.0; // real part of 2*A1_prime*i
     Real arg_i = A1prime_r * 2.0;  // imag part
     Real sqrt_arg_r, sqrt_arg_i;
-    complex_sqrt(arg_r, arg_i, sqrt_arg_r, sqrt_arg_i);
+    complex_sqrt<Real>(arg_r, arg_i, sqrt_arg_r, sqrt_arg_i);
     Real phi_real, phi_imag;
-    Phi_0_img_new(sqrt_arg_r, sqrt_arg_i, phi_real, phi_imag);
+    Phi_0_img_new<Real>(sqrt_arg_r, sqrt_arg_i, phi_real, phi_imag);
 
     // inner = partA - phi + 1
     Real inner_real = partA_real - phi_real + 1.0;
@@ -576,6 +569,8 @@ void Radiation_integral1_subcrit(
     outImag = m_real * inner_imag + m_imag * inner_real;
 }
 
+// Roger & Moreau (2005) Eq. 16 — subcritical back-scattering correction f2.
+// H' uses complex A1' = K̄₁ + Mμ̄ - ik̄' and D' = μ̄(x/S₀) - ik̄'.
 template<typename Real>
 inline void Radiation_integral2_subcrit(
     Real A_prime_r, Real A_prime_i,
@@ -605,7 +600,7 @@ inline void Radiation_integral2_subcrit(
 
     // sqrt(A1_prime) (complex)
     Real sqrtA1_r, sqrtA1_i;
-    complex_sqrt(A1_prime_r,A1_prime_i,sqrtA1_r,sqrtA1_i);
+    complex_sqrt<Real>(A1_prime_r,A1_prime_i,sqrtA1_r,sqrtA1_i);
     Real mod_sqrtA1 = std::sqrt(sqrtA1_r*sqrtA1_r + sqrtA1_i*sqrtA1_i);
 
     Real denom = 2.0*std::sqrt(M_PI)*(alpha-1.0)*K_bar*mod_sqrtA1;
@@ -652,7 +647,7 @@ inline void Radiation_integral2_subcrit(
     Real temp3r = -2.0*Dr;
     Real temp3i =  2.0*Di;
     Real ESr,ESi;
-    Fresnel_int_conj(temp3r,temp3i,ESr,ESi);
+    Fresnel_int_conj<Real>(temp3r,temp3i,ESr,ESi);
 
     Real coeff = 2.0*std::sqrt(2.0*k_min_bar_prime)*
                    (K_bar + (M-x/S0)*mu_bar);
@@ -673,6 +668,10 @@ inline void Radiation_integral2_subcrit(
     out_i = pre_r*Hbr_i + pre_i*Hbr_r;
 }
 
+// Roger & Moreau (2005) Section 3.1 — subcritical wavenumber quantities.
+// k̄' = sqrt(K̄₂²/β² - μ̄²) is real and positive when k̄² = μ̄² - K̄₂²/β² < 0.
+// Also computes complex amplitudes A1' = K̄₁ + Mμ̄ - ik̄',  A' = K̄ + Mμ̄ - ik̄',
+// and Θ' = sqrt(A1'/A').
 template<typename Real>
 inline void Wavenumbers_subcrit(
     const Real M,
@@ -702,9 +701,13 @@ inline void Wavenumbers_subcrit(
     Real ri = (A1prime_i*Aprime_r - A1prime_r*Aprime_i)/denom;
 
     // Theta' = sqrt(rr + i ri)
-    complex_sqrt(rr, ri, Tr, Ti);
+    complex_sqrt<Real>(rr, ri, Tr, Ti);
 }
 
+// Roger & Moreau (2005) Section 3.1 — frequency loop; selects supercritical or subcritical branch.
+// Branching criterion: k̄² = μ̄² - K̄₂²/β².
+//   k̄² >= 0 (supercritical): real scattered wavenumber k̄ = sqrt(k̄²), call Radiation_integral1/2.
+//   k̄² <  0 (subcritical):   imaginary scattered wavenumber, call Radiation_integral1/2_subcrit.
 template<typename Real>
 void Radiation_integral_total(
     const Real *C,           // array size Nsound
@@ -723,36 +726,33 @@ void Radiation_integral_total(
 {
     for (int i = 0; i < Nsound; ++i)
     {
-        // MATLAB: crit = (K_1_bar*M/(alpha*beta))
-        Real crit = (K_1_bar[i] * M / (alpha * beta));
+        // k̄² = μ̄² - K̄₂²/β²  (Section 3.1 of Roger & Moreau 2005)
+        Real kbar2 = mu_bar[i]*mu_bar[i] -
+                     (K_2_bar[i]*K_2_bar[i])/(beta*beta);
 
         Real Ireal = 0.0, Iimag = 0.0;
 
-        if (K_2_bar[i] * K_2_bar[i] < (crit * crit))
+        if (kbar2 >= 0.0)
         {
-            // subcritical branch
-            Real k_min_bar = std::sqrt(std::abs(
-                mu_bar[i] * mu_bar[i] -
-                (K_2_bar[i] * K_2_bar[i]) / (beta * beta)));
+            // SUPERCRITICAL — use Radiation_integral1/2
+            Real k_min_bar = std::sqrt(kbar2);
 
             Real B = K_1_bar[i] + M * mu_bar[i] + k_min_bar;
 
-            // f1 (identical to Amiet)
             Real fr1, fi1;
             Radiation_integral1<Real>(B, C[i], fr1, fi1);
 
-            // f2 (back-scattering in R&M)
             Real fr2, fi2;
             Radiation_integral2<Real>(
-                B,              // B
-                K_bar[i],       // K_bar
-                k_min_bar,      // k_min_bar
-                mu_bar[i],      // mu_bar
-                S0,             // S0
-                K_1_bar[i],     // K_1_bar
-                alpha,          // alpha
-                x,              // x
-                M,              // M
+                B,
+                K_bar[i],
+                k_min_bar,
+                mu_bar[i],
+                S0,
+                K_1_bar[i],
+                alpha,
+                x,
+                M,
                 fr2, fi2);
 
             Ireal = fr1 + fr2;
@@ -760,20 +760,18 @@ void Radiation_integral_total(
         }
         else
         {
-            // supercritical branch
+            // SUBCRITICAL — use Radiation_integral1/2_subcrit
             Real k_min_bar_prime;
             Real A1prime_r, A1prime_i;
             Real Aprime_r, Aprime_i;
             Real Thetaprime_r, Thetaprime_i;
 
-            // compute wavenumbers etc.
             Wavenumbers_subcrit<Real>(
                 M, mu_bar[i], K_1_bar[i], K_2_bar[i], K_bar[i], beta,
                 k_min_bar_prime, A1prime_r, A1prime_i,
                 Aprime_r, Aprime_i,
                 Thetaprime_r, Thetaprime_i);
 
-            // f1
             Real fr1, fi1;
             Radiation_integral1_subcrit<Real>(
                 C[i],
@@ -784,7 +782,6 @@ void Radiation_integral_total(
                 k_min_bar_prime,
                 fr1, fi1);
 
-            // f2
             Real fr2, fi2;
             Radiation_integral2_subcrit<Real>(
                 Aprime_r, Aprime_i,
@@ -807,6 +804,7 @@ void Radiation_integral_total(
         I_abs2[i] = Ireal * Ireal + Iimag * Iimag;
     }
 }
+
 
 
 template<typename Real>
@@ -838,9 +836,10 @@ void TE_noise_outer(
     Real beta = std::sqrt(1.0 - M*M);
     // distance to observer
     Real S0 = std::sqrt(x*x + beta*beta * (y*y + z*z));
+
     // convection velocity
     Real U_c = 0.7 * Ue[surf]; 
-    
+
     Real alpha = U / U_c;
 
     // Outputs (arrays):
@@ -850,6 +849,10 @@ void TE_noise_outer(
     Real K_1_bar[Nsound];
     Real K_2_bar[Nsound];
     Real k_bar[Nsound];
+    // Roger & Moreau (2005) nomenclature (Section 2) and Eq. 12 — non-dimensional wavenumbers.
+    // K̄ = (ω/U)b  (aerodynamic),  k̄ = (ω/c₀)b  (acoustic),
+    // μ̄ = K̄M/β²,  K̄₁ = αK̄  (convection wavenumber),  K̄₂ = k̄(y/S₀)  (spanwise),
+    // C = K̄₁ - μ̄(x/S₀ - M)  (Eq. 12 phase parameter).
     for (int i=0; i<Nsound; ++i)
     {
         // acoustic wavenumber
@@ -866,9 +869,9 @@ void TE_noise_outer(
         mu_bar[i]   = K_bar[i] * M / (beta*beta); //correct
 
         // K_1_bar
-        K_1_bar[i]  = alpha * K_bar[i]; //correct 
+        K_1_bar[i]  = alpha * K_bar[i]; //correct
 
-        // C (temporal variable)
+        // Roger & Moreau (2005) Eq. 12 — phase parameter C
         C[i] = K_1_bar[i] - mu_bar[i] * ((x/S0) - M); //correct
 
         // K_2_bar
@@ -888,32 +891,31 @@ void TE_noise_outer(
                             beta,Ky,I_abs2);
     
 
-    // spanwise correlation length :
+    // Roger & Moreau (2005) Eq. 19 — Corcos model for spanwise correlation length l_y.
+    // l_y = b_c * U_c / ω,  with Corcos constant b_c = 1.47 (as in Roger & Moreau Table 1).
     Real b_c = 1.47; // corcos constant
     Real K_2 = 0.0;
-    
+
     Real l_y[Nsound];
     for (int i=0;i<Nsound;++i){
-        
-        Real top = omega[i] / (b_c*U_c);
-        Real bot = (omega[i]*omega[i]) / (b_c*U_c * b_c*U_c);
-        l_y[i] = top/bot;
+        l_y[i] = (b_c * U_c) / omega[i];
     }
 
 
-    // far field spectra (eq 18 in R&M) :
+    // Roger & Moreau (2005) Eq. 18 — simplified far-field PSD S_pp(ω).
+    // S_pp = (ωb z / 2πc₀S₀²)² · 2π·span · |I|² · Φ_pp · l_y,  b = c/2 (half-chord).
 
+    Real b_half = c / 2.0;
     for (int i=0;i<Nsound;++i){
-        
-        Real term1 = std::pow((omega[i]*c*z)/(c0*2.0*2.0*M_PI*S0*S0), 2.0);
 
-        Real Spp = 0.0;
+        Real term1 = std::pow((omega[i]*b_half*z)/(2.0*M_PI*c0*S0*S0), 2.0);
+
         if (surf==0){
             farfieldSpectra[i] = 0.0;
-            farfieldSpectra[i] += term1*2.0*M_PI*span*I_abs2[i]*(WPS_upper[i]*l_y[i]/M_PI);
+            farfieldSpectra[i] += term1*2.0*M_PI*span*I_abs2[i]*WPS_upper[i]*l_y[i];
         }
         else{
-            farfieldSpectra[i] += term1*2.0*M_PI*span*I_abs2[i]*(WPS_lower[i]*l_y[i]/M_PI);
+            farfieldSpectra[i] += term1*2.0*M_PI*span*I_abs2[i]*WPS_lower[i]*l_y[i];
         }
     }
     }

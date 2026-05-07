@@ -1,9 +1,8 @@
 #pragma once
 
-#include "real_type.hpp"
-#include "data_structs.hpp"
+#include <cmath>
 
-// Structure to hold panel information
+// Structure to hold panel information (templatised on Real)
 template<typename Real>
 struct PanelInfo {
     Real t[2];
@@ -11,29 +10,7 @@ struct PanelInfo {
     Real x, z, d, r1, r2, theta1, theta2;
 };
 
-template<typename Real> struct Isolc;
-template<typename Real> struct Isolv;
-template<typename Real> struct Vsol;
-template<typename Real> struct Foil;
-template<typename Real> struct Param;
-template<typename Real> struct Post;
-template<typename Real> struct Oper;
-template<typename Real> struct Geom;
-template<typename Real> struct Wake;
-template<typename Real> struct Glob;
-template<typename Real> struct Trans;
-
-
-// Function to compute the L2 norm of a 2D vector
-//template<typename Real>
-//Real norm2(const Real* x) {
-//    return std::sqrt(x[0]*x[0] + x[1]*x[1]);
-//}
-
-template<typename Real>
-Real norm2_3D(const Real* x) {
-    return std::sqrt(x[0]*x[0] + x[1]*x[1]+ x[2]*x[2]);
-}
+// norm2 / norm2_3D are defined in real_type.h and real_type.hpp respectively.
 
 template<typename Real>
 void panel_info(const Real& panelStartX, const Real& panelStartY,
@@ -43,7 +20,7 @@ void panel_info(const Real& panelStartX, const Real& panelStartY,
     /* Finds commen panel quantities, such as tangent/normal vector, and
         distances/angles to some contorl point
 
-        The struct PanelInfo is passed as reference (passed in input) to be re-used
+        The struct PanelInfo<Real> is passed as reference (passed in input) to be re-used
         within loops for efficiency in terms of memory (i think).
     */
 
@@ -73,6 +50,7 @@ void panel_info(const Real& panelStartX, const Real& panelStartY,
     info.theta2 = std::atan2(info.z, info.x - info.d);
 
 }
+
 
 template<typename Real>
 void panel_linvortex_stream(const Real& panelStartX, const Real& panelStartY,
@@ -182,6 +160,7 @@ void panel_linsource_stream(const Real& panelStartX, const Real& panelStartY,
 }
 
 
+
 template<typename Real>
 void panel_linvortex_velocity(const Real& panelStartX, const Real& panelStartY,
     const Real& panelEndX,   const Real& panelEndY,
@@ -207,6 +186,7 @@ void panel_linvortex_velocity(const Real& panelStartX, const Real& panelStartY,
     b2 = ug2 * info.t[1] + wg2 * info.n[1];
 
 }
+
 
 template<typename Real>
 void panel_constsource_velocity(const Real& panelStartX, const Real& panelStartY,
@@ -259,116 +239,5 @@ void panel_linsource_velocity(const Real& panelStartX, const Real& panelStartY,
     a2 = ug1 * info.t[1] + wg1 * info.n[1];
     b1 = ug2 * info.t[0] + wg2 * info.n[0];
     b2 = ug2 * info.t[1] + wg2 * info.n[1];
-
-}
-
-template<typename Real>
-void inviscid_velocity(const Foil<Real>& foil,const Real* gammas, const Real& Vinf,
-    const Real& alpha,const Real& CPx,const Real&CPy, Real*velocity){
-    
-    PanelInfo<Real> info;
-
-    Real a1,b1,a2,b2 ;
-    for (int j = 0; j < Ncoords-1; ++j) {
-        
-        panel_linvortex_velocity(
-            foil.x[colMajorIndex(0,j,2)],
-            foil.x[colMajorIndex(1,j,2)],
-            foil.x[colMajorIndex(0,j+1,2)],
-            foil.x[colMajorIndex(1,j+1,2)],
-            CPx, CPy, info, a1, b1, a2, b2);
-
-        velocity[0] += a1*gammas[j] + b1*gammas[j+1];
-        velocity[1] += a2*gammas[j] + b2*gammas[j+1];
-    }
-
-    panel_constsource_velocity(
-        foil.x[colMajorIndex(0,Ncoords-1,2)],
-        foil.x[colMajorIndex(1,Ncoords-1,2)],
-        foil.x[colMajorIndex(0,0,2)],
-        foil.x[colMajorIndex(1,0,2)],
-        CPx, CPy, info, a1, a2);
-
-    Real f1x = a1*(-0.5*foil.te.tcp);
-    Real f1y = a2*(-0.5*foil.te.tcp);
-    Real f2x = a1*0.5*foil.te.tcp ;
-    Real f2y = a2*0.5*foil.te.tcp ;
-
-    velocity[0] += f1x*gammas[0] + f2x*gammas[Ncoords-1];
-    velocity[1] += f1y*gammas[0] + f2y*gammas[Ncoords-1];
-
-    panel_linvortex_velocity(
-        foil.x[colMajorIndex(0,Ncoords-1,2)],
-        foil.x[colMajorIndex(1,Ncoords-1,2)],
-        foil.x[colMajorIndex(0,0,2)],
-        foil.x[colMajorIndex(1,0,2)],
-        CPx, CPy, info, a1, b1, a2, b2);
-
-    f1x = (a1+b1)*(0.5*foil.te.tdp);
-    f1y = (a2+b2)*(0.5*foil.te.tdp);
-    f2x = (a1+b1)*(-0.5*foil.te.tdp);
-    f2y = (a2+b2)*(-0.5*foil.te.tdp);
-
-    velocity[0] += f1x*gammas[0] + f2x*gammas[Ncoords-1];
-    velocity[1] += f1y*gammas[0] + f2y*gammas[Ncoords-1];
-
-    velocity[0] += Vinf*std::cos(alpha);
-    velocity[1] += Vinf*std::sin(alpha);    
-}
-
-template<typename Real>
-void dvelocity_dgamma(const Foil<Real>& foil,const Real& CPx,const Real&CPy, Real*V_G){
-    
-    PanelInfo<Real> info;
-
-    Real a1,b1,a2,b2 ;
-    for (int j = 0; j < Ncoords-1; ++j) {
-        
-        panel_linvortex_velocity(
-            foil.x[colMajorIndex(0,j,2)],
-            foil.x[colMajorIndex(1,j,2)],
-            foil.x[colMajorIndex(0,j+1,2)],
-            foil.x[colMajorIndex(1,j+1,2)],
-            CPx, CPy, info, a1, b1, a2, b2);
-
-        V_G[colMajorIndex(0,j,2)] += a1;
-        V_G[colMajorIndex(1,j,2)] += a2;
-        V_G[colMajorIndex(0,j+1,2)] += b1;
-        V_G[colMajorIndex(1,j+1,2)] += b2;
-    }
-
-    panel_constsource_velocity(
-        foil.x[colMajorIndex(0,Ncoords-1,2)],
-        foil.x[colMajorIndex(1,Ncoords-1,2)],
-        foil.x[colMajorIndex(0,0,2)],
-        foil.x[colMajorIndex(1,0,2)],
-        CPx, CPy, info, a1, a2);
-
-    Real f1x = a1*(-0.5*foil.te.tcp);
-    Real f1y = a2*(-0.5*foil.te.tcp);
-    Real f2x = a1*0.5*foil.te.tcp ;
-    Real f2y = a2*0.5*foil.te.tcp ;
-
-    V_G[colMajorIndex(0,0,2)] += f1x;
-    V_G[colMajorIndex(1,0,2)] += f1y;
-    V_G[colMajorIndex(0,Ncoords-1,2)] += f2x;
-    V_G[colMajorIndex(1,Ncoords-1,2)] += f2y;
-
-    panel_linvortex_velocity(
-        foil.x[colMajorIndex(0,Ncoords-1,2)],
-        foil.x[colMajorIndex(1,Ncoords-1,2)],
-        foil.x[colMajorIndex(0,0,2)],
-        foil.x[colMajorIndex(1,0,2)],
-        CPx, CPy, info, a1, b1, a2, b2);
-
-    f1x = (a1+b1)*(0.5*foil.te.tdp);
-    f1y = (a2+b2)*(0.5*foil.te.tdp);
-    f2x = (a1+b1)*(-0.5*foil.te.tdp);
-    f2y = (a2+b2)*(-0.5*foil.te.tdp);
-
-    V_G[colMajorIndex(0,0,2)] += f1x;
-    V_G[colMajorIndex(1,0,2)] += f1y;
-    V_G[colMajorIndex(0,Ncoords-1,2)] += f2x;
-    V_G[colMajorIndex(1,Ncoords-1,2)] += f2y;
 
 }

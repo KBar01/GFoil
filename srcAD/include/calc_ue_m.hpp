@@ -2,6 +2,7 @@
 
 #include <iostream>
 #include <cmath>
+#include <chrono>
 #include <Eigen/Dense>
 #include <codi.hpp>
 #include "real_type.hpp"

@@ -1,26 +1,17 @@
-#include <iostream>
-#include <vector>
+#pragma once
+
 #include <cmath>
-#include "codi.hpp"
-#include "real_type.h"
-#include <chrono>
-#include <fstream>
-#include <sstream>
-#include <string>
-
-#include "nlohmann/json.hpp"  // nlohmann/json
-
-using json = nlohmann::json;
-using namespace std::chrono;
+#include <vector>
 
 
-
+template<typename Real>
 struct CubicSpline1DOrig {
     int N = Nin;
     Real x[Nin] = {0};       // nodes (1D, N)
     Real c[4 * (Nin - 1)]={0};       // coefficients: (N-1) x 4 matrix stored column-major (4 rows)
 };
 
+template<typename Real>
 struct CubicSpline1DFine {
     int N = Nfine;
     Real x[Nfine] = {0};       // nodes (1D, N)
@@ -28,21 +19,25 @@ struct CubicSpline1DFine {
 };
 
 
+template<typename Real>
 struct Spline2DOrig {
-    CubicSpline1DOrig Xspline;
-    CubicSpline1DOrig Yspline;
+    CubicSpline1DOrig<Real> Xspline;
+    CubicSpline1DOrig<Real> Yspline;
 };
+template<typename Real>
 struct Spline2DFine {
-    CubicSpline1DFine Xspline;
-    CubicSpline1DFine Yspline;
+    CubicSpline1DFine<Real> Xspline;
+    CubicSpline1DFine<Real> Yspline;
 };
 
 
+template<typename Real>
 Real norm2(Real x, Real y) {
     return std::sqrt(x * x + y * y);
 }
 
-void fit_cubic_splineOrig(const Real* x, const Real* y, CubicSpline1DOrig& spline) {
+template<typename Real>
+void fit_cubic_splineOrig(const Real* x, const Real* y, CubicSpline1DOrig<Real>& spline) {
     // Solve for natural cubic spline coefficients
     //spline.N = N;
     //spline.x = new Real[N];
@@ -91,7 +86,8 @@ void fit_cubic_splineOrig(const Real* x, const Real* y, CubicSpline1DOrig& splin
 }
 
 
-void fit_cubic_splineFine(const Real* x, const Real* y, CubicSpline1DFine& spline) {
+template<typename Real>
+void fit_cubic_splineFine(const Real* x, const Real* y, CubicSpline1DFine<Real>& spline) {
     // Solve for natural cubic spline coefficients
     //spline.N = N;
     //spline.x = new Real[N];
@@ -138,7 +134,8 @@ void fit_cubic_splineFine(const Real* x, const Real* y, CubicSpline1DFine& splin
     }
 }
 
-void spline2dOrig(const Real* X, Spline2DOrig& spline) {
+template<typename Real>
+void spline2dOrig(const Real* X, Spline2DOrig<Real>& spline) {
     
     Real xq[5] = {
         0.046910077030668, 0.230765344947158, 0.5,
@@ -212,7 +209,8 @@ void spline2dOrig(const Real* X, Spline2DOrig& spline) {
     }
 }
 
-void spline2dFine(const Real* X,Spline2DFine& spline) {
+template<typename Real>
+void spline2dFine(const Real* X,Spline2DFine<Real>& spline) {
     
     const Real xq[5] = {
         0.046910077030668, 0.230765344947158, 0.5,
@@ -282,16 +280,17 @@ void spline2dFine(const Real* X,Spline2DFine& spline) {
     }
 }
 
-const Real xq[5] = {
+static constexpr double spline_xq[5] = {
     0.046910077030668, 0.230765344947158, 0.5,
     0.769234655052842, 0.953089922969332
 };
-const Real wq[5] = {
+static constexpr double spline_wq[5] = {
     0.118463442528095, 0.239314335249683, 0.284444444444444,
     0.239314335249683, 0.118463442528095
 };
 
-void evaluate_splineOrigtoFine(const CubicSpline1DOrig& spline, const Real* s, Real* yout) {
+template<typename Real>
+void evaluate_splineOrigtoFine(const CubicSpline1DOrig<Real>& spline, const Real* s, Real* yout) {
     
     for (int i = 0; i < Nfine; ++i) {
         Real val = s[i];
@@ -309,7 +308,8 @@ void evaluate_splineOrigtoFine(const CubicSpline1DOrig& spline, const Real* s, R
     }
 }
 
-void evaluate_splineFinetoOut(const CubicSpline1DFine& spline, const Real* s, Real* yout) {
+template<typename Real>
+void evaluate_splineFinetoOut(const CubicSpline1DFine<Real>& spline, const Real* s, Real* yout) {
     
     for (int i = 0; i < Ncoords; ++i) {
         Real val = s[i];
@@ -327,6 +327,7 @@ void evaluate_splineFinetoOut(const CubicSpline1DFine& spline, const Real* s, Re
     }
 }
 
+template<typename Real>
 Real cubic_interp1d(const Real* x, const Real* y, Real xq) {
     // Handle out-of-bounds queries
     if (xq <= x[0]) return y[0];
@@ -356,7 +357,7 @@ Real cubic_interp1d(const Real* x, const Real* y, Real xq) {
 }
 
 
-
+template<typename Real>
 void spline_curvature(
     const Real* Xin,    // Input points 2xNin
     Real Ufac, Real TEfac,     // Uniformity & TE resolution factors
@@ -370,7 +371,7 @@ void spline_curvature(
     }
 
     // 2. Fit spline to original data
-    Spline2DOrig PP;
+    Spline2DOrig<Real> PP;
     spline2dOrig(Xin, PP);
 
     // 3. Evaluate fine grid
@@ -395,7 +396,7 @@ void spline_curvature(
     }
 
     // 4. Re-spline fine curve
-    Spline2DFine PPfine;
+    Spline2DFine<Real> PPfine;
     spline2dFine(xyfine, PPfine);
 
     for (int i=0;i<Nfine;++i){
@@ -410,7 +411,7 @@ void spline_curvature(
         Real sint = 0;
 
         for (int q = 0; q < 5; ++q) {
-            Real st = s[i] + xq[q] * ds;
+            Real st = s[i] + spline_xq[q] * ds;
             int seg = PPfine.Xspline.N - 2;
             for (int j = 0; j < PPfine.Xspline.N - 1; ++j)
                 if (st < PPfine.Xspline.x[j+1]) { seg = j; break; }
@@ -420,7 +421,7 @@ void spline_curvature(
             Real dy2 = 6.0 * PPfine.Yspline.c[IDX(0,seg,4)] * (st - PPfine.Yspline.x[seg])
                        + 2.0 * PPfine.Yspline.c[IDX(1,seg,4)];
 
-            sint += wq[q] * std::sqrt(dx2*dx2 + dy2*dy2);
+            sint += spline_wq[q] * std::sqrt(dx2*dx2 + dy2*dy2);
         }
 
         sint = sint * ds * 0.5 + 0.01 * Ufac;
@@ -460,6 +461,7 @@ void spline_curvature(
     }
 }
 
+template<typename Real>
 void make_panels(const Real (&inCoords)[2*Nin], Real (&outCoords)[2*Ncoords],const Real Ufac,const Real TEfac){
 
 

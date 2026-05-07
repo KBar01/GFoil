@@ -77,7 +77,7 @@ void build_gamma_codi(Isol &isol, const Foil& foil, const Oper& op) {
     Real rhs[2*(Ncoords + 1)] ; 
 
     // Initialise the panelinfo struct and influence coeffs used inside loop
-    PanelInfo panelInfo;
+    PanelInfo<Real> panelInfo;
     Real aij = 1.0;
     Real bij = 1.0;
     Real a   = 1.0;
