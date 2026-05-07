@@ -32,11 +32,6 @@ struct Spline2DFine {
 
 
 template<typename Real>
-Real norm2(Real x, Real y) {
-    return std::sqrt(x * x + y * y);
-}
-
-template<typename Real>
 void fit_cubic_splineOrig(const Real* x, const Real* y, CubicSpline1DOrig<Real>& spline) {
     // Solve for natural cubic spline coefficients
     //spline.N = N;
