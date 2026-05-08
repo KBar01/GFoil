@@ -7,6 +7,7 @@
 #include "spline.hpp"
 #include "main_func.h"
 #include "get_funcs.h"
+#include "extract_BL_TE.hpp"
 #include "panel_funcs.h"
 #include <chrono>
 #include <fstream>
@@ -178,7 +179,7 @@ bool runCode(
         ycoords[i] = flattenedCoords[colMajorIndex(1,i,2)];
     }
 
-    interpolate_at_95_both_surfaces(xcoords,glob.U,post.cp,oper,vsol,param,topsurf,botsurf,Uinf,sampleTE,chordScaling);
+    interpolate_at_95_both_surfaces(xcoords,glob.U,post.cp,oper,vsol.turb,param,topsurf,botsurf,Uinf,sampleTE,chordScaling);
     Real OASPL = calc_OASPL(botsurf,topsurf,chordScaling,Uinf,X,Y,Z,S,kinViscInf,rhoInf,doCps,model);
 
     // check OASPL validity

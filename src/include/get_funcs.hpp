@@ -1,41 +1,20 @@
 #pragma once
 
-#include <vector>
-#include "real_type.hpp"
-#include "data_structs.hpp"
+#include <cmath>
+// Callers must include real_type.h / real_type.hpp before this header.
 
 
-template<typename Real> struct Isolc;
-template<typename Real> struct Isolv;
-template<typename Real> struct Vsol;
-template<typename Real> struct Foil;
-template<typename Real> struct Param;
-template<typename Real> struct Post;
-template<typename Real> struct Oper;
-template<typename Real> struct Geom;
-template<typename Real> struct Wake;
-template<typename Real> struct Glob;
-template<typename Real> struct Trans;
+/*
+
+For optimisation, a lot of functions involve re-calculating parametrs
+that are already found in earlier sections of the code. Can reduce 
+computation 
+
+*/
 
 
-
-
-template<typename Real>
-void get_ueinv(const Isolc<Real>& isolc, const Isolv<Real>& isolv, Real* ueinv){
-
-    for (int i = 0; i < Ncoords; ++i) {
-        ueinv[i] = isolv.edgeVelSign[i]*isolc.gammas[i];
-    }
-
-    for (int i = 0; i < Nwake; ++i) {
-        ueinv[Ncoords+i] = isolc.uewi[i] ;
-    }
-
-    ueinv[Ncoords] = ueinv[Ncoords-1]; // continuity of upper surface and wake velocity
-}
-
-template<typename Real>
-void get_cp(Post<Real>& post, const Oper<Real>& oper, const Param<Real>& param, const Real edgeVelocity[Ncoords+Nwake]) {
+template<typename Real, typename PostT, typename OperT, typename ParamT>
+void get_cp(PostT& post, const OperT& oper, const ParamT& param, const Real edgeVelocity[Ncoords+Nwake]) {
     constexpr int Nsys = Ncoords+Nwake;
     if (oper.Ma > 0.0) {
         for (int i = 0; i < Nsys; ++i) {
@@ -52,8 +31,8 @@ void get_cp(Post<Real>& post, const Oper<Real>& oper, const Param<Real>& param, 
 }
 
 
-template<typename Real>
-Real get_uk(const Real& incompSpeed,const Param<Real>&param,Real&dCompSpeed_dIncompSpeed){
+template<typename Real, typename ParamT>
+Real get_uk(const Real& incompSpeed,const ParamT& param,Real&dCompSpeed_dIncompSpeed){
 
     // Finds compressible speed using corrections
 
@@ -74,8 +53,8 @@ Real get_uk(const Real& incompSpeed,const Param<Real>&param,Real&dCompSpeed_dInc
     return compSpeed ;
 }
 
-template<typename Real>
-Real get_Mach2(const Real&edgeVel,const Param<Real>&param,Real*dMsqrd_dState){
+template<typename Real, typename ParamT>
+Real get_Mach2(const Real&edgeVel,const ParamT& param,Real*dMsqrd_dState){
 
     // Finding squared Mach number, doing compressible correction if needed
     // Returns sqaured mach by value, and change wrt state U as reference.
@@ -141,8 +120,8 @@ Real get_Hw(const Real th, const Real wgap, Real* Hw_U){
     return Hw;
 }
 
-template<typename Real>
-Real get_Hk(const Real th, const Real ds, const Real ue, const Param<Real>&param, Real*Hk_U){
+template<typename Real, typename ParamT>
+Real get_Hk(const Real th, const Real ds, const Real ue, const ParamT& param, Real*Hk_U){
 
     // gets the kinematic shape parameter and also change wrt state U.
     
@@ -174,8 +153,9 @@ Real get_Hk(const Real th, const Real ds, const Real ue, const Param<Real>&param
     return Hk;
 }
 
-template<typename Real>
-Real get_Hss(const Real th, const Real ds, const Real ue, const Param<Real>&param, Real*Hss_U){
+
+template<typename Real, typename ParamT>
+Real get_Hss(const Real th, const Real ds, const Real ue, const ParamT& param, Real*Hss_U){
 
     // gets density shape parameter and change wrt state U
 
@@ -200,8 +180,9 @@ Real get_Hss(const Real th, const Real ds, const Real ue, const Param<Real>&para
     return Hss ;
 }
 
-template<typename Real>
-Real get_de(const Real th, const Real ds, const Real ue, const Param<Real>&param,Real* de_U){
+
+template<typename Real, typename ParamT>
+Real get_de(const Real th, const Real ds, const Real ue, const ParamT& param,Real* de_U){
 
     Real Hk_U[4] = {0.0};
     Real Hk = get_Hk(th,ds,ue,param,Hk_U) ;
@@ -233,8 +214,9 @@ Real get_de(const Real th, const Real ds, const Real ue, const Param<Real>&param
     return de;
 }
 
-template<typename Real>
-Real get_Ret(const Real th, const Real ds, const Real ue, const Param<Real>&param, Real* Ret_U){
+
+template<typename Real, typename ParamT>
+Real get_Ret(const Real th, const Real ds, const Real ue, const ParamT& param, Real* Ret_U){
 
 
     Real Ret = param.rho0*th*ue/param.mu0 ;
@@ -281,17 +263,17 @@ Real get_Ret(const Real th, const Real ds, const Real ue, const Param<Real>&para
         }
     }
     else {
-        Ret_U[0] = ue/param.mu0;
+        Ret_U[0] = param.rho0*ue/param.mu0;
         Ret_U[1] = 0;
         Ret_U[2] = 0;
-        Ret_U[3] = th/param.mu0 ;
+        Ret_U[3] = param.rho0*th/param.mu0 ;
     }
 
     return Ret ;
 }
 
-template<typename Real>
-Real get_cf(const Real th, const Real ds, const Real sa, const Real ue,const bool turb,const bool wake, const Param<Real>& param, Real* cf_U)  // output: cf linearisation w.r.t. th, ds, sa, ue
+template<typename Real, typename ParamT>
+Real get_cf(const Real th, const Real ds, const Real sa, const Real ue,const bool turb,const bool wake, const ParamT& param, Real* cf_U)  // output: cf linearisation w.r.t. th, ds, sa, ue
 {
     for (int i = 0; i < 4; ++i) cf_U[i] = 0.0;
 
@@ -388,8 +370,9 @@ Real get_cf(const Real th, const Real ds, const Real sa, const Real ue,const boo
     }
 }
 
-template<typename Real>
-Real get_cfxt(const Real th, const Real ds, const Real sa, const Real ue, const Real dist, const bool turb,const bool wake, const Param<Real>& param, Real*cfxt_U,Real& cfxt_x){
+
+template<typename Real, typename ParamT>
+Real get_cfxt(const Real th, const Real ds, const Real sa, const Real ue, const Real dist, const bool turb,const bool wake, const ParamT& param, Real*cfxt_U,Real& cfxt_x){
 
     Real cf_U[4] = {0.0};
 
@@ -408,10 +391,11 @@ Real get_cfxt(const Real th, const Real ds, const Real sa, const Real ue, const 
 }
 
 
-template<typename Real>
+
+template<typename Real, typename ParamT>
 Real get_Hs(
     const Real th, const Real ds, const Real sa, const Real ue,
-    const Param<Real>& param, const bool turb, const bool wake,
+    const ParamT& param, const bool turb, const bool wake,
     Real* Hs_U  // output (length 4)
 ) {
     
@@ -535,8 +519,9 @@ Real get_Hs(
 }
 
 
-template<typename Real>
-Real get_Us(const Real th, const Real ds, const Real sa, const Real ue, const Param<Real>& param,
+
+template<typename Real, typename ParamT>
+Real get_Us(const Real th, const Real ds, const Real sa, const Real ue, const ParamT& param,
     const bool turb, const bool wake, Real* Us_U) {
     
     for (int i = 0; i < 4; ++i) Us_U[i] = 0.0;
@@ -587,14 +572,15 @@ Real get_Us(const Real th, const Real ds, const Real sa, const Real ue, const Pa
     return Us;
 }
 
-template<typename Real>
+
+template<typename Real, typename ParamT>
 Real get_uq(const Real ds,const Real (&ds_U)[8],
-    const Real cf,const Real (&cf_U)[8],
-    Real Hk, Real (&Hk_U)[8],
-    const Real Ret,const Real (&Ret_U)[8],
-    const bool wake,
-    const Param<Real>&param,
-    Real (&uq_U)[8])
+const Real cf,const Real (&cf_U)[8],
+Real Hk, Real (&Hk_U)[8],
+const Real Ret,const Real (&Ret_U)[8],
+const bool wake,
+const ParamT& param,
+Real (&uq_U)[8])
 {
     Real beta = param.GB,A=param.GA,C=param.GC;
     if (wake){A *= param.Dlr, C = 0;}
@@ -637,12 +623,19 @@ Real get_uq(const Real ds,const Real (&ds_U)[8],
     }
     
     return uq ;
+
+
+
+
+
 }
 
-template<typename Real>
+
+
+template<typename Real, typename ParamT>
 Real get_cDi_turbwall(
     const Real th, const Real ds, const Real sa, const Real ue,const bool turb, const bool wake,
-    const Param<Real>& param,
+    const ParamT& param,
     Real* cDi_U  // output: length-4
 ) {
     for (int i = 0; i < 4; ++i) cDi_U[i] = 0.0;
@@ -699,8 +692,8 @@ Real get_cDi_turbwall(
     return cDi;
 }
 
-template<typename Real>
-Real get_cDi_lam(const Real th,const Real ds,const Real sa,const Real ue,const Param<Real>& param,Real (&cDi_U)[4]) {
+template<typename Real, typename ParamT>
+Real get_cDi_lam(const Real th,const Real ds,const Real sa,const Real ue,const ParamT& param,Real (&cDi_U)[4]) {
 
     Real Hk_U[4]={0}, Ret_U[4]={0};
     Real Hk = get_Hk(th,ds,ue,param,Hk_U);
@@ -727,8 +720,8 @@ Real get_cDi_lam(const Real th,const Real ds,const Real sa,const Real ue,const P
     return num * invRet;
 }
 
-template<typename Real>
-Real get_cDi_lamwake(const Real th,const Real ds,const Real sa,const Real ue, const bool turb, const bool wake, const Param<Real>& param,Real (&cDi_U)[4]) {
+template<typename Real, typename ParamT>
+Real get_cDi_lamwake(const Real th,const Real ds,const Real sa,const Real ue, const bool turb, const bool wake, const ParamT& param,Real (&cDi_U)[4]) {
 
 
     //turb = false;
@@ -755,8 +748,9 @@ Real get_cDi_lamwake(const Real th,const Real ds,const Real sa,const Real ue, co
     return num * invHsRet;
 }
 
-template<typename Real>
-Real get_cDi_outer(const Real th, const Real ds,const Real sa,const Real ue, const bool turb,const bool wake,const Param<Real>& param, Real (&cDi_U)[4]) {
+
+template<typename Real, typename ParamT>
+Real get_cDi_outer(const Real th, const Real ds,const Real sa,const Real ue, const bool turb,const bool wake,const ParamT& param, Real (&cDi_U)[4]) {
     
     if (!turb) {
         for (int i = 0; i < 4; ++i) cDi_U[i] = 0.0;
@@ -778,8 +772,9 @@ Real get_cDi_outer(const Real th, const Real ds,const Real sa,const Real ue, con
     return ct*factor/Hs;
 }
 
-template<typename Real>
-Real get_cDi_lamstress(const Real th,const Real ds,const Real sa,const Real ue,const bool turb,const bool wake, const Param<Real>& param, Real (&cDi_U)[4]) {
+
+template<typename Real, typename ParamT>
+Real get_cDi_lamstress(const Real th,const Real ds,const Real sa,const Real ue,const bool turb,const bool wake, const ParamT& param, Real (&cDi_U)[4]) {
     
     Real Hs_U[4]={0}, Us_U[4]={0}, Ret_U[4]={0};
     Real Hs = get_Hs(th,ds,sa,ue,param,turb,wake,Hs_U);
@@ -802,8 +797,9 @@ Real get_cDi_lamstress(const Real th,const Real ds,const Real sa,const Real ue,c
 }
 
 
-template<typename Real>
-Real get_cDi(const Real th,const Real ds,const Real sa,const Real ue,const bool turb,const bool wake, const Param<Real>& param,
+
+template<typename Real, typename ParamT>
+Real get_cDi(const Real th,const Real ds,const Real sa,const Real ue,const bool turb,const bool wake, const ParamT& param,
     Real (&cDi_U)[4])
 {
 
@@ -862,8 +858,9 @@ Real get_cDi(const Real th,const Real ds,const Real sa,const Real ue,const bool 
     }
 }
 
-template<typename Real>
-Real get_cDixt(const Real th,const Real ds,const Real sa,const Real ue,const bool turb,const bool wake, const Real dist, const Param<Real>& param,
+
+template<typename Real, typename ParamT>
+Real get_cDixt(const Real th,const Real ds,const Real sa,const Real ue,const bool turb,const bool wake, const Real dist, const ParamT& param,
     Real (&cDixt_U)[4],Real& cDixt_x)
 {
 
@@ -881,9 +878,10 @@ Real get_cDixt(const Real th,const Real ds,const Real sa,const Real ue,const boo
     return cDixt;
 }
 
-template<typename Real>
+
+template<typename Real, typename ParamT>
 Real get_upw(const Real th1,const Real ds1,const Real sa1,const Real ue1,
-    const Real th2,const Real ds2,const Real sa2,const Real ue2, const bool wake, const Param<Real>&param,
+    const Real th2,const Real ds2,const Real sa2,const Real ue2, const bool wake, const ParamT& param,
     Real (&upw_U)[8]){
 
     Real Hk_U1[4] = {0};
@@ -933,8 +931,9 @@ Real get_upw(const Real th1,const Real ds1,const Real sa1,const Real ue1,
     return upw ;
 }
 
-template<typename Real>
-Real get_cteq(const Real th,const Real ds,const Real sa,const Real ue,const bool turb,const bool wake, const Param<Real>&param,Real (&cteq_U)[4])
+
+template<typename Real, typename ParamT>
+Real get_cteq(const Real th,const Real ds,const Real sa,const Real ue,const bool turb,const bool wake, const ParamT& param,Real (&cteq_U)[4])
 {
     Real CC = 0.5/(param.GA*param.GA*param.GB), C = param.GC ;
     Real Hk_U[4] = {0};
@@ -994,8 +993,9 @@ Real get_cteq(const Real th,const Real ds,const Real sa,const Real ue,const bool
     return cteq ;
 }
 
-template<typename Real>
-Real get_damp(const Real th,const Real ds,const Real sa,const Real ue, const Param<Real>& param, Real (&damp_U)[4]) {
+
+template<typename Real, typename ParamT>
+Real get_damp(const Real th,const Real ds,const Real sa,const Real ue, const ParamT& param, Real (&damp_U)[4]) {
     
     
     
@@ -1102,8 +1102,9 @@ Real get_damp(const Real th,const Real ds,const Real sa,const Real ue, const Par
     return damp;
 }
 
-template<typename Real>
-Real get_damp_forced(const Real th,const Real ds,const Real sa,const Real ue, const Param<Real>& param, const Real&ncrit, Real (&damp_U)[4]) {
+
+template<typename Real, typename ParamT>
+Real get_damp_forced(const Real th,const Real ds,const Real sa,const Real ue, const ParamT& param, const Real&ncrit, Real (&damp_U)[4]) {
     
     
     
@@ -1210,8 +1211,8 @@ Real get_damp_forced(const Real th,const Real ds,const Real sa,const Real ue, co
     return damp;
 }
 
-template<typename Real>
-Real get_cttr(const Real th,const Real ds,const Real sa,const Real ue,const bool turb,const Param<Real>&param,Real (&cttr_U)[4]){
+template<typename Real, typename ParamT>
+Real get_cttr(const Real th,const Real ds,const Real sa,const Real ue,const bool turb,const ParamT& param,Real (&cttr_U)[4]){
 
     Real cteq,cteq_U[4]={0};
     Real Hk,Hk_U[4]={0};

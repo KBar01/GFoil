@@ -7,8 +7,9 @@
 #include "real_type.h"
 #include "panel_funcs.h"
 #include "data_structs.h"
-#include "get_funcs.h"     // must precede residuals.hpp so get_H etc. are visible at instantiation
-#include "residuals_shared.hpp"   // shared templates: upwind, upwind_half, residual_station, residual_station_forced
+#include "get_funcs.h"     // must precede residuals_shared.hpp so get_H etc. are visible at instantiation
+#include "vector_ops.hpp"  // must precede residuals_shared.hpp so cnp:: ops are available
+#include "residuals_shared.hpp"
 
 // Non-template declarations — struct-dependent functions kept in src/residuals.cpp:
 

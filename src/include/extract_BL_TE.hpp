@@ -1,13 +1,15 @@
-#include <iostream>
+#pragma once
+
 #include <cmath>
-#include "real_type.h"
-#include "get_funcs.h"
-#include "data_structs.h"
-#include "vector_ops.hpp"
-#include "main_func.h"
+// Callers must include real_type.h / real_type.hpp, and the shared
+// get_funcs.hpp (for get_cf, get_uk) before including this header.
+#include "get_funcs.hpp"
+
+
 
 
 // Performs cubic interpolation at x using 4 surrounding points (xs, ys)
+template<typename Real>
 Real cubic_interp(Real x, const Real* xs, const Real* ys) {
     Real result = 0.0;
     for (int i = 0; i < 4; ++i) {
@@ -21,10 +23,12 @@ Real cubic_interp(Real x, const Real* xs, const Real* ys) {
     return result;
 }
 
+template<typename Real>
 Real linear_interp(Real x, const Real* xs, const Real* ys) {
     return ys[0] + (ys[1] - ys[0]) * (x - xs[0]) / (xs[1] - xs[0]);
 }
 
+template<typename Real>
 Real quadratic_interp(Real x, const Real* xs, const Real* ys) {
     Real result = 0.0;
     for (int i = 0; i < 3; ++i) {
@@ -38,6 +42,7 @@ Real quadratic_interp(Real x, const Real* xs, const Real* ys) {
     return result;
 }
 
+template<typename Real>
 Real adaptive_interp(Real x, const Real* xs, const Real* ys, int n) {
     if (n == 4)
         return cubic_interp(x, xs, ys);
@@ -49,6 +54,7 @@ Real adaptive_interp(Real x, const Real* xs, const Real* ys, int n) {
         return 0.0; // fallback error
 }
 
+template<typename Real>
 int find_interp_position(const Real* xcoords, int start, int end, Real x_target) {
 
     // For top surface : finds node just before sampling pos
@@ -74,16 +80,17 @@ int find_interp_position(const Real* xcoords, int start, int end, Real x_target)
     return found_idx;
 }
 
-void get_nodes(int topFoundIdx,int botFoundIdx, Real x_target, int* topNodeList,int &topNnodes, int* botNodeList,int &botNnodes, const Vsol&vsol){
+template<typename Real, typename TurbT>
+void get_nodes(int topFoundIdx,int botFoundIdx, Real x_target, int* topNodeList,int &topNnodes, int* botNodeList,int &botNnodes, const TurbT* turb){
 
     // do top surface :
     int topStart = topFoundIdx - 1 ; // Ideal starting position for cubic interp to have 2 nodes either side of sampling position
     topNnodes = 4 ;
-    if (vsol.turb[topFoundIdx] == false){
+    if (turb[topFoundIdx] == false){
         topNnodes = 0;
     }
     else{
-        if (vsol.turb[topStart] == false){topStart += 1; } // original start is not turbulent, shift start down a node
+        if (turb[topStart] == false){topStart += 1; } // original start is not turbulent, shift start down a node
         topNnodes = (Ncoords-1 - topStart) + 1 ;  // how many available nodes to use for interp
         if (topNnodes>4){topNnodes=4;} // limit to 4 nodes for cubic
     }
@@ -94,11 +101,11 @@ void get_nodes(int topFoundIdx,int botFoundIdx, Real x_target, int* topNodeList,
     // do bot surface :
     int botStart = botFoundIdx + 1 ; // Ideal starting position for cubic interp to have 2 nodes either side of sampling position
     botNnodes = 4;
-    if (vsol.turb[botFoundIdx] == false){
+    if (turb[botFoundIdx] == false){
         botNnodes = 0;
     }
     else{
-        if (vsol.turb[botStart] == false){botStart -= 1; } // original start is not turbulent, shift start down a node
+        if (turb[botStart] == false){botStart -= 1; } // original start is not turbulent, shift start down a node
         int botNnodes = botStart ;  // how many available nodes to use for interp
         if (botNnodes>4){botNnodes=4;} // limit to 4 nodes for cubic
     }
@@ -106,8 +113,7 @@ void get_nodes(int topFoundIdx,int botFoundIdx, Real x_target, int* topNodeList,
     for (int i=0;i<botNnodes;++i){botNodeList[i] = botStart-i ;}
 }
 
-
-
+template<typename Real>
 void interp_BL_states(const int* topIdx,const int* botIdx, const int topNnodes, const int botNnodes, const Real x_target, const Real* xcoords, const Real* states, Real* topInterpStates, Real* botInterpStates){
 
 
@@ -152,7 +158,8 @@ void interp_BL_states(const int* topIdx,const int* botIdx, const int topNnodes, 
 
 
 // Computes dp/dx at x_target using cubic interpolation + central finite difference
-Real interpolate_dpdx(const Real* xcoords, const Real* Cps, const int* nodeIdx, const int nodeN, Real x_target, const Oper&oper,const Real chordScale,const Real Uinf) {
+template<typename Real, typename OperT>
+Real interpolate_dpdx(const Real* xcoords, const Real* Cps, const int* nodeIdx, const int nodeN, Real x_target, const OperT& oper,const Real chordScale,const Real Uinf) {
     
     
     Real h = 1e-6 ;  // Small step size for derivative approximation TODO: verfiy step is correct (convergence)
@@ -185,8 +192,8 @@ Real interpolate_dpdx(const Real* xcoords, const Real* Cps, const int* nodeIdx, 
     return dpdx;
 }
 
-
-Real interpolate_cf(const Real* xcoords, const Real* states, const int* nodeIdx, const int nodeN, Real x_target, const Vsol&vsol, const Param&param) {
+template<typename Real, typename TurbT, typename ParamT>
+Real interpolate_cf(const Real* xcoords, const Real* states, const int* nodeIdx, const int nodeN, Real x_target, const TurbT* turb, const ParamT& param) {
     
     Real xs[4] = {
         xcoords[nodeIdx[0]],
@@ -206,7 +213,7 @@ Real interpolate_cf(const Real* xcoords, const Real* states, const int* nodeIdx,
             states[colMajorIndex(1,indexes[i],4)],
             states[colMajorIndex(2,indexes[i],4)],
             states[colMajorIndex(3,indexes[i],4)],
-            vsol.turb[indexes[i]],
+            turb[indexes[i]],
             false,
             param,
             cf_U
@@ -218,8 +225,8 @@ Real interpolate_cf(const Real* xcoords, const Real* states, const int* nodeIdx,
     return Cf95;
 }
 
-
-void interpolate_at_95_both_surfaces(const Real* xcoords, const Real* states, const Real*Cps, const Oper&oper, const Vsol&vsol, const Param&param,
+template<typename Real, typename OperT, typename TurbT, typename ParamT>
+void interpolate_at_95_both_surfaces(const Real* xcoords, const Real* states, const Real*Cps, const OperT& oper, const TurbT* turb, const ParamT& param,
     Real (&topBLStates)[7],Real (&botBLStates)[7],const Real Uinf, const Real x_target, const Real chordScale) {
 
     
@@ -253,7 +260,7 @@ void interpolate_at_95_both_surfaces(const Real* xcoords, const Real* states, co
             int foundIndexTop = find_interp_position(xcoords, Ncoords - 98, Ncoords - 1, xSamples[i]);
 
             int topIdx[4] = {0}, botIdx[4] = {0}, topN, botN;
-            get_nodes(foundIndexTop, foundIndexBot, xSamples[i], topIdx, topN, botIdx, botN, vsol);
+            get_nodes(foundIndexTop, foundIndexBot, xSamples[i], topIdx, topN, botIdx, botN, turb);
 
             interp_BL_states(topIdx, botIdx, topN, botN, xSamples[i],
                              xcoords, states, tmpTop, tmpBot);
@@ -277,7 +284,7 @@ void interpolate_at_95_both_surfaces(const Real* xcoords, const Real* states, co
             Real tauMaxBot = (tmpBot[2]*tmpBot[2]) * (oper.rho * (tmpBot[3]*tmpBot[3]));
             tmpBot[2] = tauMaxBot;
             tmpBot[4] = dpdxBot;
-            Real cfBot = interpolate_cf(xcoords, states, botIdx, botN, xSamples[i], vsol, param);
+            Real cfBot = interpolate_cf(xcoords, states, botIdx, botN, xSamples[i], turb, param);
             Real tauWallBot = (cfBot/2) * oper.rho * tmpBot[3]*tmpBot[3];
             tmpBot[5] = tauWallBot;
             Real deltaBot = 0.0;
@@ -291,7 +298,7 @@ void interpolate_at_95_both_surfaces(const Real* xcoords, const Real* states, co
             Real tauMaxTop = (tmpTop[2]*tmpTop[2]) * (oper.rho * (tmpTop[3]*tmpTop[3]));
             tmpTop[2] = tauMaxTop;
             tmpTop[4] = dpdxTop;
-            Real cfTop = interpolate_cf(xcoords, states, topIdx, topN, xSamples[i], vsol, param);
+            Real cfTop = interpolate_cf(xcoords, states, topIdx, topN, xSamples[i], turb, param);
             Real tauWallTop = (cfTop/2) * oper.rho * tmpTop[3]*tmpTop[3];
             tmpTop[5] = tauWallTop;
             Real deltaTop = 0.0;
@@ -323,7 +330,7 @@ void interpolate_at_95_both_surfaces(const Real* xcoords, const Real* states, co
 
     // find the indexes to to the interpolation over 
     int topIdx[4] = {0},botIdx[4] = {0}, topN, botN ;
-    get_nodes(foundIndexTop,foundIndexBot,x_target,topIdx,topN,botIdx,botN,vsol);
+    get_nodes(foundIndexTop,foundIndexBot,x_target,topIdx,topN,botIdx,botN,turb);
 
     interp_BL_states(topIdx,botIdx,topN,botN,x_target,xcoords,states,topBLStates,botBLStates);
     
@@ -341,7 +348,7 @@ void interpolate_at_95_both_surfaces(const Real* xcoords, const Real* states, co
     botBLStates[4] = dpdxBot;
 
     // tau_wall = Cf*(rho * ue^2) / 2
-    Real cfBot = interpolate_cf(xcoords,states,botIdx,botN,x_target,vsol,param);
+    Real cfBot = interpolate_cf(xcoords,states,botIdx,botN,x_target,turb,param);
     Real tauWallBot = (cfBot/2) * oper.rho * botBLStates[3] * botBLStates[3] ;
     botBLStates[5] = tauWallBot ;
     // scaling theta and delta* by given chord 
@@ -368,7 +375,7 @@ void interpolate_at_95_both_surfaces(const Real* xcoords, const Real* states, co
     topBLStates[4] = dpdxTop;
     
     // tau_wall = Cf*(rho * ue^2) / 2
-    Real cfTop = interpolate_cf(xcoords,states,topIdx,topN,x_target,vsol,param);
+    Real cfTop = interpolate_cf(xcoords,states,topIdx,topN,x_target,turb,param);
     Real tauWallTop = (cfTop/2) * oper.rho * topBLStates[3] * topBLStates[3] ;
     topBLStates[5] = tauWallTop ;
 

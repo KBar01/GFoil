@@ -11,6 +11,19 @@
 template<typename Real> struct Isolc;
 template<typename Real> struct Isolv;
 template<typename Real> struct Vsol;
+
+// AD version of get_ueinv: kept here because it takes Isolc<Real>+Isolv<Real>
+// (the Isol/Isolc split means this cannot be in the shared src/include/get_funcs.hpp).
+template<typename Real>
+void get_ueinv(const Isolc<Real>& isolc, const Isolv<Real>& isolv, Real* ueinv) {
+    for (int i = 0; i < Ncoords; ++i) {
+        ueinv[i] = isolv.edgeVelSign[i] * isolc.gammas[i];
+    }
+    for (int i = 0; i < Nwake; ++i) {
+        ueinv[Ncoords+i] = isolc.uewi[i];
+    }
+    ueinv[Ncoords] = ueinv[Ncoords-1];
+}
 template<typename Real> struct Foil;
 template<typename Real> struct Param;
 template<typename Real> struct Post;
