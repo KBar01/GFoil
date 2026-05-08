@@ -282,7 +282,7 @@ void partialRpartialx(
     stagpoint_find(isolc,isol_pre,foil,wake);
     identify_surfaces(isol_pre,vsol);
     set_wake_gap(foil,isol_pre,vsol);
-    calc_ue_m(foil,wake,isolc,vsol);
+    calc_ue_m<Real>(foil,wake,isolc,vsol);
     Isolv<Real> isol_final;
     stagpoint_move_AD(isol_final,glob,foil,wake,vsol,currStag);
     build_glob_RV_AD(foil,vsol,isol_final,glob,param,tdata);
