@@ -163,7 +163,7 @@ void wake_init(const Vsol& vsol, const Foil& foil, const Glob& glob, const Param
     // Compute residual system
     Real R[3]={0}, R_U[36]={0};
     int J[3]={0};
-    wake_sys(vsol, foil, glob, param, R, R_U, J);
+    wake_sys<true,Real>(vsol, foil, glob, param, R, R_U, J);
 
 
     // Solve the residual system by subtracting R
@@ -329,10 +329,10 @@ void init_boundary_layer(const Oper&oper, const Foil&foil, Param&param, Isol&iso
                     
                     Real distFromStagTrans =  isol.distFromStag[prevNode] + std::sqrt((tdata.transPos[surf]-x1)*(tdata.transPos[surf]-x1)  + (yt-y1)*(yt-y1));
                     if (!tdata.isForced[surf]){
-                        residual_transition(prevState,currState,isol.distFromStag[prevNode],isol.distFromStag[currNode],0.0,0.0,param,R,R_U,R_x);
+                        residual_transition<true,Real>(prevState,currState,isol.distFromStag[prevNode],isol.distFromStag[currNode],0.0,0.0,param,R,R_U,R_x);
                     }
                     else{
-                        residual_transition_forced(prevState,currState,isol.distFromStag[prevNode],isol.distFromStag[currNode],param,distFromStagTrans,R,R_U,R_x);
+                        residual_transition_forced<true,Real>(prevState,currState,isol.distFromStag[prevNode],isol.distFromStag[currNode],param,distFromStagTrans,R,R_U,R_x);
                     }
                 } 
                 else {
@@ -580,7 +580,7 @@ void init_boundary_layer_from_xfoil(const Oper&oper, const Foil&foil, const Para
             
             if (tran) {
                 
-                residual_transition(prevState,currState,isol.distFromStag[prevNode],isol.distFromStag[currNode],0.0,0.0,param,R,R_U,R_x);
+                residual_transition<true,Real>(prevState,currState,isol.distFromStag[prevNode],isol.distFromStag[currNode],0.0,0.0,param,R,R_U,R_x);
             } 
             else {
 

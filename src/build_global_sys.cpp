@@ -261,7 +261,7 @@ void build_glob_RV(const Foil&foil, const Vsol&vsol,const Isol&isol,Glob&glob, P
         else {  // dealing with start of wake
             Real R1[3], R1_U[36]={0};
             int J[3]; 
-            wake_sys(vsol,foil,glob,param,R1,R1_U,J);
+            wake_sys<true,Real>(vsol,foil,glob,param,R1,R1_U,J);
 
             int Ig = 3*Is[i0];
             for (int row=0;row<3;++row){glob.R[Ig+row] = R1[row];}
@@ -293,7 +293,7 @@ void build_glob_RV(const Foil&foil, const Vsol&vsol,const Isol&isol,Glob&glob, P
                 Real transPos = tdata.transPos[si];
 
                 if (!isForced){
-                    residual_transition(Uprev,Ucurr,xi[Is[prevI]],xi[Is[currI]],0,0,param,Ri,Ri_U,Ri_x);
+                    residual_transition<true,Real>(Uprev,Ucurr,xi[Is[prevI]],xi[Is[currI]],Real(0),Real(0),param,Ri,Ri_U,Ri_x);
                 }
                 else {
 
@@ -304,7 +304,7 @@ void build_glob_RV(const Foil&foil, const Vsol&vsol,const Isol&isol,Glob&glob, P
                     Real yt = y1 + ((tdata.transPos[si] - x1) / (x2 - x1)) * (y2 - y1);                
                     Real distFromStagTrans =  isol.distFromStag[Is[prevI]] + std::sqrt((tdata.transPos[si]-x1)*(tdata.transPos[si]-x1) + (yt-y1)*(yt-y1));
 
-                    residual_transition_forced(Uprev,Ucurr,xi[Is[prevI]],xi[Is[currI]],param,distFromStagTrans,Ri,Ri_U,Ri_x);
+                    residual_transition_forced<true,Real>(Uprev,Ucurr,xi[Is[prevI]],xi[Is[currI]],param,distFromStagTrans,Ri,Ri_U,Ri_x);
                 }
             }
             else {

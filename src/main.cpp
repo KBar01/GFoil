@@ -9,6 +9,8 @@
 #include "get_funcs.h"
 #include "extract_BL_TE.hpp"
 #include "panel_funcs.h"
+#include "calc_ue_m.hpp"
+#include "sound.hpp"
 #include <chrono>
 #include <fstream>
 #include <sstream>
@@ -115,7 +117,7 @@ bool runCode(
     stagpoint_find(isol,foil,wake);
     identify_surfaces(isol,vsol);
     set_wake_gap(foil,isol,vsol);
-    calc_ue_m(foil,wake,isol,vsol);
+    calc_ue_m<Real>(foil,wake,isol,vsol);
     rebuild_ue_m(foil,wake,isol,vsol,false);
 
     if (fromRestart){
@@ -180,7 +182,7 @@ bool runCode(
     }
 
     interpolate_at_95_both_surfaces(xcoords,glob.U,post.cp,oper,vsol.turb,param,topsurf,botsurf,Uinf,sampleTE,chordScaling);
-    Real OASPL = calc_OASPL(botsurf,topsurf,chordScaling,Uinf,X,Y,Z,S,kinViscInf,rhoInf,doCps,model);
+    Real OASPL = calc_OASPL<Real,true>(botsurf,topsurf,chordScaling,Uinf,X,Y,Z,S,kinViscInf,rhoInf,model,doCps);
 
     // check OASPL validity
     if (std::isnan(OASPL) || std::isinf(OASPL)) {
@@ -353,7 +355,7 @@ int main(){
         botsurf[6] = botdelta;
 
         Real Uinf = (Re*kinViscInf)/(chordScaling) ;
-        Real OASPL = calc_OASPL(botsurf,topsurf,chordScaling,Uinf,X,Y,Z,S,kinViscInf,rhoInf,1,model);
+        Real OASPL = calc_OASPL<Real,true>(botsurf,topsurf,chordScaling,Uinf,X,Y,Z,S,kinViscInf,rhoInf,model,1);
         return 1 ;
     }
     else{

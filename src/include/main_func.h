@@ -32,8 +32,6 @@ void identify_surfaces(const Isol& isol, Vsol& vsol);
 
 void set_wake_gap(const Foil&foil,const Isol&isol,Vsol&vsol);
 
-void calc_ue_m(const Foil&foil,const Wake&wake,Isol&isol,Vsol &vsol);
-
 void rebuild_ue_m(const Foil&foil,const Wake&wake,const Isol&isol,Vsol&vsol,bool realloc);
 
 void init_boundary_layer(const Oper&oper, const Foil&foil, Param&param, Isol&isol, Vsol&vsol, Glob&glob, Trans&tdata, const bool force);
@@ -68,10 +66,7 @@ void turbulent_BL_profile_XFOIL(
 
 // interpolate_at_95_both_surfaces is now template<typename Real, typename OperT, typename ParamT>
 // in src/include/extract_BL_TE.hpp — include that header directly where needed.
-
-Real calc_OASPL(const Real* botStates, const Real* topStates, const Real chordScale, const Real Uinf,
-    const Real X,const Real Y,const Real Z, const Real S, const Real nu, const Real rho,
-    const int WPSjson,const std::string& model);
-
+// calc_OASPL is now template<typename Real, bool WriteJSON> in src/include/sound.hpp.
+// calc_ue_m is now template<typename Real, ...> in src/include/calc_ue_m.hpp.
 
 #endif
