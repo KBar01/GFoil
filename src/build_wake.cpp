@@ -91,17 +91,6 @@ void build_wake(const Foil& foil, const Geom& geom, const Oper& op, Isol& isol, 
 }
 
 
-void set_wake_gap(const Foil&foil,const Isol&isol,Vsol&vsol){
-
-    Real lengthScaleFactr = 2.5;
-    Real dtdx = std::min(std::max(foil.te.dtdx,-3.0/lengthScaleFactr),3.0/lengthScaleFactr);
-    Real Lw =lengthScaleFactr*foil.te.hTE;
-
-    Real xib ;
-    for (int i=0; i<Nwake;++i){
-        xib = (isol.distFromStag[Ncoords+i] - isol.distFromStag[Ncoords])/Lw;
-        if (xib <= 1.0){
-            vsol.wgap[i] = foil.te.hTE*(1+(2+lengthScaleFactr*dtdx)*xib)*(1-xib)*(1-xib) ;
-        }
-    }
+void set_wake_gap(const Foil& foil, const Isol& isol, Vsol& vsol) {
+    set_wake_gap<>(foil, isol, vsol);
 }

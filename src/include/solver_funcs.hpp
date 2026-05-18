@@ -9,6 +9,26 @@
 #include <cmath>
 #include <vector>
 
+// ── set_wake_gap ─────────────────────────────────────────────────────────────
+// Accesses foil.te.hTE, foil.te.dtdx, isol.distFromStag[], vsol.wgap[].
+template<typename FoilT, typename IsolT, typename VsolT>
+void set_wake_gap(const FoilT& foil, const IsolT& isol, VsolT& vsol) {
+
+    using Real = std::decay_t<decltype(foil.te.hTE)>;
+
+    Real lengthScaleFactr = 2.5;
+    Real dtdx = std::min(std::max(foil.te.dtdx, -3.0/lengthScaleFactr), 3.0/lengthScaleFactr);
+    Real Lw = lengthScaleFactr * foil.te.hTE;
+
+    Real xib;
+    for (int i = 0; i < Nwake; ++i) {
+        xib = (isol.distFromStag[Ncoords+i] - isol.distFromStag[Ncoords]) / Lw;
+        if (xib <= 1.0) {
+            vsol.wgap[i] = foil.te.hTE * (1 + (2 + lengthScaleFactr*dtdx)*xib) * (1-xib) * (1-xib);
+        }
+    }
+}
+
 // ── range (non-template helper) ──────────────────────────────────────────────
 inline std::vector<int> range(int start, int end, int step = 1) {
     std::vector<int> result;

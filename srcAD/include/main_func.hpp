@@ -166,21 +166,7 @@ void stagpoint_find(const Isolc<Real>& isolc, Isolv<Real> & isolv, const Foil<Re
 
 // range() and identify_surfaces moved to src/include/solver_funcs.hpp
 
-template<typename Real>
-void set_wake_gap(const Foil<Real>&foil,const Isolv<Real>&isol,Vsol<Real>&vsol){
-
-    Real lengthScaleFactr = 2.5;
-    Real dtdx = std::min(std::max(foil.te.dtdx,-3.0/lengthScaleFactr),3.0/lengthScaleFactr);
-    Real Lw =lengthScaleFactr*foil.te.hTE;
-
-    Real xib ;
-    for (int i=0; i<Nwake;++i){
-        xib = (isol.distFromStag[Ncoords+i] - isol.distFromStag[Ncoords])/Lw;
-        if (xib <= 1.0){
-            vsol.wgap[i] = foil.te.hTE*(1+(2+lengthScaleFactr*dtdx)*xib)*(1-xib)*(1-xib) ;
-        }
-    }
-}
+// set_wake_gap moved to src/include/solver_funcs.hpp
 
 
 template<typename Real>
