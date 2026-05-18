@@ -9,6 +9,84 @@
 #include <cmath>
 #include <vector>
 
+// ── rebuild_ue_m ─────────────────────────────────────────────────────────────
+// Real deduced from isol.edgeVelSign[0] element type.
+template<typename FoilT, typename WakeT, typename IsolT, typename VsolT>
+void rebuild_ue_m(const FoilT& foil, const WakeT& wake,
+                  const IsolT& isol, VsolT& vsol, bool realloc) {
+
+    using Real = std::decay_t<decltype(foil.s[0])>;  // edgeVelSign is int[], deduce from foil.s
+
+    Real sigma_m[2*(Ncoords-1)];
+
+    if (realloc) {
+        for (int i = 0; i < (Ncoords+Nwake)*(Ncoords+Nwake); ++i)
+            vsol.ue_m[i] = 0;
+    }
+
+    for (int i = 0; i < Ncoords-1; ++i) {
+        Real ds = foil.s[i+1] - foil.s[i];
+        int ind = 2*i;
+        sigma_m[ind]   = -1.0*isol.edgeVelSign[i]   / ds;
+        sigma_m[ind+1] =  1.0*isol.edgeVelSign[i+1] / ds;
+    }
+
+    for (int row = 0; row < Ncoords+Nwake; ++row)
+        vsol.ue_m[row] = vsol.ue_sigma[row] * sigma_m[0];
+
+    int ue_mInt = Ncoords+Nwake;
+    int sigma_mIndex = 1;
+    for (int col = 1; col <= Ncoords-2; ++col) {
+        Real sigma_mValue = sigma_m[sigma_mIndex];
+        for (int row = 0; row < Ncoords+Nwake; ++row)
+            vsol.ue_m[ue_mInt+row] += vsol.ue_sigma[colMajorIndex(row,col-1,Ncoords+Nwake)] * sigma_mValue;
+        sigma_mValue = sigma_m[sigma_mIndex+1];
+        for (int row = 0; row < Ncoords+Nwake; ++row)
+            vsol.ue_m[ue_mInt+row] += vsol.ue_sigma[colMajorIndex(row,col,Ncoords+Nwake)] * sigma_mValue;
+        sigma_mIndex += 2;
+        ue_mInt += (Ncoords+Nwake);
+    }
+
+    for (int row = 0; row < Ncoords+Nwake; ++row)
+        vsol.ue_m[colMajorIndex(row,Ncoords-1,Ncoords+Nwake)] =
+            vsol.ue_sigma[colMajorIndex(row,Ncoords-2,Ncoords+Nwake)] * sigma_m[2*(Ncoords-1)-1];
+
+    Real sigma_mWake[2*(Nwake-1)];
+    for (int i = 0; i < Nwake-1; ++i) {
+        int ind = 2*i;
+        Real ds = wake.s[i+1] - wake.s[i];
+        sigma_mWake[ind]   = -1.0 / ds;
+        sigma_mWake[ind+1] =  1.0 / ds;
+    }
+
+    for (int row = 0; row < Ncoords+Nwake; ++row)
+        vsol.ue_m[colMajorIndex(row,Ncoords,Ncoords+Nwake)] =
+            vsol.ue_sigma[colMajorIndex(row,Ncoords-1,Ncoords+Nwake)] * sigma_mWake[0];
+
+    ue_mInt = (Ncoords+Nwake)*(Ncoords) + Ncoords+Nwake;
+    sigma_mIndex = 1;
+    for (int col = 1; col <= Nwake-2; ++col) {
+        Real sigma_mValue = sigma_mWake[sigma_mIndex];
+        for (int row = 0; row < Ncoords+Nwake; ++row)
+            vsol.ue_m[ue_mInt+row] += vsol.ue_sigma[colMajorIndex(row,Ncoords+col-2,Ncoords+Nwake)] * sigma_mValue;
+        sigma_mValue = sigma_mWake[sigma_mIndex+1];
+        for (int row = 0; row < Ncoords+Nwake; ++row)
+            vsol.ue_m[ue_mInt+row] += vsol.ue_sigma[colMajorIndex(row,Ncoords+col-1,Ncoords+Nwake)] * sigma_mValue;
+        sigma_mIndex += 2;
+        ue_mInt += (Ncoords+Nwake);
+    }
+
+    for (int row = 0; row < Ncoords+Nwake; ++row)
+        vsol.ue_m[(Ncoords+Nwake)*(Ncoords+Nwake-1)+row] =
+            vsol.ue_sigma[colMajorIndex(row,Ncoords+Nwake-3,Ncoords+Nwake)] * sigma_mWake[2*(Nwake-1)-1];
+
+    for (int row = 0; row < Ncoords; ++row) {
+        if (isol.edgeVelSign[row] == 1.0) continue;
+        for (int col = 0; col < Ncoords+Nwake; ++col)
+            vsol.ue_m[colMajorIndex(row,col,Ncoords+Nwake)] *= -1.0;
+    }
+}
+
 // ── set_wake_gap ─────────────────────────────────────────────────────────────
 // Accesses foil.te.hTE, foil.te.dtdx, isol.distFromStag[], vsol.wgap[].
 template<typename FoilT, typename IsolT, typename VsolT>
