@@ -3,44 +3,11 @@
 #include "real_type.h"
 #include "panel_funcs.h"
 #include "data_structs.h"
+#include "solver_funcs.hpp"
 
-
-void space_wake_nodes(const Real& wakeLength,const Real& firstPanelLength,Real* wakeSpacing,const Foil&foil,Wake&wake){
-
-    int Nintervals = Nwake -1;
-    Real d = wakeLength/firstPanelLength ;
-    Real a = Nintervals*(Nintervals-1.0)*(Nintervals-2.0)/6.0 ;
-    Real b = Nintervals*(Nintervals-1.0)/2.0 ;
-    Real c = Nintervals-d;
-
-    Real disc = std::max(b*b-4.0*a*c, 0.0);
-    Real r    = 1 + (-b + std::sqrt(disc))/(2*a) ;
-
-    // Newton-Raphson iterations
-    Real R, R_r, dr;
-    for (int k = 0; k < 10; ++k) {
-        
-        R = std::pow(r, Nintervals) - 1 - d * (r - 1);
-        R_r = Nintervals * std::pow(r, Nintervals - 1) - d;
-        dr = -R / R_r;
-        if (std::abs(dr) < 1e-6) break;
-        r -= R / R_r;
-    }
-
-
-    wakeSpacing[0] = 0.0 ;
-    Real foilEndS = foil.s[Ncoords-1];
-    wake.s[0] = foilEndS + 0.0;
-
-    // Compute cumulative sum
-    Real term = firstPanelLength;
-
-    for (int i = 0; i < Nwake-1; ++i) {
-        wakeSpacing[i+1] = wakeSpacing[i] + term;
-        wake.s[i+1] = foilEndS + wakeSpacing[i+1];
-        // include r multiplication to avoid constantly calling power
-        term *=r;
-    }
+void space_wake_nodes(const Real& wakeLength, const Real& firstPanelLength,
+                      Real* wakeSpacing, const Foil& foil, Wake& wake) {
+    space_wake_nodes<>(wakeLength, firstPanelLength, wakeSpacing, foil, wake);
 }
 
 

@@ -9,6 +9,43 @@
 #include <cmath>
 #include <vector>
 
+// ── space_wake_nodes ─────────────────────────────────────────────────────────
+// Real is in the parameter types so it is deduced at each call site.
+template<typename Real, typename FoilT, typename WakeT>
+void space_wake_nodes(const Real& wakeLength, const Real& firstPanelLength,
+                      Real* wakeSpacing, const FoilT& foil, WakeT& wake) {
+
+    int Nintervals = Nwake - 1;
+    Real d = wakeLength / firstPanelLength;
+    Real a = Nintervals*(Nintervals-1.0)*(Nintervals-2.0)/6.0;
+    Real b = Nintervals*(Nintervals-1.0)/2.0;
+    Real c = Nintervals - d;
+
+    Real disc = std::max(b*b - 4.0*a*c, Real(0.0));
+    Real r    = 1 + (-b + std::sqrt(disc)) / (2*a);
+
+    // Newton-Raphson iterations
+    Real R, R_r, dr;
+    for (int k = 0; k < 10; ++k) {
+        R   = std::pow(r, Nintervals) - 1 - d * (r - 1);
+        R_r = Nintervals * std::pow(r, Nintervals - 1) - d;
+        dr  = -R / R_r;
+        if (std::abs(dr) < 1e-6) break;
+        r -= R / R_r;
+    }
+
+    wakeSpacing[0] = 0.0;
+    Real foilEndS = foil.s[Ncoords-1];
+    wake.s[0] = foilEndS + 0.0;
+
+    Real term = firstPanelLength;
+    for (int i = 0; i < Nwake-1; ++i) {
+        wakeSpacing[i+1] = wakeSpacing[i] + term;
+        wake.s[i+1] = foilEndS + wakeSpacing[i+1];
+        term *= r;
+    }
+}
+
 // ── init_thermo ───────────────────────────────────────────────────────────────
 // Real is deduced from oper.Vinf so no explicit Real template param is needed.
 template<typename OperT, typename ParamT, typename GeomT>
