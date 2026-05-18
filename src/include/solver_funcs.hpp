@@ -9,6 +9,55 @@
 #include <cmath>
 #include <vector>
 
+// ── stagpoint_find_impl ───────────────────────────────────────────────────────
+// GammaT provides .gammas[] (Isol in fwd, Isolc<Real> in AD).
+// VarT    receives .stagIndex[], .stagArcLocation, etc. (Isol in fwd, Isolv<Real> in AD).
+// compute_sstag_g is a compile-time bool: true for fwd (Isol has sstag_g[]),
+// false for AD (Isolv does not). if constexpr prevents the field access from
+// being instantiated for the AD path.
+template<bool compute_sstag_g, typename GammaT, typename VarT,
+         typename FoilT, typename WakeT>
+void stagpoint_find_impl(const GammaT& gammaStruct, VarT& varStruct,
+                         const FoilT& foil, const WakeT& wake) {
+    int j = 0;
+    for (; j < Ncoords; ++j) {
+        if (gammaStruct.gammas[j] > 0) break;
+    }
+    int I[2] = {j-1, j};
+    varStruct.stagIndex[0] = I[0];
+    varStruct.stagIndex[1] = I[1];
+
+    auto G0 = gammaStruct.gammas[I[0]];
+    auto G1 = gammaStruct.gammas[I[1]];
+    auto S0 = foil.s[I[0]];
+    auto S1 = foil.s[I[1]];
+
+    auto den = G1 - G0;
+    auto w1  = G1 / den;
+    auto w2  = -G0 / den;
+
+    varStruct.stagArcLocation = w1 * S0 + w2 * S1;
+
+    varStruct.stagXLocation[0] = foil.x[colMajorIndex(0,j-1,2)] * w1 + foil.x[colMajorIndex(1,j,2)] * w2;
+    varStruct.stagXLocation[1] = foil.x[colMajorIndex(1,j-1,2)] * w1 + foil.x[colMajorIndex(1,j,2)] * w2;
+
+    auto st_g1 = G1 * (S0 - S1) / (den * den);
+    if constexpr (compute_sstag_g) {
+        // sstag_g[] only exists in the fwd Isol struct, not in AD's Isolv
+        varStruct.sstag_g[0] =  st_g1;
+        varStruct.sstag_g[1] = -st_g1;
+    }
+
+    for (int i = j; i < Ncoords; ++i)
+        varStruct.edgeVelSign[i] = 1.0;
+
+    for (int i = 0; i < Ncoords; ++i)
+        varStruct.distFromStag[i] = std::abs(foil.s[i] - varStruct.stagArcLocation);
+
+    for (int i = 0; i < Nwake; ++i)
+        varStruct.distFromStag[Ncoords + i] = wake.s[i] - varStruct.stagArcLocation;
+}
+
 // ── rebuild_ue_m ─────────────────────────────────────────────────────────────
 // Real deduced from isol.edgeVelSign[0] element type.
 template<typename FoilT, typename WakeT, typename IsolT, typename VsolT>

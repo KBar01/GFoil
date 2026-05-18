@@ -123,45 +123,10 @@ void build_wake(const Foil<Real>& foil, const Geom<Real>& geom, const Oper<Real>
 }
 
 template<typename Real>
-void stagpoint_find(const Isolc<Real>& isolc, Isolv<Real> & isolv, const Foil<Real>& foil,const Wake<Real>& wake) {
-
-
-    int j=0;
-    // Find first positive gamma
-    for (; j < Ncoords; ++j) {
-        if (isolc.gammas[j] > 0) break;
-    }
-    int I[2] = {j-1, j};
-    isolv.stagIndex[0] = I[0];
-    isolv.stagIndex[1] = I[1];
-
-    Real G[2] = {isolc.gammas[I[0]], isolc.gammas[I[1]]};
-    Real S[2] = {foil.s[I[0]], foil.s[I[1]]};
-
-    Real den = G[1] - G[0];
-    Real w1 = G[1] / den;
-    Real w2 = -G[0] / den;
-
-    isolv.stagArcLocation = w1 * S[0] + w2 * S[1];
-
-    // Compute x location in column-major form
-    isolv.stagXLocation[0] = foil.x[colMajorIndex(0,j-1,2)] * w1 + foil.x[colMajorIndex(1,j,2)] * w2;   // x-coordinate
-    isolv.stagXLocation[1] = foil.x[colMajorIndex(1,j-1,2)] * w1 + foil.x[colMajorIndex(1,j,2)] * w2; // y-coordinate
-
-    // Compute sign conversion (sgnue)
-    for (int i = j; i < Ncoords; ++i) {
-        isolv.edgeVelSign[i] = 1.0;
-    }
-
-    // Compute distance from stagnation point (xi)
-    for (int i = 0; i < Ncoords; ++i) {
-        isolv.distFromStag[i] = std::abs(foil.s[i] - isolv.stagArcLocation);
-    }
-
-    for (int i = 0; i < Nwake; ++i) {
-        isolv.distFromStag[Ncoords + i] = wake.s[i] - isolv.stagArcLocation;
-    }
-
+void stagpoint_find(const Isolc<Real>& isolc, Isolv<Real>& isolv,
+                    const Foil<Real>& foil, const Wake<Real>& wake) {
+    // isolc = gamma source, isolv = variable destination; no sstag_g in AD
+    stagpoint_find_impl<false>(isolc, isolv, foil, wake);
 }
 
 // range() and identify_surfaces moved to src/include/solver_funcs.hpp
