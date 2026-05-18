@@ -164,34 +164,7 @@ void stagpoint_find(const Isolc<Real>& isolc, Isolv<Real> & isolv, const Foil<Re
 
 }
 
-// Helper function to mimic Python's range(start, end, step)
-std::vector<int> range(int start, int end, int step = 1) {
-    std::vector<int> result;
-    if (step > 0) {
-        for (int i = start; i < end; i += step)
-            result.push_back(i);
-    } else if (step < 0) {
-        for (int i = start; i > end; i += step)
-            result.push_back(i);
-    }
-    return result;
-}
-
-
-// Core function to fill in surface indices
-template<typename Real>
-void identify_surfaces(const Isolv<Real>& isolv, Vsol<Real>& vsol) {
-    vsol.Is.clear(); // Clear any previous data
-
-    // Lower surface (reverse order from Istag[0] to 0)
-    vsol.Is.push_back(range(isolv.stagIndex[0], -1, -1));
-
-    // Upper surface (from Istag[1] to foil.N-1)
-    vsol.Is.push_back(range(isolv.stagIndex[1], Ncoords));
-
-    // Wake (from foil.N to foil.N + wake.N - 1)
-    vsol.Is.push_back(range(Ncoords, Ncoords+Nwake));
-}
+// range() and identify_surfaces moved to src/include/solver_funcs.hpp
 
 template<typename Real>
 void set_wake_gap(const Foil<Real>&foil,const Isolv<Real>&isol,Vsol<Real>&vsol){

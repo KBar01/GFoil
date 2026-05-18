@@ -3,10 +3,10 @@
 #include "real_type.h"
 #include "panel_funcs.h"
 #include "data_structs.h"
+#include "solver_funcs.hpp"
 
 
-void stagpoint_find(Isol& isol, const Foil& foil,const Wake& wake) {
-
+void stagpoint_find(Isol& isol, const Foil& foil, const Wake& wake) {
 
     int j=0;
     // Find first positive gamma
@@ -26,21 +26,17 @@ void stagpoint_find(Isol& isol, const Foil& foil,const Wake& wake) {
 
     isol.stagArcLocation = w1 * S[0] + w2 * S[1];
 
-    // Compute x location in column-major form
-    isol.stagXLocation[0] = foil.x[colMajorIndex(0,j-1,2)] * w1 + foil.x[colMajorIndex(1,j,2)] * w2;   // x-coordinate
-    isol.stagXLocation[1] = foil.x[colMajorIndex(1,j-1,2)] * w1 + foil.x[colMajorIndex(1,j,2)] * w2; // y-coordinate
+    isol.stagXLocation[0] = foil.x[colMajorIndex(0,j-1,2)] * w1 + foil.x[colMajorIndex(1,j,2)] * w2;
+    isol.stagXLocation[1] = foil.x[colMajorIndex(1,j-1,2)] * w1 + foil.x[colMajorIndex(1,j,2)] * w2;
 
-    // Compute linearization
     Real st_g1 = G[1] * (S[0] - S[1]) / (den * den);
     isol.sstag_g[0] = st_g1;
     isol.sstag_g[1] = -st_g1;
 
-    // Compute sign conversion (sgnue)
     for (int i = j; i < Ncoords; ++i) {
         isol.edgeVelSign[i] = 1.0;
     }
 
-    // Compute distance from stagnation point (xi)
     for (int i = 0; i < Ncoords; ++i) {
         isol.distFromStag[i] = std::abs(foil.s[i] - isol.stagArcLocation);
     }
@@ -48,33 +44,9 @@ void stagpoint_find(Isol& isol, const Foil& foil,const Wake& wake) {
     for (int i = 0; i < Nwake; ++i) {
         isol.distFromStag[Ncoords + i] = wake.s[i] - isol.stagArcLocation;
     }
-
 }
 
-// Helper function to mimic Python's range(start, end, step)
-std::vector<int> range(int start, int end, int step = 1) {
-    std::vector<int> result;
-    if (step > 0) {
-        for (int i = start; i < end; i += step)
-            result.push_back(i);
-    } else if (step < 0) {
-        for (int i = start; i > end; i += step)
-            result.push_back(i);
-    }
-    return result;
-}
-
-
-// Core function to fill in surface indices
+// range() is now inline in solver_funcs.hpp; this is the fwd non-template wrapper.
 void identify_surfaces(const Isol& isol, Vsol& vsol) {
-    vsol.Is.clear(); // Clear any previous data
-
-    // Lower surface (reverse order from Istag[0] to 0)
-    vsol.Is.push_back(range(isol.stagIndex[0], -1, -1));
-
-    // Upper surface (from Istag[1] to foil.N-1)
-    vsol.Is.push_back(range(isol.stagIndex[1], Ncoords));
-
-    // Wake (from foil.N to foil.N + wake.N - 1)
-    vsol.Is.push_back(range(Ncoords, Ncoords+Nwake));
+    identify_surfaces<>(isol, vsol);
 }

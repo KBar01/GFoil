@@ -9,6 +9,29 @@
 #include <cmath>
 #include <vector>
 
+// ── range (non-template helper) ──────────────────────────────────────────────
+inline std::vector<int> range(int start, int end, int step = 1) {
+    std::vector<int> result;
+    if (step > 0) {
+        for (int i = start; i < end; i += step)
+            result.push_back(i);
+    } else if (step < 0) {
+        for (int i = start; i > end; i += step)
+            result.push_back(i);
+    }
+    return result;
+}
+
+// ── identify_surfaces ─────────────────────────────────────────────────────────
+// No Real needed — only accesses isol.stagIndex[] (always int[]).
+template<typename IsolT, typename VsolT>
+void identify_surfaces(const IsolT& isol, VsolT& vsol) {
+    vsol.Is.clear();
+    vsol.Is.push_back(range(isol.stagIndex[0], -1, -1));
+    vsol.Is.push_back(range(isol.stagIndex[1], Ncoords));
+    vsol.Is.push_back(range(Ncoords, Ncoords+Nwake));
+}
+
 // ── space_wake_nodes ─────────────────────────────────────────────────────────
 // Real is in the parameter types so it is deduced at each call site.
 template<typename Real, typename FoilT, typename WakeT>
