@@ -45,7 +45,7 @@ void update_state(const Oper&oper, const Param&param, Glob&glob,Vsol&vsol);
 
 void update_transition(Glob &glob, Vsol &vsol, Isol &isol, Param&param, Trans&tdata,const bool force);
 
-void clear_RV(Glob&glob, const Isol&isol,const Vsol&vsol, const Foil&foil,const Param&param);
+// clear_RV → inline in solver_funcs.hpp (guarded by AIRFOIL_STRUCTS_H)
 
 bool solve_coupled(const Oper& oper, const Foil& foil, const Wake& wake,
     Param& param, Vsol& vsol, Isol& isol, Glob& glob, Trans&tdata, const bool force);

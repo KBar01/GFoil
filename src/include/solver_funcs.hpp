@@ -510,6 +510,16 @@ void init_thermo(const OperT& oper, ParamT& param, const GeomT& geom) {
 // Guard: AIRFOIL_STRUCTS_H is defined by data_structs.h.
 #ifdef AIRFOIL_STRUCTS_H
 #include <cassert>
+
+// clear_RV: zeros the sparse Jacobian storage in Glob.
+inline void clear_RV(Glob& glob, const Isol&, const Vsol&, const Foil&, const Param&) {
+    for (int i = 0; i < glob.R_V_latest; ++i) {
+        glob.R_V_vals[i] = 0.0;
+        glob.R_V_rows[i] = 0;
+        glob.R_V_cols[i] = 0;
+    }
+    glob.R_V_latest = 0;
+}
 inline void stagpoint_move(Isol& isol, Glob& glob,
                            const Foil& foil, const Wake& wake, Vsol& vsol) {
     int* I = isol.stagIndex;
