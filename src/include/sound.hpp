@@ -48,6 +48,9 @@ void calc_WPS(const std::string& model,
 }
 
 // ── OASPL ─────────────────────────────────────────────────────────────────────
+// Overall sound pressure level integrated from PSD over Nsound frequencies
+// (200-20000 Hz, log-spaced). OASPL = 10*log10(integral(PSD*domega) / pref^2)
+// where pref = 20e-6 Pa.
 
 template<typename Real, bool WriteJSON = false>
 Real calc_OASPL(const Real* botStates, const Real* topStates,

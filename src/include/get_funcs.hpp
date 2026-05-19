@@ -94,6 +94,7 @@ Real get_Mach2(const Real&edgeVel,const ParamT& param,Real*dMsqrd_dState){
     { return M2;}
 }
 
+// H = delta*/theta. H_k: Fidkowski Eq.45, H**: Eq.46
 template<typename Real>
 Real get_H(const Real th, const Real ds, Real* H_U){
     
@@ -181,6 +182,7 @@ Real get_Hss(const Real th, const Real ds, const Real ue, const ParamT& param, R
 }
 
 
+// Amplification rate dn/dxi: Fidkowski Eqs.69-76
 template<typename Real, typename ParamT>
 Real get_de(const Real th, const Real ds, const Real ue, const ParamT& param,Real* de_U){
 
@@ -272,6 +274,7 @@ Real get_Ret(const Real th, const Real ds, const Real ue, const ParamT& param, R
     return Ret ;
 }
 
+// c_f laminar: Fidkowski Eq.56. c_f turbulent: Eqs.57-60
 template<typename Real, typename ParamT>
 Real get_cf(const Real th, const Real ds, const Real sa, const Real ue,const bool turb,const bool wake, const ParamT& param, Real* cf_U)  // output: cf linearisation w.r.t. th, ds, sa, ue
 {
@@ -573,6 +576,7 @@ Real get_Us(const Real th, const Real ds, const Real sa, const Real ue, const Pa
 }
 
 
+// u_q equilibrium: Fidkowski Eq.77. c_tau_eq: Eqs.78-80
 template<typename Real, typename ParamT>
 Real get_uq(const Real ds,const Real (&ds_U)[8],
 const Real cf,const Real (&cf_U)[8],
@@ -798,6 +802,7 @@ Real get_cDi_lamstress(const Real th,const Real ds,const Real sa,const Real ue,c
 
 
 
+// c_D laminar: Fidkowski Eq.61. c_D turbulent: Eqs.62-67
 template<typename Real, typename ParamT>
 Real get_cDi(const Real th,const Real ds,const Real sa,const Real ue,const bool turb,const bool wake, const ParamT& param,
     Real (&cDi_U)[4])
@@ -1237,7 +1242,8 @@ Real get_cttr(const Real th,const Real ds,const Real sa,const Real ue,const bool
     return cttr;
 }
 
-// get_ueinv: fwd non-template (Isol unified struct; AD uses isolc+isolv).
+// get_ueinv: u_e^inv = edgeVelSign * gamma on airfoil (Fidkowski Sec. V.B,
+// since gamma = tangential velocity), u_e^inv = uewi on wake (Eq.24)
 // Only available when data_structs.h has been included (defines AIRFOIL_STRUCTS_H).
 #ifdef AIRFOIL_STRUCTS_H
 inline void get_ueinv(const Isol& isol, Real* ueinv) {

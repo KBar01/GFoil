@@ -45,6 +45,9 @@ Real upwind_half(
     return f ;
 }
 
+// Discretized BL equations, Fidkowski (2021) Eqs. 9-12.
+// Finite differences of logs for momentum (Eq.9), shape (Eq.10),
+// amplification (Eq.11), lag (Eq.12). Upwind factor from Eq.13.
 template<bool ComputeJacobian=true, typename Real, typename ParamT>
 void residual_station(
     const Real* U1,
@@ -682,7 +685,10 @@ void residual_station_forced(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// wake_sys
+// wake_sys — wake initialization residuals, Fidkowski (2021) Eq.14.
+//   R_mom:   theta_w1 = theta_1 + theta_N
+//   R_shape: delta*_w1 = delta*_1 + delta*_N + hTE
+//   R_lag:   c_tau^(1/2) momentum-weighted average
 //   VsolT / FoilT / GlobT / ParamT — duck-typed for Vsol/Vsol<Real> etc.
 //   ComputeJacobian=true  : fills R_U[36] and J[3]  (forward solver)
 //   ComputeJacobian=false : R_U and J ignored        (AD solver)
@@ -761,7 +767,10 @@ void wake_sys(const VsolT& vsol, const FoilT& foil, const GlobT& glob,
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// residual_transition
+// residual_transition — Fidkowski (2021) Eq.16.
+// Transition interval: laminar sub-interval uses R_amp (Eq.11);
+// turbulent sub-interval uses R_lag (Eq.12).
+// c_tau^(1/2) initialised at transition via Eq.17.
 //   ComputeJacobian=true  : fills R_U[24] and R_x[6]  (forward solver)
 //   ComputeJacobian=false : R_U and R_x ignored         (AD solver)
 // ─────────────────────────────────────────────────────────────────────────────

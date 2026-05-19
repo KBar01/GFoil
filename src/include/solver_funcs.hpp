@@ -25,6 +25,8 @@
 #include "vector_ops.hpp"
 
 // ── ue_residual_kernel ───────────────────────────────────────────────────────
+// Edge velocity closure residual R_u, Fidkowski (2021) Eq.27.
+// R_u = u_e - (u_e^inv + D*(u_e.*delta*))
 // Steps 1-3 shared between solve_glob (fwd) and finishdRdU_AD (AD).
 // IsolcT provides .gammas[] and .uewi[]; IsolvT provides .edgeVelSign[].
 // Pass the same Isol object for both in the fwd (unified struct).
@@ -66,6 +68,7 @@ void ue_residual_kernel(const IsolcT& isolc, const IsolvT& isolv,
 }
 
 // ── stagpoint_move_impl ──────────────────────────────────────────────────────
+// Updates stagnation location after Newton step. Fidkowski (2021) Sec. V.C.
 // Shared core for stagpoint_move (fwd) and stagpoint_move_AD (AD).
 // stagPanel[2] are the two stagnation panel indices determined by the caller's
 // preamble. The impl always updates all fields and rebuilds ue_m (realloc=true).
@@ -108,6 +111,9 @@ void stagpoint_move_impl(IsolT& isol, GlobT& glob,
 }
 
 // ── stagnation_state_impl ────────────────────────────────────────────────────
+// Fidkowski (2021) Eqs. 9-10 at xi=0, Sec. IV.C.
+// At stagnation xi,ue→0; ln(theta2/theta1) and ln(H*2/H*1) drop out.
+// u_e ~ K*xi so ln(ue2/ue1) = ln(xi2/xi1) = 1.
 // Shared kernel: computes Ust[0..3] and xst from two adjacent state vectors.
 // The fwd stagnation_state adds Jacobian outputs Ust_U[32] and Ust_x[8] on
 // top of this call; the AD stagnation_state is just this call.
@@ -133,6 +139,8 @@ void stagnation_state_impl(const Real* U1, const Real* U2,
 }
 
 // ── build_wake_impl ──────────────────────────────────────────────────────────
+// Wake geometry: streamline from TE midpoint, Fidkowski (2021) Sec. IV.D.
+// Predictor-corrector arc-length spacing (space_wake_nodes) then streamline march.
 // Duck-typed on IsolcT — both Isol (fwd) and Isolc<Real> (AD) provide
 // .gammas[] and .uewi[]. Real deduced from op.Vinf.
 template<typename FoilT, typename GeomT, typename OperT,
@@ -207,6 +215,8 @@ void build_wake_impl(const FoilT& foil, const GeomT& geom,
 }
 
 // ── calc_force ───────────────────────────────────────────────────────────────
+// Force coefficients, Fidkowski (2021) Eqs.33-36.
+// c_l: Eq.33, c_m: Eq.35, c_d (wake/Squire-Young): Eq.36
 // Duck-typed on all struct params. Real deduced from glob.U element type.
 // The fwd signature has an extra unused isol param (dropped here).
 template<typename OperT, typename GeomT, typename ParamT,
@@ -268,6 +278,8 @@ void calc_force(const OperT& op, const GeomT& geom, const ParamT& par,
 }
 
 // ── stagpoint_find_impl ───────────────────────────────────────────────────────
+// Fidkowski (2021) Sec. IV.C: s_stag = linear interp of adjacent u_e values.
+// edgeVelSign = direction factor d_i (negative on lower surface, +1 on upper/wake).
 // GammaT provides .gammas[] (Isol in fwd, Isolc<Real> in AD).
 // VarT    receives .stagIndex[], .stagArcLocation, etc. (Isol in fwd, Isolv<Real> in AD).
 // compute_sstag_g is a compile-time bool: true for fwd (Isol has sstag_g[]),
@@ -317,6 +329,8 @@ void stagpoint_find_impl(const GammaT& gammaStruct, VarT& varStruct,
 }
 
 // ── rebuild_ue_m ─────────────────────────────────────────────────────────────
+// Builds ue_m matrix (D matrix), Fidkowski (2021) Eq.26.
+// sigma = dm/dxi (Eq.23), m = ue*delta*
 // Real deduced from isol.edgeVelSign[0] element type.
 template<typename FoilT, typename WakeT, typename IsolT, typename VsolT>
 void rebuild_ue_m(const FoilT& foil, const WakeT& wake,
@@ -395,6 +409,8 @@ void rebuild_ue_m(const FoilT& foil, const WakeT& wake,
 }
 
 // ── set_wake_gap ─────────────────────────────────────────────────────────────
+// Wake gap h_w(xi), Fidkowski (2021) Eq.15.
+// Decreases from hTE to 0 over distance Lw = fw*hTE.
 // Accesses foil.te.hTE, foil.te.dtdx, isol.distFromStag[], vsol.wgap[].
 template<typename FoilT, typename IsolT, typename VsolT>
 void set_wake_gap(const FoilT& foil, const IsolT& isol, VsolT& vsol) {
@@ -475,6 +491,8 @@ void space_wake_nodes(const Real& wakeLength, const Real& firstPanelLength,
 }
 
 // ── init_thermo ───────────────────────────────────────────────────────────────
+// Compressibility corrections, Fidkowski (2021) Sec. VI.
+// Karman-Tsien correction Eq.29. Isentropic density Eq.31, Sutherland viscosity Eq.32.
 // Real is deduced from oper.Vinf so no explicit Real template param is needed.
 template<typename OperT, typename ParamT, typename GeomT>
 void init_thermo(const OperT& oper, ParamT& param, const GeomT& geom) {

@@ -81,6 +81,8 @@ void errFunc(Real in_r, Real in_i, Real &out_r, Real &out_i){
 
 /////////////////////////////////////////// Amiet model — Roger & Moreau (2005) ///////////////////
 
+// Computes E*(x) used in Amiet transfer function, Roger & Moreau (2005) Eq.6.
+// E(x) = conj(E*(x)) obtained by negating imaginary part.
 // E*(xr + i·xi) = erf[(1+i)·sqrt((xr+i·xi)/2)] / (1+i)
 // For real x (xi=0) this gives the mid-span E* of R&M Eq. 3-4.
 template<typename Real>
@@ -106,9 +108,8 @@ inline Real sinc_safe(Real z) {
     return (std::abs(z) < Real(1e-10)) ? Real(1.0) : std::sin(z) / z;
 }
 
-// Roger & Moreau (2005) Eq. 13 — chordwise radiation integral f1.
-// Primary trailing-edge scattering term for the supercritical regime.
-// B = K̄₁ + (1+M)μ̄  (at mid-span),  C from Eq. 12.
+// Primary TE scattering term, Roger & Moreau (2005) Eq.13. Supercritical only
+// (K2_bar=0 ⟹ kappa_bar=mu_bar always). B = K̄₁ + (1+M)μ̄ (at mid-span), C from Eq.12.
 template<typename Real>
 inline void Radiation_integral1(Real B, Real C,
                                 Real &f1r, Real &f1i)
@@ -150,8 +151,8 @@ inline void Radiation_integral1(Real B, Real C,
 }
 
 
-// Roger & Moreau (2005) Eq. 14 — back-scattering correction integral f2.
-// G is the sum of sub-integrals G_a..G_e; H is the correction prefactor; ε from Eq. 9.
+// Back-scattering correction, Roger & Moreau (2005) Eq.14.
+// G is the sum of sub-integrals G_a..G_e; H is the correction prefactor; ε from Eq.9.
 template<typename Real>
 void Radiation_integral2(
     Real B, Real K_bar, Real k_min_bar, Real mu_bar, Real S0,
@@ -287,8 +288,8 @@ void Radiation_integral2(
     f2i = Hr*totali + Hi*totalr;
 }
 
-// Roger & Moreau (2005) Section 3.1 — mid-span supercritical frequency loop.
-// K̄₂ = 0 always, so kbar2 = μ̄² > 0 and the path is always supercritical.
+// Loops over Nsound frequencies, assembles I_abs2[Nsound] for far-field PSD.
+// R&M (2005) Section 3.1 — mid-span, K̄₂=0 always ⟹ always supercritical.
 template<typename Real>
 void Radiation_integral_total(
     const Real *C,
@@ -333,6 +334,8 @@ void Radiation_integral_total(
 
 
 
+// Top-level Amiet TE noise. Computes far-field PSD at observer (x,y,z)
+// for each frequency in omega[Nsound]. Roger & Moreau (2005) Eqs.1-2, 18.
 template<typename Real>
 void TE_noise_outer(
     Real M, Real U, Real x, Real y, Real z,
