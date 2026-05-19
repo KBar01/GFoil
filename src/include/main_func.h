@@ -53,7 +53,7 @@ void clear_RV(Glob&glob, const Isol&isol,const Vsol&vsol, const Foil&foil,const 
 bool solve_coupled(const Oper& oper, const Foil& foil, const Wake& wake,
     Param& param, Vsol& vsol, Isol& isol, Glob& glob, Trans&tdata, const bool force);
 
-void calc_force(const Oper&op, const Geom&geom, const Param&par, const Isol&isol,const Foil&foil, const Glob&glob, Post& post);
+// calc_force → template in solver_funcs.hpp
 
 
 

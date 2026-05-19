@@ -10,6 +10,7 @@
 #include "extract_BL_TE.hpp"
 #include "panel_funcs.h"
 #include "calc_ue_m.hpp"
+#include "solver_funcs.hpp"
 #include "sound.hpp"
 #include <chrono>
 #include <fstream>
@@ -149,7 +150,7 @@ bool runCode(
     stagpoint_move(isol,glob,foil,wake,vsol);
     bool converged = solve_coupled(oper,foil,wake,param,vsol,isol,glob,tdata,force);
     Post post;
-    calc_force(oper,geom,param,isol,foil,glob,post);
+    calc_force<>(oper,geom,param,foil,glob,post);
     
     ////////////////////////////// Aero done, now acoustics ///////////////////////////////////////////////////////////////////
 
