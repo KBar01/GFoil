@@ -119,7 +119,7 @@ bool runCode(
     identify_surfaces(isol,vsol);
     set_wake_gap(foil,isol,vsol);
     calc_ue_m<Real>(foil,wake,isol,vsol);
-    rebuild_ue_m(foil,wake,isol,vsol,false);
+    rebuild_ue_m<>(foil,wake,isol,vsol,false);
 
     if (fromRestart){
 

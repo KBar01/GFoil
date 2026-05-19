@@ -32,7 +32,7 @@ void identify_surfaces(const Isol& isol, Vsol& vsol);
 
 void set_wake_gap(const Foil&foil,const Isol&isol,Vsol&vsol);
 
-void rebuild_ue_m(const Foil&foil,const Wake&wake,const Isol&isol,Vsol&vsol,bool realloc);
+// rebuild_ue_m → template in solver_funcs.hpp
 
 void init_boundary_layer(const Oper&oper, const Foil&foil, Param&param, Isol&isol, Vsol&vsol, Glob&glob, Trans&tdata, const bool force);
 
