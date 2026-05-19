@@ -9,6 +9,80 @@
 #include <cmath>
 #include <vector>
 
+// ── build_wake_impl ──────────────────────────────────────────────────────────
+// Duck-typed on IsolcT — both Isol (fwd) and Isolc<Real> (AD) provide
+// .gammas[] and .uewi[]. Real deduced from op.Vinf.
+template<typename FoilT, typename GeomT, typename OperT,
+         typename IsolcT, typename WakeT>
+void build_wake_impl(const FoilT& foil, const GeomT& geom,
+                     const OperT& op, IsolcT& isol, WakeT& wake) {
+
+    using Real = std::decay_t<decltype(op.Vinf)>;
+
+    Real firstPanelSize = 0.5*(foil.s[1]-foil.s[0] + foil.s[Ncoords-1]-foil.s[Ncoords-2]);
+    Real wakeLength = geom.wakelen*geom.chord;
+    Real wakePanelSizes[Nwake];
+    space_wake_nodes(wakeLength,firstPanelSize,wakePanelSizes,foil,wake);
+
+    Real midpointTE[2];
+    midpointTE[0] = 0.5*(foil.x[colMajorIndex(0,0,2)] + foil.x[colMajorIndex(0,Ncoords-1,2)]);
+    midpointTE[1] = 0.5*(foil.x[colMajorIndex(1,0,2)] + foil.x[colMajorIndex(1,Ncoords-1,2)]);
+
+    Real normTE[2];
+    Real tangTE[2];
+    normTE[0] = foil.x[colMajorIndex(0,Ncoords-1,2)] - foil.x[colMajorIndex(0,0,2)];
+    normTE[1] = foil.x[colMajorIndex(1,Ncoords-1,2)] - foil.x[colMajorIndex(1,0,2)];
+
+    tangTE[0] = normTE[1];
+    tangTE[1] = -normTE[0];
+
+    wake.x[0] = midpointTE[0] + (1.0e-5)*tangTE[0]*geom.chord;
+    wake.x[1] = midpointTE[1] + (1.0e-5)*tangTE[1]*geom.chord;
+
+    Real v1[2],v2[2],v1Store[2];
+    Real norm,wakeLengthsDiff;
+    for (int i=0; i<Nwake-1; ++i) {
+
+        v1Store[0]=0.0; v1Store[1]=0.0;
+        v2[0]=0.0;      v2[1]=0.0;
+        inviscid_velocity(foil,isol.gammas,op.Vinf,op.alpha,
+                          wake.x[colMajorIndex(0,i,2)],wake.x[colMajorIndex(1,i,2)],v1Store);
+
+        norm = norm2(v1Store);
+        v1[0] = v1Store[0]/norm;
+        v1[1] = v1Store[1]/norm;
+        wake.t[colMajorIndex(0,i,2)] = v1[0];
+        wake.t[colMajorIndex(1,i,2)] = v1[1];
+
+        isol.uewi[i] = (v1Store[0] * v1[0]) + (v1Store[1] * v1[1]);
+
+        wakeLengthsDiff = wakePanelSizes[i+1]-wakePanelSizes[i];
+        wake.x[colMajorIndex(0,i+1,2)] = wake.x[colMajorIndex(0,i,2)] + wakeLengthsDiff*v1[0];
+        wake.x[colMajorIndex(1,i+1,2)] = wake.x[colMajorIndex(1,i,2)] + wakeLengthsDiff*v1[1];
+
+        inviscid_velocity(foil,isol.gammas,op.Vinf,op.alpha,
+                          wake.x[colMajorIndex(0,i+1,2)],wake.x[colMajorIndex(1,i+1,2)],v2);
+        norm = norm2(v2);
+        v2[0] /= norm; v2[1] /= norm;
+        wake.t[colMajorIndex(0,i+1,2)] = v2[0];
+        wake.t[colMajorIndex(1,i+1,2)] = v2[1];
+
+        wake.x[colMajorIndex(0,i+1,2)] = wake.x[colMajorIndex(0,i,2)] + wakeLengthsDiff*0.5*(v1[0]+v2[0]);
+        wake.x[colMajorIndex(1,i+1,2)] = wake.x[colMajorIndex(1,i,2)] + wakeLengthsDiff*0.5*(v1[1]+v2[1]);
+    }
+
+    v1Store[0]=0.0; v1Store[1]=0.0;
+    inviscid_velocity(foil,isol.gammas,op.Vinf,op.alpha,
+                      wake.x[colMajorIndex(0,Nwake-1,2)],wake.x[colMajorIndex(1,Nwake-1,2)],v1Store);
+    norm = norm2(v1Store);
+    v1[0] = v1Store[0]/norm;
+    v1[1] = v1Store[1]/norm;
+    wake.t[colMajorIndex(0,Nwake-1,2)] = v1[0];
+    wake.t[colMajorIndex(1,Nwake-1,2)] = v1[1];
+
+    isol.uewi[Nwake-1] = (v1Store[0] * v1[0]) + (v1Store[1] * v1[1]);
+}
+
 // ── calc_force ───────────────────────────────────────────────────────────────
 // Duck-typed on all struct params. Real deduced from glob.U element type.
 // The fwd signature has an extra unused isol param (dropped here).
