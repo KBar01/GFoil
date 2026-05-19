@@ -100,48 +100,11 @@ void finishdRdU_AD(const Foil<Real>&foil, const Isolc<Real>&isolc, const Isolv<R
 }
 
 template<typename Real>
-void stagpoint_move_AD(Isolv<Real>& isol,Glob<Real>& glob,const Foil<Real>& foil,const Wake<Real>& wake,Vsol<Real>&vsol,const int (&currStag)[2]) {
-    
-    const int* I = currStag;       // pointer to stagnation indices (keeps it cleaner)
-    bool newpanel = true;
-    
-    // Compute new stagnation location
-    Real u0 = glob.U[colMajorIndex(3,I[0],4)]; // velocities at stag point panel
-    Real u1 = glob.U[colMajorIndex(3,I[1],4)]; 
-
-    Real den = u0 + u1;
-    Real w1 = u1 / den;
-    Real w2 = u0 / den;
-
-    isol.stagArcLocation = w1*foil.s[I[0]] + w2*foil.s[I[1]]; // new arclength location
-
-    for (int d=0; d<2; ++d) {   // new x coord of stagnation point
-        isol.stagXLocation[d] = w1*foil.x[colMajorIndex(d,I[0],2)] + w2*foil.x[colMajorIndex(d,I[1],2)];
-    }
-
-    Real ds = foil.s[I[1]] - foil.s[I[0]];
-    isol.sstag_ue[0] = u1 * ds / (den * den);
-    isol.sstag_ue[1] = -u0 * ds / (den * den);
-
-
-    // updating the array of arclength from stagnation at every node
-
-
-    cnp::scalar_sub_abs<Ncoords>(foil.s,isol.stagArcLocation,isol.distFromStag);
-    Real* xiWake = isol.distFromStag + Ncoords ;
-    cnp::scalar_sub<Nwake>(wake.s,isol.stagArcLocation,xiWake);
-
-    for (int i=0; i<=I[0]; ++i){ isol.edgeVelSign[i] = -1;}
-    for (int i=I[0]+1; i<Ncoords; ++i){ isol.edgeVelSign[i] = 1;}
-
-    isol.stagIndex[0] = I[0] ;
-    isol.stagIndex[1] = I[1] ;
-
-
-    identify_surfaces(isol,vsol);
-    rebuild_ue_m(foil,wake,isol,vsol,false);
-    
-};
+void stagpoint_move_AD(Isolv<Real>& isol, Glob<Real>& glob,
+                       const Foil<Real>& foil, const Wake<Real>& wake,
+                       Vsol<Real>& vsol, const int (&currStag)[2]) {
+    stagpoint_move_impl<Real>(isol, glob, foil, wake, vsol, currStag);
+}
 
 template<typename Real>
 void stagnation_state(const Real*U1, const Real*U2, const Real x1, const Real x2,
