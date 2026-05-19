@@ -9,6 +9,67 @@
 #include <cmath>
 #include <vector>
 
+// ── calc_force ───────────────────────────────────────────────────────────────
+// Duck-typed on all struct params. Real deduced from glob.U element type.
+// The fwd signature has an extra unused isol param (dropped here).
+template<typename OperT, typename GeomT, typename ParamT,
+         typename FoilT, typename GlobT, typename PostT>
+void calc_force(const OperT& op, const GeomT& geom, const ParamT& par,
+                const FoilT& foil, const GlobT& glob, PostT& post) {
+
+    using Real = std::decay_t<decltype(glob.U[0])>;
+
+    Real qinf = 0.5*op.rho *(op.Vinf * op.Vinf);
+    constexpr int Nsys = Ncoords+Nwake;
+
+    Real ue[Nsys]={0};
+    for (int i=0;i<Nsys;++i){ue[i] = glob.U[colMajorIndex(3,i,4)];}
+    get_cp(post,op,par,ue);
+
+    Real cos_alpha = std::cos(op.alpha);
+    Real sin_alpha = std::sin(op.alpha);
+
+    for (int i0 = 1; i0 <= Ncoords; ++i0) {
+
+        int i  = (i0 == Ncoords) ? 0        : i0;
+        int ip = (i0 == Ncoords) ? Ncoords-1 : i0-1;
+
+        const Real x1[2] = {foil.x[colMajorIndex(0,ip,2)],foil.x[colMajorIndex(1,ip,2)]};
+        const Real x2[2] = {foil.x[colMajorIndex(0,i ,2)],foil.x[colMajorIndex(1,i ,2)]};
+
+        Real dxv[2] = {x2[0] - x1[0], x2[1] - x1[1]};
+        Real dx1[2] = {x1[0] - geom.xref[0], x1[1] - geom.xref[1]};
+        Real dx2[2] = {x2[0] - geom.xref[0], x2[1] - geom.xref[1]};
+
+        Real dx1nds = dxv[0] * dx1[0] + dxv[1] * dx1[1];
+        Real dx2nds = dxv[0] * dx2[0] + dxv[1] * dx2[1];
+
+        Real dx = -dxv[0] * cos_alpha - dxv[1] * sin_alpha;
+        Real dz =  dxv[1] * cos_alpha - dxv[0] * sin_alpha;
+
+        Real cp1 = post.cp[ip], cp2 = post.cp[i];
+        Real cpbar = 0.5 * (cp1 + cp2);
+
+        post.cl += dx * cpbar;
+        post.cm += cp1 * dx1nds / 3.0 + cp1 * dx2nds / 6.0
+                 + cp2 * dx1nds / 6.0 + cp2 * dx2nds / 3.0;
+    }
+
+    post.cl /= geom.chord;
+    post.cm /= (geom.chord*geom.chord);
+
+    int iw = Ncoords+Nwake-1;
+    const Real* U = &glob.U[colMajorIndex(0,iw,4)];
+
+    Real H, H_U[4];
+    H = get_H(U[0],U[1],H_U);
+
+    Real uk, uk_ue;
+    uk = get_uk(U[3],par,uk_ue);
+
+    post.cd = 2.0 * U[0] * pow(uk / op.Vinf, (5.0 + H) / 2.0);
+}
+
 // ── stagpoint_find_impl ───────────────────────────────────────────────────────
 // GammaT provides .gammas[] (Isol in fwd, Isolc<Real> in AD).
 // VarT    receives .stagIndex[], .stagArcLocation, etc. (Isol in fwd, Isolv<Real> in AD).
