@@ -1,10 +1,24 @@
 #pragma once
 
 // Mid-span (x₂ = 0) trailing-edge noise model — Roger & Moreau (2005).
-// Restriction: observer in the mid-span plane only.
-//   x₂ = 0  ⟹  K̄₂ = 0  ⟹  κ̄ = μ̄
-//   kbar² = μ̄² - (K̄₂/β)² = μ̄² > 0 always  ⟹  supercritical path only.
-// The subcritical branch and all associated helpers are not present.
+//
+// Assumptions:
+//   x₂ = 0  (mid-span observer)
+//   K̄₂ = 0  (follows from x₂ = 0)
+//   κ̄ = μ̄   (follows from K̄₂ = 0)
+//   kbar² = μ̄² > 0 always → supercritical path only
+//
+// Key functions:
+//   Estar()                  — E*(x), R&M Eq. 3-4 (via complex erf/Faddeeva)
+//   Radiation_integral1()    — I1, R&M Eq. 13 (primary TE scattering)
+//   Radiation_integral2()    — I2, R&M Eq. 14 (leading-edge back-scatter)
+//   Radiation_integral_total() — frequency loop over Nsound points
+//   TE_noise_outer()         — far-field PSD, R&M Eq. 18
+//
+// CoDiPack note:
+//   errFunc() uses .getValue()/.getGradient() and StatementPushHelper.
+//   It requires Real to be a CoDiPack active type — will not compile
+//   with Real = double. All call paths go through codi::RealReverse.
 
 #include <cmath>
 #include <complex>
@@ -81,13 +95,14 @@ void errFunc(Real in_r, Real in_i, Real &out_r, Real &out_i){
 
 /////////////////////////////////////////// Amiet model — Roger & Moreau (2005) ///////////////////
 
-// Computes E*(x) used in Amiet transfer function, Roger & Moreau (2005) Eq.6.
-// E(x) = conj(E*(x)) obtained by negating imaginary part.
-// E*(xr + i·xi) = erf[(1+i)·sqrt((xr+i·xi)/2)] / (1+i)
-// For real x (xi=0) this gives the mid-span E* of R&M Eq. 3-4.
+// Estar(xr + i·xi) — Roger & Moreau (2005) Eq. 3-4.
+// Computes E*(x) = erf[(1+i)·sqrt((xr+i·xi)/2)] / (1+i)
+// For real x (xi=0): mid-span E* used in radiation integrals.
+// The no-star E(x) = conj(E*(x)) for real x — obtained by negating
+// the imaginary part of Estar at the call site.
 template<typename Real>
-inline void Fresnel_int_conj(Real xr, Real xi,
-                             Real &Er, Real &Ei)
+inline void Estar(Real xr, Real xi,
+                  Real &Er, Real &Ei)
 {
     Real sr, si;
     complex_sqrt<Real>(0.5*xr, 0.5*xi, sr, si);
@@ -114,8 +129,8 @@ template<typename Real>
 inline void Radiation_integral1(Real B, Real C,
                                 Real &f1r, Real &f1i)
 {
-    Real a_r, a_i; Fresnel_int_conj<Real>(2.0*(B-C), 0.0, a_r, a_i);
-    Real b_r, b_i; Fresnel_int_conj<Real>(2.0*B,     0.0, b_r, b_i);
+    Real a_r, a_i; Estar<Real>(2.0*(B-C), 0.0, a_r, a_i);
+    Real b_r, b_i; Estar<Real>(2.0*B,     0.0, b_r, b_i);
 
     Real cos2C = std::cos(2.0*C), sin2C = std::sin(2.0*C);
     // prefactor = -e^{2iC}/(iC) = i·e^{2iC}/C
@@ -137,6 +152,8 @@ inline void Radiation_integral1(Real B, Real C,
     Real a_div_r, a_div_i;
     cdiv<Real>(a_r, a_i, sc_r, sc_i, a_div_r, a_div_i);
 
+    // Combine s and a_div: sqrt(2B) * E*(2(B-C))/sqrt(2(B-C))
+    //                    = sqrt(B/(B-C)) * E*(2(B-C))  per R&M Eq.13
     Real t1r = tmp_r*a_div_r - tmp_i*a_div_i;
     Real t1i = tmp_r*a_div_i + tmp_i*a_div_r;
 
@@ -151,8 +168,12 @@ inline void Radiation_integral1(Real B, Real C,
 }
 
 
-// Back-scattering correction, Roger & Moreau (2005) Eq.14.
-// G is the sum of sub-integrals G_a..G_e; H is the correction prefactor; ε from Eq.9.
+// Roger & Moreau (2005) Eq. 14 — leading-edge back-scattering correction I2.
+// Supercritical mid-span: kappa_bar = mu_bar, k_min_bar = mu_bar.
+// H = prefactor (R&M Eq.14 notation), epsilon = (1 + 1/(4*mu_bar))^(-1/2) (Eq.9).
+// G = sum of sub-terms G_a..G_e; Estar(x) for E*, conj(Estar(x)) for E(x).
+// NOTE: G_e coefficient uses sqrt(0.5*k/D), corrected from sqrt(k/D).
+// TODO: replace denominator clipping in G_c, G_d, G_e with limiting forms.
 template<typename Real>
 void Radiation_integral2(
     Real B, Real K_bar, Real k_min_bar, Real mu_bar, Real S0,
@@ -165,7 +186,7 @@ void Radiation_integral2(
 
     // Ẽ = exp(4i·k_min_bar)·(1 - (1+i)·E*(4·k_min_bar))
     Real Fr, Fi;
-    Fresnel_int_conj<Real>(4.0*k_min_bar, 0.0, Fr, Fi);
+    Estar<Real>(4.0*k_min_bar, 0.0, Fr, Fi);
     Real t1r = Fr - Fi;   // (1+i)·E*: real part
     Real t1i = Fi + Fr;   // (1+i)·E*: imag part
     Real oneMinus_r = 1.0 - t1r;
@@ -196,13 +217,16 @@ void Radiation_integral2(
 
     // --- G_c: [(1+ε)(1-i)] / [2(D-2k)] · e^{4ik}·E*(4k)
     Real denC_val = D - 2.0*k_min_bar;
+    // TODO: replace denominator clipping with analytical limiting form near
+    // D +/- 2*k_min_bar = 0. Current clipping prevents crashes but may
+    // introduce gradient discontinuities for CoDiPack AD.
     Real denC = 2.0 * ((std::abs(denC_val) < Real(1e-10)) ? Real(1e-10) : denC_val);
     Real m1r = 1.0, m1i = -1.0;  // (1-i)
     Real coeffr = (1.0+error)*m1r / denC;
     Real coeffi = (1.0+error)*m1i / denC;
     epr = std::cos(4.0*k_min_bar);
     epi = std::sin(4.0*k_min_bar);
-    Fresnel_int_conj<Real>(4.0*k_min_bar, 0.0, Fr, Fi);
+    Estar<Real>(4.0*k_min_bar, 0.0, Fr, Fi);
     Real tmp_r = epr*Fr - epi*Fi;
     Real tmp_i = epr*Fi + epi*Fr;
     Real G_cr = coeffr*tmp_r - coeffi*tmp_i;
@@ -210,6 +234,9 @@ void Radiation_integral2(
 
     // --- G_d: [(1-ε)(1+i)] / [2(D+2k)] · e^{-4ik}·E(4k),  subtracted in sum
     Real denD_val = D + 2.0*k_min_bar;
+    // TODO: replace denominator clipping with analytical limiting form near
+    // D +/- 2*k_min_bar = 0. Current clipping prevents crashes but may
+    // introduce gradient discontinuities for CoDiPack AD.
     Real denD = 2.0 * ((std::abs(denD_val) < Real(1e-10)) ? Real(1e-10) : denD_val);
     Real p1r = 1.0, p1i = 1.0;  // (1+i)
     Real coeffDr = (1.0-error)*p1r / denD;
@@ -217,7 +244,7 @@ void Radiation_integral2(
     epr = std::cos(-4.0*k_min_bar);
     epi = std::sin(-4.0*k_min_bar);
     // E(4k) = conj(E*(4k)): compute E* then negate imaginary part
-    Fresnel_int_conj<Real>(4.0*k_min_bar, 0.0, Fr, Fi);
+    Estar<Real>(4.0*k_min_bar, 0.0, Fr, Fi);
     Fi = -Fi;
     tmp_r = epr*Fr - epi*Fi;
     tmp_i = epr*Fi + epi*Fr;
@@ -231,10 +258,12 @@ void Radiation_integral2(
     } else {
         Real e2r = std::cos(2.0*D);
         Real e2i = std::sin(2.0*D);
+        // R&M Eq.14: e^{2iD}/2 * sqrt(2k/D) = e^{2iD} * sqrt(k/(2D))
+        // so the sqrt argument is 0.5*k_min_bar/D, not k_min_bar/D.
         Real sqrtfactor_r, sqrtfactor_i;
-        complex_sqrt<Real>(k_min_bar / D, Real(0.0), sqrtfactor_r, sqrtfactor_i);
+        complex_sqrt<Real>(0.5*k_min_bar / D, Real(0.0), sqrtfactor_r, sqrtfactor_i);
 
-        Fresnel_int_conj<Real>(2.0*D, 0.0, Fr, Fi);
+        Estar<Real>(2.0*D, 0.0, Fr, Fi);
         tmp_r = e2r*Fr - e2i*Fi;
         tmp_i = e2r*Fi + e2i*Fr;
         Real new_r = tmp_r*sqrtfactor_r - tmp_i*sqrtfactor_i;
@@ -244,6 +273,7 @@ void Radiation_integral2(
         // bracket = (1+i)·(1-ε)/(D+2k) - (1-i)·(1+ε)/(D-2k)
         Real da = D + 2.0*k_min_bar;
         Real db = D - 2.0*k_min_bar;
+        // TODO: replace clipping with limiting forms near D +/- 2k = 0.
         Real da_s = (std::abs(da) < Real(1e-10)) ? Real(1e-10) : da;
         Real db_s = (std::abs(db) < Real(1e-10)) ? Real(1e-10) : db;
         Real term1r = (1.0-error) / da_s;
@@ -333,9 +363,20 @@ void Radiation_integral_total(
 }
 
 
-
-// Top-level Amiet TE noise. Computes far-field PSD at observer (x,y,z)
-// for each frequency in omega[Nsound]. Roger & Moreau (2005) Eqs.1-2, 18.
+// Roger & Moreau (2005) Eq. 18 — far-field PSD S_pp(omega).
+// Mid-span observer (y=0): S0 = sqrt(x^2 + beta^2*z^2).
+// Integrates upper and lower surface contributions.
+// Inputs:
+//   M, U    — freestream Mach and velocity
+//   x, z    — observer coordinates (y ignored, assumed 0 for mid-span)
+//   b       — semi-chord (half-chord = c/2), used for K_bar = omega/U * b
+//   c       — full chord (used only for b_half = b, kept for clarity)
+//   span    — span length
+//   c0      — speed of sound
+//   omega   — angular frequency array [Nsound]
+//   Ue_bot/top — trailing-edge edge velocity, lower/upper surface
+//   WPS_lower/upper — one-sided wall-pressure spectrum Phi_pp [Nsound]
+//   farfieldSpectra — output: S_pp(omega) [Nsound]
 template<typename Real>
 void TE_noise_outer(
     Real M, Real U, Real x, Real y, Real z,
@@ -355,7 +396,10 @@ void TE_noise_outer(
     for (int surf = 0; surf < 2; ++surf) {
 
     Real beta = std::sqrt(1.0 - M*M);
-    Real S0   = std::sqrt(x*x + beta*beta*(y*y + z*z));
+    // Mid-span implementation: y is ignored and assumed to be zero.
+    // Including y in S0 while K2_bar=0 is physically inconsistent
+    // (R&M Section 3, mid-span observer: x2=0 throughout).
+    Real S0 = std::sqrt(x*x + beta*beta*z*z);
 
     Real U_c  = 0.7 * Ue[surf];
     Real alpha = U / U_c;
@@ -387,8 +431,9 @@ void TE_noise_outer(
         l_y[i] = (b_c * U_c) / omega[i];
 
     // Roger & Moreau (2005) Eq. 18 — far-field PSD S_pp(ω).
-    // S_pp = (ωb·z / 2πc₀S₀²)² · 2·span · |I|² · Φ_pp · l_y,  b = c/2 (half-chord).
-    Real b_half = c / 2.0;
+    // S_pp = (ωb·z / 2πc₀S₀²)² · 2·span · |I|² · Φ_pp · l_y,
+    // b = semi-chord (half-chord), passed directly as parameter
+    Real b_half = b;  // b is already the semi-chord (c/2) passed by caller
     for (int i = 0; i < Nsound; ++i) {
         Real term1 = std::pow((omega[i]*b_half*z) / (2.0*M_PI*c0*S0*S0), 2.0);
 
