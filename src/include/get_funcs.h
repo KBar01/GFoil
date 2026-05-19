@@ -9,5 +9,14 @@
 #include "data_structs.h"
 #include "get_funcs.hpp"
 
-// Kept separate from get_funcs.hpp: requires Isol (forward) vs Isolc+Isolv (AD)
-void get_ueinv(const Isol& isol, Real* ueinv);
+// get_ueinv: fwd non-template inline (Isol is a unified struct; AD uses isolc+isolv).
+// Guard ensures Isol/Real are defined (they come from data_structs.h above).
+#ifdef AIRFOIL_STRUCTS_H
+inline void get_ueinv(const Isol& isol, Real* ueinv) {
+    for (int i = 0; i < Ncoords; ++i)
+        ueinv[i] = isol.edgeVelSign[i] * isol.gammas[i];
+    for (int i = 0; i < Nwake; ++i)
+        ueinv[Ncoords+i] = isol.uewi[i];
+    ueinv[Ncoords] = ueinv[Ncoords-1];
+}
+#endif // AIRFOIL_STRUCTS_H
