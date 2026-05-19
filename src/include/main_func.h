@@ -35,7 +35,7 @@ void init_boundary_layer(const Oper&oper, const Foil&foil, Param&param, Isol&iso
 
 void init_boundary_layer_from_xfoil(const Oper&oper, const Foil&foil, const Param&param, Isol&isol, Vsol&vsol, Glob&glob);
 
-void stagpoint_move(Isol& isol,Glob& glob,const Foil& foil,const Wake& wake,Vsol&vsol);
+// stagpoint_move → inline in solver_funcs.hpp (guarded by AIRFOIL_STRUCTS_H)
 
 void build_glob_RV(const Foil&foil, const Vsol&vsol,const Isol&isol,Glob&glob, Param&param, Trans&tdata);
 

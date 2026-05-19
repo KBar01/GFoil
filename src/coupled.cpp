@@ -8,6 +8,7 @@
 #include "get_funcs.h"
 #include "vector_ops.hpp"
 #include "main_func.h"
+#include "solver_funcs.hpp"
 #include <chrono>
 #include <fstream>
 
