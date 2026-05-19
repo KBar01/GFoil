@@ -24,13 +24,10 @@ void build_gamma_codi(Isol &isol, const Foil& foil, const Oper& oper);
 
 // init_thermo → template in solver_funcs.hpp
 
-void build_wake(const Foil& foil, const Geom& geom, const Oper& op, Isol& isol, Wake& wake);
-
-void stagpoint_find(Isol& isol, const Foil& foil,const Wake&wake);
-
-void identify_surfaces(const Isol& isol, Vsol& vsol);
-
-void set_wake_gap(const Foil&foil,const Isol&isol,Vsol&vsol);
+// build_wake → build_wake_impl<> template in solver_funcs.hpp
+// stagpoint_find → stagpoint_find_impl<true> template in solver_funcs.hpp
+// identify_surfaces → template in solver_funcs.hpp
+// set_wake_gap → template in solver_funcs.hpp
 
 // rebuild_ue_m → template in solver_funcs.hpp
 

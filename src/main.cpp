@@ -114,10 +114,10 @@ bool runCode(
 
     build_gamma_codi(isol,foil,oper);
     init_thermo<>(oper,param,geom);
-    build_wake(foil,geom,oper,isol,wake);
-    stagpoint_find(isol,foil,wake);
-    identify_surfaces(isol,vsol);
-    set_wake_gap(foil,isol,vsol);
+    build_wake_impl<>(foil,geom,oper,isol,wake);
+    stagpoint_find_impl<true>(isol,isol,foil,wake);
+    identify_surfaces<>(isol,vsol);
+    set_wake_gap<>(foil,isol,vsol);
     calc_ue_m<Real>(foil,wake,isol,vsol);
     rebuild_ue_m<>(foil,wake,isol,vsol,false);
 
