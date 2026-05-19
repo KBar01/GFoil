@@ -12,7 +12,7 @@
 
 template<typename Real> struct Isolc;
 template<typename Real> struct Isolv;
-template<typename Real> struct Vsol;
+// Vsol (and other types) are now template aliases — no struct forward-decl.
 
 // AD version of get_ueinv: kept here because it takes Isolc<Real>+Isolv<Real>
 // (the Isol/Isolc split means this cannot be in the shared src/include/get_funcs.hpp).
@@ -26,14 +26,7 @@ void get_ueinv(const Isolc<Real>& isolc, const Isolv<Real>& isolv, Real* ueinv) 
     }
     ueinv[Ncoords] = ueinv[Ncoords-1];
 }
-template<typename Real> struct Foil;
-template<typename Real> struct Param;
-template<typename Real> struct Post;
-template<typename Real> struct Oper;
-template<typename Real> struct Geom;
-template<typename Real> struct Wake;
-template<typename Real> struct Glob;
-template<typename Real> struct Trans;
+// These are now template aliases in data_structs.hpp — no struct forward-decls needed.
 
 
 
