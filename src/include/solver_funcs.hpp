@@ -21,6 +21,47 @@
 #include <vector>
 #include "vector_ops.hpp"
 
+// ── ue_residual_kernel ───────────────────────────────────────────────────────
+// Steps 1-3 shared between solve_glob (fwd) and finishdRdU_AD (AD).
+// IsolcT provides .gammas[] and .uewi[]; IsolvT provides .edgeVelSign[].
+// Pass the same Isol object for both in the fwd (unified struct).
+// The fwd solve_glob adds sparse Jacobian fill + sparse solve after this call.
+template<typename Real, typename IsolcT, typename IsolvT,
+         typename VsolT, typename GlobT>
+void ue_residual_kernel(const IsolcT& isolc, const IsolvT& isolv,
+                        VsolT& vsol, GlobT& glob) {
+    constexpr int Nsys = Ncoords+Nwake;
+
+    // Step 1: clamp ue to avoid 0 or negative
+    Real ue[Nsys] = {0};
+    Real uemax = 0.0;
+    for (int i = 0; i < Nsys; ++i)
+        uemax = std::max(uemax, std::abs(glob.U[colMajorIndex(3,i,4)]));
+    for (int i = 0; i < Nsys; ++i)
+        ue[i] = std::max(glob.U[colMajorIndex(3,i,4)], Real(1e-10)*uemax);
+
+    // Step 2: inviscid edge velocity (inlined to avoid get_ueinv signature mismatch)
+    Real ueinv[Nsys] = {0};
+    for (int i = 0; i < Ncoords; ++i)
+        ueinv[i] = isolv.edgeVelSign[i] * isolc.gammas[i];
+    for (int i = 0; i < Nwake; ++i)
+        ueinv[Ncoords+i] = isolc.uewi[i];
+    ueinv[Ncoords] = ueinv[Ncoords-1];
+
+    // Step 3: build R[3*Nsys:]
+    Real ds[Nsys];
+    for (int i = 0; i < Nsys; ++i) ds[i] = glob.U[colMajorIndex(1, i, 4)];
+
+    Real tempRHS[Nsys];
+    cnp::mul<Nsys>(ds, ue, tempRHS);
+
+    Real* Rpointer = &glob.R[3*Nsys];
+    cnp::matmat_mul<Nsys,Nsys,1>(vsol.ue_m, tempRHS, Rpointer);
+
+    for (int i = 0; i < Nsys; ++i)
+        Rpointer[i] = ue[i] - (ueinv[i] + Rpointer[i]);
+}
+
 // ── stagpoint_move_impl ──────────────────────────────────────────────────────
 // Shared core for stagpoint_move (fwd) and stagpoint_move_AD (AD).
 // stagPanel[2] are the two stagnation panel indices determined by the caller's

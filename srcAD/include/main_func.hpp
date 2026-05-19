@@ -64,39 +64,10 @@ void stagpoint_find(const Isolc<Real>& isolc, Isolv<Real>& isolv,
 // calc_force moved to src/include/solver_funcs.hpp
 
 template<typename Real>
-void finishdRdU_AD(const Foil<Real>&foil, const Isolc<Real>&isolc, const Isolv<Real>&isolv, Glob<Real>& glob, Vsol<Real>& vsol, const Oper<Real>& oper) {
-    
-    
-    constexpr int Nsys = Ncoords+Nwake;
-
-    // Step 1: Modify ue array to avoid 0 or negative
-    int nrows = 4; // Since U is shaped (4, Nsys) in column-major
-    Real ue[Nsys] = {0};
-    Real uemax = 0.0;
-    for (int i = 0; i < Nsys; ++i){
-        uemax = std::max(uemax, std::abs(glob.U[colMajorIndex(3,i,4)]));
-    }
-    for (int i = 0; i < Nsys; ++i){
-        ue[i] = std::max(glob.U[colMajorIndex(3,i,4)], 1e-10*uemax);
-    }
-
-    // Step 2: Get ueinv
-    Real ueinv[Nsys]={0};
-    get_ueinv(isolc,isolv,ueinv);
-
-    // Step 3: Build Residual R
-    Real ds[Nsys];
-    for (int i = 0; i < Nsys; ++i) {ds[i] = glob.U[colMajorIndex(1, i, 4)];}
-
-    Real tempRHS[Nsys];
-    cnp::mul<Nsys>(ds,ue,tempRHS); // ds*ue
-
-    Real* Rpointer = &glob.R[3*Nsys] ; 
-    cnp::matmat_mul<Nsys,Nsys,1>(vsol.ue_m,tempRHS,Rpointer);
-
-    for (int i = 0; i < Nsys; ++i){
-        Rpointer[i] = ue[i] - (ueinv[i] + Rpointer[i]);
-    }
+void finishdRdU_AD(const Foil<Real>&foil, const Isolc<Real>&isolc,
+                   const Isolv<Real>&isolv, Glob<Real>& glob,
+                   Vsol<Real>& vsol, const Oper<Real>& oper) {
+    ue_residual_kernel<Real>(isolc, isolv, vsol, glob);
 }
 
 template<typename Real>
