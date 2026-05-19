@@ -1,7 +1,7 @@
-// Thin forwarding header — template panel functions are defined in panel_funcs.hpp.
-// This header additionally declares the non-template functions that depend on
-// the Foil struct (inviscid_velocity, dvelocity_dgamma), which are implemented
-// in src/panel_funcs.cpp and cannot be shared as templates.
+// Thin forwarding header for the fwd build.
+// Template panel functions (panel_info, panel_linvortex_stream, etc.) are in panel_funcs.hpp.
+// inviscid_velocity and dvelocity_dgamma are now template<Real,FoilT> in panel_funcs.hpp;
+// the declarations below are the non-template fwd wrappers implemented in panel_funcs.cpp.
 #pragma once
 
 #include "real_type.h"

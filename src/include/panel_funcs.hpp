@@ -241,3 +241,96 @@ void panel_linsource_velocity(const Real& panelStartX, const Real& panelStartY,
     b2 = ug2 * info.t[1] + wg2 * info.n[1];
 
 }
+
+// Forward declaration required for two-phase lookup in the FoilT templates below.
+// colMajorIndex is defined in real_type.hpp (AD build) and
+// inviscid_solve_codi.cpp (fwd build).
+int colMajorIndex(int row, int col, int num_rows);
+
+// ── inviscid_velocity and dvelocity_dgamma ────────────────────────────────────
+// Templated on FoilT so both Foil (fwd, non-template) and Foil<Real> (AD) work.
+// Real is deduced from the gammas/velocity/CPx arguments.
+
+template<typename Real, typename FoilT>
+void inviscid_velocity(const FoilT& foil, const Real* gammas,
+    const Real& Vinf, const Real& alpha,
+    const Real& CPx, const Real& CPy, Real* velocity)
+{
+    PanelInfo<Real> info;
+    Real a1, b1, a2, b2;
+
+    for (int j = 0; j < Ncoords - 1; ++j) {
+        panel_linvortex_velocity<Real>(
+            foil.x[colMajorIndex(0,j,2)],   foil.x[colMajorIndex(1,j,2)],
+            foil.x[colMajorIndex(0,j+1,2)], foil.x[colMajorIndex(1,j+1,2)],
+            CPx, CPy, info, a1, b1, a2, b2);
+        velocity[0] += a1*gammas[j] + b1*gammas[j+1];
+        velocity[1] += a2*gammas[j] + b2*gammas[j+1];
+    }
+
+    panel_constsource_velocity<Real>(
+        foil.x[colMajorIndex(0,Ncoords-1,2)], foil.x[colMajorIndex(1,Ncoords-1,2)],
+        foil.x[colMajorIndex(0,0,2)],          foil.x[colMajorIndex(1,0,2)],
+        CPx, CPy, info, a1, a2);
+
+    Real f1x = a1*(-0.5*foil.te.tcp), f1y = a2*(-0.5*foil.te.tcp);
+    Real f2x = a1*( 0.5*foil.te.tcp), f2y = a2*( 0.5*foil.te.tcp);
+    velocity[0] += f1x*gammas[0] + f2x*gammas[Ncoords-1];
+    velocity[1] += f1y*gammas[0] + f2y*gammas[Ncoords-1];
+
+    panel_linvortex_velocity<Real>(
+        foil.x[colMajorIndex(0,Ncoords-1,2)], foil.x[colMajorIndex(1,Ncoords-1,2)],
+        foil.x[colMajorIndex(0,0,2)],          foil.x[colMajorIndex(1,0,2)],
+        CPx, CPy, info, a1, b1, a2, b2);
+
+    f1x = (a1+b1)*( 0.5*foil.te.tdp);  f1y = (a2+b2)*( 0.5*foil.te.tdp);
+    f2x = (a1+b1)*(-0.5*foil.te.tdp);  f2y = (a2+b2)*(-0.5*foil.te.tdp);
+    velocity[0] += f1x*gammas[0] + f2x*gammas[Ncoords-1];
+    velocity[1] += f1y*gammas[0] + f2y*gammas[Ncoords-1];
+
+    velocity[0] += Vinf*std::cos(alpha);
+    velocity[1] += Vinf*std::sin(alpha);
+}
+
+template<typename Real, typename FoilT>
+void dvelocity_dgamma(const FoilT& foil, const Real& CPx,
+    const Real& CPy, Real* V_G)
+{
+    PanelInfo<Real> info;
+    Real a1, b1, a2, b2;
+
+    for (int j = 0; j < Ncoords - 1; ++j) {
+        panel_linvortex_velocity<Real>(
+            foil.x[colMajorIndex(0,j,2)],   foil.x[colMajorIndex(1,j,2)],
+            foil.x[colMajorIndex(0,j+1,2)], foil.x[colMajorIndex(1,j+1,2)],
+            CPx, CPy, info, a1, b1, a2, b2);
+        V_G[colMajorIndex(0,j,2)]   += a1;
+        V_G[colMajorIndex(1,j,2)]   += a2;
+        V_G[colMajorIndex(0,j+1,2)] += b1;
+        V_G[colMajorIndex(1,j+1,2)] += b2;
+    }
+
+    panel_constsource_velocity<Real>(
+        foil.x[colMajorIndex(0,Ncoords-1,2)], foil.x[colMajorIndex(1,Ncoords-1,2)],
+        foil.x[colMajorIndex(0,0,2)],          foil.x[colMajorIndex(1,0,2)],
+        CPx, CPy, info, a1, a2);
+
+    Real f1x = a1*(-0.5*foil.te.tcp), f1y = a2*(-0.5*foil.te.tcp);
+    Real f2x = a1*( 0.5*foil.te.tcp), f2y = a2*( 0.5*foil.te.tcp);
+    V_G[colMajorIndex(0,0,2)]         += f1x;
+    V_G[colMajorIndex(1,0,2)]         += f1y;
+    V_G[colMajorIndex(0,Ncoords-1,2)] += f2x;
+    V_G[colMajorIndex(1,Ncoords-1,2)] += f2y;
+
+    panel_linvortex_velocity<Real>(
+        foil.x[colMajorIndex(0,Ncoords-1,2)], foil.x[colMajorIndex(1,Ncoords-1,2)],
+        foil.x[colMajorIndex(0,0,2)],          foil.x[colMajorIndex(1,0,2)],
+        CPx, CPy, info, a1, b1, a2, b2);
+
+    f1x = (a1+b1)*( 0.5*foil.te.tdp);  f1y = (a2+b2)*( 0.5*foil.te.tdp);
+    f2x = (a1+b1)*(-0.5*foil.te.tdp);  f2y = (a2+b2)*(-0.5*foil.te.tdp);
+    V_G[colMajorIndex(0,0,2)]         += f1x;
+    V_G[colMajorIndex(1,0,2)]         += f1y;
+    V_G[colMajorIndex(0,Ncoords-1,2)] += f2x;
+    V_G[colMajorIndex(1,Ncoords-1,2)] += f2y;
+}
