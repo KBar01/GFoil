@@ -83,25 +83,14 @@ in both TUs — do NOT add `#include "real_type.h"` inside newAmiet.hpp.
 
 ---
 
-## Shared solver template header
+## Shared solver template headers
 
 `src/include/solver_funcs.hpp` — included by both build targets.
-Contains duck-typed template implementations that replaced duplicated
-non-template functions in `src/*.cpp` and `srcAD/include/main_func.hpp`.
+Contains duck-typed template implementations; each fwd *.cpp delegates
+via a one-line non-template wrapper. main_func.hpp includes it directly.
 
-Functions now in solver_funcs.hpp (all duck-typed on struct params):
-- `stagpoint_find_impl<bool compute_sstag_g, GammaT, VarT, FoilT, WakeT>`
-  — compile-time bool guards the sstag_g[] write (fwd-only field).
-  fwd wrapper passes isol as both GammaT and VarT; AD wrapper passes isolc/isolv.
-- `rebuild_ue_m<FoilT, WakeT, IsolT, VsolT>` — Real deduced from foil.s[0]
-- `set_wake_gap<FoilT, IsolT, VsolT>` — Real deduced from foil.te.hTE
-- `space_wake_nodes<Real, FoilT, WakeT>` — Real in param types, fully deducible
-- `identify_surfaces<IsolT, VsolT>` — no Real needed
-- `range(int,int,int)` — non-template inline helper
-- `init_thermo<OperT, ParamT, GeomT>` — Real deduced from oper.Vinf
-
-Include chain: main_func.hpp includes solver_funcs.hpp; each fwd *.cpp
-also includes it and delegates via a one-line non-template wrapper.
+`src/include/panel_funcs.hpp` — already shared; `inviscid_velocity` and
+`dvelocity_dgamma` added as `template<Real,FoilT>` in May 2026.
 
 ## Dead / Stale Files
 
@@ -148,7 +137,30 @@ detects success by checking that the output file was written/updated,
 not by exit code. Do not change this logic without also fixing the
 binary exit codes.
 
+## Deduplication progress
+
+### Completed (Easy tier — all in solver_funcs.hpp or panel_funcs.hpp)
+- init_thermo            → solver_funcs.hpp  template<OperT,ParamT,GeomT>
+- space_wake_nodes       → solver_funcs.hpp  template<Real,FoilT,WakeT>
+- identify_surfaces      → solver_funcs.hpp  template<IsolT,VsolT>
+- set_wake_gap           → solver_funcs.hpp  template<FoilT,IsolT,VsolT>
+- rebuild_ue_m           → solver_funcs.hpp  template<FoilT,WakeT,IsolT,VsolT>
+- stagpoint_find_impl    → solver_funcs.hpp  template<bool,GammaT,VarT,FoilT,WakeT>
+- calc_force             → solver_funcs.hpp  template<OperT,GeomT,ParamT,FoilT,GlobT,PostT>
+- build_wake_impl        → solver_funcs.hpp  template<FoilT,GeomT,OperT,IsolcT,WakeT>
+- inviscid_velocity      → panel_funcs.hpp   template<Real,FoilT>
+- dvelocity_dgamma       → panel_funcs.hpp   template<Real,FoilT>
+
+### Deferred (Medium difficulty)
+- stagnation_state       fwd adds Ust_U[32]+Ust_x[8] Jacobian outputs; AD omits
+- stagpoint_move         different preambles (fwd scans glob.U; AD receives currStag)
+- Ue residual kernel     fwd adds Jacobian fill + sparse solve on top of shared kernel
+- struct unification     Geom,TE,Foil,Wake,Oper,Post,Param,Trans,Vsol all field-identical
+                         → template<typename Real> structs in data_structs_shared.hpp
+
+### Deferred (Hard — do not attempt)
+- build_glob_RV          Jacobian fill interleaved at every station; ~35% shared logic
+
 ## Current Work
-6 duplicate functions consolidated into solver_funcs.hpp (May 2026).
-Both builds pass. Golden regression files committed. Regression test
-passes at 1e-8 tolerance after clean rebuild.
+About to tackle Medium difficulty deduplication items.
+Run python3 tests/regression_test.py --test after every step.
