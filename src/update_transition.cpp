@@ -5,7 +5,7 @@
 #include "panel_funcs.hpp"
 #include "residuals.h"
 #include "data_structs.h"
-#include "get_funcs.h"
+#include "get_funcs.hpp"
 #include "vector_ops.hpp"
 
 int march_amplification(Glob &glob, Vsol &vsol, Isol &isol, int si, const Param&param, Trans&tdata, const bool force) {

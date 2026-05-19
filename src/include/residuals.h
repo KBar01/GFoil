@@ -3,7 +3,7 @@
 #include "real_type.h"
 #include "panel_funcs.hpp"
 #include "data_structs.h"
-#include "get_funcs.h"     // must precede residuals_shared.hpp so get_H etc. are visible at instantiation
+#include "get_funcs.hpp"     // must precede residuals_shared.hpp so get_H etc. are visible at instantiation
 #include "vector_ops.hpp"  // must precede residuals_shared.hpp so cnp:: ops are available
 #include "residuals_shared.hpp"
 

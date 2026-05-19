@@ -7,55 +7,33 @@
 #include "real_type.h"
 #include "panel_funcs.hpp"
 
-struct Isol;
-struct Vsol;
-struct Foil;
-struct Param;
-struct Post;
-struct Oper;
-struct Geom;
-struct Wake;
-struct Glob;
-struct Trans;
+// Forward declarations — needed because main_func.h is #included inside data_structs.h
+// before the struct bodies are defined.
+struct Isol; struct Glob;
+struct Geom; struct Foil; struct Wake; struct Oper; struct Param;
+struct Vsol; struct Post; struct Trans;
 
-// colMajorIndex → inline constexpr in real_type.h
-// build_gamma_codi → inline wrapper in solve_inv.hpp (AIRFOIL_STRUCTS_H guard)
-
-// init_thermo → template in solver_funcs.hpp
-
-// build_wake → build_wake_impl<> template in solver_funcs.hpp
-// stagpoint_find → stagpoint_find_impl<true> template in solver_funcs.hpp
-// identify_surfaces → template in solver_funcs.hpp
-// set_wake_gap → template in solver_funcs.hpp
-
-// rebuild_ue_m → template in solver_funcs.hpp
-
+// Functions that remain as separate .cpp translation units:
 void init_boundary_layer(const Oper&oper, const Foil&foil, Param&param, Isol&isol, Vsol&vsol, Glob&glob, Trans&tdata, const bool force);
-
 void init_boundary_layer_from_xfoil(const Oper&oper, const Foil&foil, const Param&param, Isol&isol, Vsol&vsol, Glob&glob);
-
-// stagpoint_move → inline in solver_funcs.hpp (guarded by AIRFOIL_STRUCTS_H)
-
 void build_glob_RV(const Foil&foil, const Vsol&vsol,const Isol&isol,Glob&glob, Param&param, Trans&tdata);
-
 void solve_glob(const Foil&foil, const Isol&isol, Glob& glob, Vsol& vsol, const Oper& oper, const int doSolve);
-
 void update_state(const Oper&oper, const Param&param, Glob&glob,Vsol&vsol);
-
 void update_transition(Glob &glob, Vsol &vsol, Isol &isol, Param&param, Trans&tdata,const bool force);
-
-// clear_RV → inline in solver_funcs.hpp (guarded by AIRFOIL_STRUCTS_H)
-
 bool solve_coupled(const Oper& oper, const Foil& foil, const Wake& wake,
     Param& param, Vsol& vsol, Isol& isol, Glob& glob, Trans&tdata, const bool force);
 
-// calc_force → template in solver_funcs.hpp
-
-
-
-// interpolate_at_95_both_surfaces is now template<typename Real, typename OperT, typename ParamT>
-// in src/include/extract_BL_TE.hpp — include that header directly where needed.
-// calc_OASPL is now template<typename Real, bool WriteJSON> in src/include/sound.hpp.
-// calc_ue_m is now template<typename Real, ...> in src/include/calc_ue_m.hpp.
+// Everything else is now a template in a shared .hpp:
+//   colMajorIndex       → inline in real_type.h
+//   build_gamma_codi    → inline wrapper in solve_inv.hpp
+//   init_thermo         → solver_funcs.hpp
+//   build_wake_impl     → solver_funcs.hpp
+//   stagpoint_find_impl → solver_funcs.hpp
+//   identify_surfaces   → solver_funcs.hpp
+//   set_wake_gap        → solver_funcs.hpp
+//   rebuild_ue_m        → solver_funcs.hpp
+//   stagpoint_move      → solver_funcs.hpp (AIRFOIL_STRUCTS_H guard)
+//   clear_RV            → solver_funcs.hpp (AIRFOIL_STRUCTS_H guard)
+//   calc_force          → solver_funcs.hpp
 
 #endif

@@ -5,7 +5,7 @@
 #include "panel_funcs.hpp"
 #include "residuals.h"
 #include "data_structs.h"
-#include "get_funcs.h"
+#include "get_funcs.hpp"
 #include "vector_ops.hpp"
 #include "main_func.h"
 #include "solver_funcs.hpp"

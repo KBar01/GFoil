@@ -1236,3 +1236,15 @@ Real get_cttr(const Real th,const Real ds,const Real sa,const Real ue,const bool
 
     return cttr;
 }
+
+// get_ueinv: fwd non-template (Isol unified struct; AD uses isolc+isolv).
+// Only available when data_structs.h has been included (defines AIRFOIL_STRUCTS_H).
+#ifdef AIRFOIL_STRUCTS_H
+inline void get_ueinv(const Isol& isol, Real* ueinv) {
+    for (int i = 0; i < Ncoords; ++i)
+        ueinv[i] = isol.edgeVelSign[i] * isol.gammas[i];
+    for (int i = 0; i < Nwake; ++i)
+        ueinv[Ncoords+i] = isol.uewi[i];
+    ueinv[Ncoords] = ueinv[Ncoords-1];
+}
+#endif // AIRFOIL_STRUCTS_H

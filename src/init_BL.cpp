@@ -5,7 +5,7 @@
 #include "real_type.h"
 #include "panel_funcs.hpp"
 #include "data_structs.h"
-#include "get_funcs.h"
+#include "get_funcs.hpp"
 #include "residuals.h"
 
 #include "nlohmann/json.hpp"  // nlohmann/json
