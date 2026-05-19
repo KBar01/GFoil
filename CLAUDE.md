@@ -172,12 +172,45 @@ binary exit codes.
   every station; only ~35% logic shared. Do not attempt without careful
   planning.
 
-### Current Work
-Deduplication complete for Easy + Medium tiers. Regression test passing.
-Next steps if desired:
-  1. Resolve fwd data_structs.h forward-declaration issue to complete
-     struct unification on both sides.
-  2. Tackle build_glob_RV (Hard) — requires a design decision on whether
-     to policy-template the Jacobian fill or leave it as-is.
-  3. Fix remaining newAmiet.hpp issues (std::fabs, std::hypot, using decls)
-     to get GFoil_AD building cleanly.
+## Current Work
+Codebase is in a clean state. All recent work complete and passing
+regression at machine precision.
+
+### Completed since last CLAUDE.md update
+- newAmiet.hpp physics fixes (supervisor review):
+    - Fresnel_int_conj renamed to Estar throughout
+    - G_e coefficient corrected: sqrt(0.5*k/D) not sqrt(k/D)
+    - Mid-span S0: sqrt(x^2 + beta^2*z^2), y term removed
+    - b_half = b (semi-chord passed directly, not c/2.0)
+    - std::fabs → std::abs throughout (CoDi compatibility)
+    - std::hypot → std::sqrt(a*a + b*b) (CoDi compatibility)
+    - using std::complex / using std::exp removed from file scope
+    - TODO comments added near denominator clipping in G_c, G_d, G_e
+    - R&M equation references added to all function comment blocks
+- Note: golden files were regenerated after these changes (physics
+  change — OASPL values shifted). Commit includes new golden files.
+
+### Running totals (all refactoring to date)
+  Easy tier dedup:       -307 lines net
+  Medium tier dedup:     -109 lines net
+  Forced trans removal:  -813 lines net
+  newAmiet.hpp cleanup:  ~-50 lines net (fabs, using decls, comments)
+  ─────────────────────────────────────
+  Total net reduction:  ~-1279 lines
+  Duplicate function definitions eliminated: 13
+  Dead code removed: Trans struct + 5 functions + forced-trans plumbing
+
+### Next steps (in priority order)
+  1. Collapse remaining single-line .cpp wrapper files into shared
+     headers (Items 2a-2j from the cleanup pass message):
+     get_cl.cpp, rebuild_ue_m.cpp, initialise_thermo_vars.cpp,
+     build_wake.cpp, stagpoint_find.cpp, stagmove.cpp,
+     panel_funcs.cpp, get_funcs.cpp, clear_RV.cpp,
+     inviscid_solve_codi.cpp
+  2. Delete forwarding headers: panel_funcs.h, get_funcs.h,
+     panel_funcs_foil.hpp; shrink main_func.h
+  3. Complete fwd-side struct unification in data_structs.h
+     (forward-declaration incompatibility with template aliases
+     still unresolved)
+  4. Re-implement forced transition cleanly on a new branch
+     when needed
