@@ -83,6 +83,41 @@ in both TUs — do NOT add `#include "real_type.h"` inside newAmiet.hpp.
 
 ---
 
+## CoDi Type Rules (EXTENDED)
+
+### Never mix double and Real
+Even for quantities that are not design variables (e.g. observer
+coordinates, constants, loop indices), do NOT cast to double or pass
+as double* in any function that is instantiated with a CoDi Real type.
+Mixing double arithmetic with Real arithmetic can silently detach
+computations from the CoDi tape, producing wrong gradients with no
+compile error.
+
+The only place getValue() is legitimately used is:
+  - Inside errFunc() in newAmiet.hpp, where StatementPushHelper
+    manually registers the erf derivative (this is the intended
+    CoDi external function pattern).
+  - In WriteJSON blocks (if constexpr (WriteJSON)) where we are
+    extracting passive values for output only, not feeding back
+    into any Real computation.
+
+Everywhere else: keep everything as Real.
+
+### Observer coordinates
+Observer locations (X, Y, Z) are not design variables but must still
+be typed as Real throughout calc_OASPL, TE_noise_outer, and all
+intermediate functions. The CoDi tape simply records zero gradient
+contribution from these — which is correct behaviour, not a problem.
+
+### Passing arrays of Real
+When adding support for multiple observer locations, pass them as:
+  const Real* obsX, const Real* obsY, const Real* obsZ
+or as:
+  const Real (&obsX)[N]
+Never as double* or std::vector<double>.
+
+---
+
 ## Shared solver template headers
 
 `src/include/solver_funcs.hpp` — included by both build targets.
@@ -172,9 +207,53 @@ binary exit codes.
   every station; only ~35% logic shared. Do not attempt without careful
   planning.
 
+## Planned Features
+
+### Multiple observer locations (next to implement)
+Average OASPL across N observers using power averaging:
+  OASPL_avg = 10 * log10( (1/N) * sum_i( 10^(OASPL_i / 10) ) )
+
+The averaged OASPL is the single scalar that the AD differentiates,
+so the gradient pipeline (dOASPL/dy, dOASPL/dalpha) is unchanged.
+
+Design:
+- calc_OASPL signature changes from scalar (X,Y,Z) to arrays
+  (obsX[], obsY[], obsZ[], nObs) — all typed as Real
+- WPS computation (calc_WPS) is observer-independent — compute ONCE
+  before the observer loop (it only depends on BL states)
+- TE_noise_outer is called once per observer inside the loop
+- Frequency integration and dB conversion done per observer
+- Power average over all observers at the end
+- JSON reading in main.cpp: if X/Y/Z are JSON arrays use them
+  directly; if scalars wrap in single-element array — backward
+  compatible with existing input.json
+- inputs.py Acoustics dataclass: accept observerXYZ as shape (3,)
+  for single observer or (N,3) for N observers; normalise to (N,3)
+  internally; pass as JSON arrays always
+
+Key constraint: ALL observer coordinate arrays must be typed as
+Real throughout — never cast to double or pass as double*.
+
+### Forced transition (future branch)
+Re-implement cleanly after multiple observer support is complete.
+Infrastructure was removed in commit 1065ed2.
+
+### A-weighting
+Post-process farfieldSpectra with A-weighting curve before
+integration. Apply inside calc_OASPL after TE_noise_outer call,
+before the frequency integration loop.
+
+### Pybind11 Python bindings
+Defer until C++ API is stable (after multiple observers + forced
+transition). The restart.json Jacobian state will be passed as a
+Python object between run_forward() and run_AD() calls, eliminating
+file I/O. See design notes in conversation history.
+
 ## Current Work
-Codebase is in a clean state. All recent work complete and passing
-regression at machine precision.
+Next task: implement multiple observer locations.
+See "## Planned Features" above for the full design spec.
+Key constraint to remember: ALL types must be Real — no double* for
+observer coordinates. See "## CoDi Type Rules (EXTENDED)".
 
 ### Completed since last CLAUDE.md update
 - newAmiet.hpp physics fixes (supervisor review):
@@ -199,18 +278,3 @@ regression at machine precision.
   Total net reduction:  ~-1279 lines
   Duplicate function definitions eliminated: 13
   Dead code removed: Trans struct + 5 functions + forced-trans plumbing
-
-### Next steps (in priority order)
-  1. Collapse remaining single-line .cpp wrapper files into shared
-     headers (Items 2a-2j from the cleanup pass message):
-     get_cl.cpp, rebuild_ue_m.cpp, initialise_thermo_vars.cpp,
-     build_wake.cpp, stagpoint_find.cpp, stagmove.cpp,
-     panel_funcs.cpp, get_funcs.cpp, clear_RV.cpp,
-     inviscid_solve_codi.cpp
-  2. Delete forwarding headers: panel_funcs.h, get_funcs.h,
-     panel_funcs_foil.hpp; shrink main_func.h
-  3. Complete fwd-side struct unification in data_structs.h
-     (forward-declaration incompatibility with template aliases
-     still unresolved)
-  4. Re-implement forced transition cleanly on a new branch
-     when needed
