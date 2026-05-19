@@ -22,7 +22,7 @@ int colMajorIndex(int row, int col, int num_rows);
 
 void build_gamma_codi(Isol &isol, const Foil& foil, const Oper& oper);
 
-void init_thermo(const Oper& oper,Param& param,const Geom& geom);
+// init_thermo → template in solver_funcs.hpp
 
 void build_wake(const Foil& foil, const Geom& geom, const Oper& op, Isol& isol, Wake& wake);
 

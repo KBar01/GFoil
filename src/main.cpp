@@ -113,7 +113,7 @@ bool runCode(
 
 
     build_gamma_codi(isol,foil,oper);
-    init_thermo(oper,param,geom);
+    init_thermo<>(oper,param,geom);
     build_wake(foil,geom,oper,isol,wake);
     stagpoint_find(isol,foil,wake);
     identify_surfaces(isol,vsol);
