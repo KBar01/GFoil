@@ -151,16 +151,33 @@ binary exit codes.
 - inviscid_velocity      → panel_funcs.hpp   template<Real,FoilT>
 - dvelocity_dgamma       → panel_funcs.hpp   template<Real,FoilT>
 
-### Deferred (Medium difficulty)
-- stagnation_state       fwd adds Ust_U[32]+Ust_x[8] Jacobian outputs; AD omits
-- stagpoint_move         different preambles (fwd scans glob.U; AD receives currStag)
-- Ue residual kernel     fwd adds Jacobian fill + sparse solve on top of shared kernel
-- struct unification     Geom,TE,Foil,Wake,Oper,Post,Param,Trans,Vsol all field-identical
-                         → template<typename Real> structs in data_structs_shared.hpp
+### Completed (Medium tier)
+- stagnation_state kernel  → solver_funcs.hpp  stagnation_state_impl<Real>
+- stagpoint_move core      → solver_funcs.hpp  stagpoint_move_impl<...>
+- Ue residual kernel       → solver_funcs.hpp  ue_residual_kernel<...>
+- 9 structs (AD side)      → data_structs_shared.hpp  template<typename Real>
+                             AD data_structs.hpp now 54 lines (was 241)
 
-### Deferred (Hard — do not attempt)
-- build_glob_RV          Jacobian fill interleaved at every station; ~35% shared logic
+### Overall deduplication results
+  Lines removed:                     1473
+  Lines added (shared headers):      1057
+  Net reduction:                     -416 lines
+  Duplicate function defs eliminated: 13
 
-## Current Work
-About to tackle Medium difficulty deduplication items.
-Run python3 tests/regression_test.py --test after every step.
+### Known deferred items
+- src/include/data_structs.h: fwd side still defines its own 9 structs
+  because struct Foo; forward declarations in fwd headers are incompatible
+  with template type aliases. Requires a broader include-order refactor.
+- build_glob_RV / build_glob_RV_AD: Hard — Jacobian fill interleaved at
+  every station; only ~35% logic shared. Do not attempt without careful
+  planning.
+
+### Current Work
+Deduplication complete for Easy + Medium tiers. Regression test passing.
+Next steps if desired:
+  1. Resolve fwd data_structs.h forward-declaration issue to complete
+     struct unification on both sides.
+  2. Tackle build_glob_RV (Hard) — requires a design decision on whether
+     to policy-template the Jacobian fill or leave it as-is.
+  3. Fix remaining newAmiet.hpp issues (std::fabs, std::hypot, using decls)
+     to get GFoil_AD building cleanly.
