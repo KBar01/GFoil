@@ -5,6 +5,17 @@
 // existed in src/*.cpp and srcAD/include/main_func.hpp.
 // Duck-typed on struct params (FoilT, IsolT, etc.) so it works with
 // both the non-template fwd structs and the template AD structs.
+//
+// Functions defined here:
+//   build_wake_impl<FoilT,GeomT,OperT,IsolcT,WakeT>
+//   calc_force<OperT,GeomT,ParamT,FoilT,GlobT,PostT>
+//   stagpoint_find_impl<bool,GammaT,VarT,FoilT,WakeT>
+//   rebuild_ue_m<FoilT,WakeT,IsolT,VsolT>
+//   set_wake_gap<FoilT,IsolT,VsolT>
+//   range(int,int,int)
+//   identify_surfaces<IsolT,VsolT>
+//   space_wake_nodes<Real,FoilT,WakeT>
+//   init_thermo<OperT,ParamT,GeomT>
 
 #include <cmath>
 #include <vector>
