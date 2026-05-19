@@ -7,6 +7,9 @@
 // both the non-template fwd structs and the template AD structs.
 //
 // Functions defined here:
+//   stagnation_state_impl<Real>                   — shared kernel; fwd adds Jacobian fill on top
+//   stagpoint_move_impl<Real,IsolT,GlobT,...>     — location-update core; fwd adds sign-scan preamble
+//   ue_residual_kernel<Real,IsolcT,IsolvT,...>    — steps 1-3; fwd adds Jacobian fill + solve on top
 //   build_wake_impl<FoilT,GeomT,OperT,IsolcT,WakeT>
 //   calc_force<OperT,GeomT,ParamT,FoilT,GlobT,PostT>
 //   stagpoint_find_impl<bool,GammaT,VarT,FoilT,WakeT>
