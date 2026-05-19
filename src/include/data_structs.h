@@ -5,7 +5,7 @@
 #include <string>
 #include <array>
 #include "real_type.h"
-#include "panel_funcs.h"
+#include "panel_funcs.hpp"
 #include "main_func.h"
 #include <codi.hpp>
 

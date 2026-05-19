@@ -2,7 +2,7 @@
 #include <Eigen/Dense>
 #include <cmath>
 #include "real_type.h"
-#include "panel_funcs.h"
+#include "panel_funcs.hpp"
 #include "data_structs.h"
 #include "solve_inv.hpp"
 

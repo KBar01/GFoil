@@ -8,7 +8,7 @@
 #include "main_func.h"
 #include "get_funcs.h"
 #include "extract_BL_TE.hpp"
-#include "panel_funcs.h"
+#include "panel_funcs.hpp"
 #include "calc_ue_m.hpp"
 #include "solver_funcs.hpp"
 #include "sound.hpp"
