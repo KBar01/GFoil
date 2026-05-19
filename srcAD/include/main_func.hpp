@@ -144,29 +144,9 @@ void stagpoint_move_AD(Isolv<Real>& isol,Glob<Real>& glob,const Foil<Real>& foil
 };
 
 template<typename Real>
-void stagnation_state(const Real*U1,const Real*U2,const Real x1,const Real x2,
-    Real (&Ust)[4],Real&xst){
-
-
-    Real dx = x2-x1;
-    Real dx_x[2] = {-1, 1};
-    Real rx = x2/x1;
-    Real rx_x[2] = {-rx/x1,1/x1};
-  
-    // linear extrapolation weights and stagnation state
-    Real w1 =  x2/dx, w1_x[2] = {-w1/dx*dx_x[0], -w1/dx*dx_x[1] + 1/dx};
-    Real w2 = -x1/dx, w2_x[2] = {-w2/dx*dx_x[0] -1/dx, -w2/dx*dx_x[1]};
-        
-    for (int i=0;i<4;++i){Ust[i] = U1[i]*w1 + U2[i]*w2;}
-    // quadratic extrapolation of the edge velocity for better slope, ue=K*x
-    Real wk1 = rx/dx,       wk1_x[2] = {rx_x[0]/dx - wk1/dx*dx_x[0], rx_x[1]/dx - wk1/dx*dx_x[1]};
-    Real wk2 = -1/(rx*dx),  wk2_x[2] = {-wk2*(rx_x[0]/rx + dx_x[0]/dx), -wk2*(rx_x[1]/rx + dx_x[1]/dx)}; 
-    Real K = wk1*U1[3] + wk2*U2[3] ;
-  
-    //stagnation coord cannot be zero, but must be small
-    xst = 1e-6;
-    Ust[3] = K*xst ; // linear dep of ue on x near stagnation
-
+void stagnation_state(const Real*U1, const Real*U2, const Real x1, const Real x2,
+    Real (&Ust)[4], Real& xst) {
+    stagnation_state_impl<Real>(U1, U2, x1, x2, Ust, xst);
 }
 
 template<typename Real>

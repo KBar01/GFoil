@@ -20,6 +20,31 @@
 #include <cmath>
 #include <vector>
 
+// ── stagnation_state_impl ────────────────────────────────────────────────────
+// Shared kernel: computes Ust[0..3] and xst from two adjacent state vectors.
+// The fwd stagnation_state adds Jacobian outputs Ust_U[32] and Ust_x[8] on
+// top of this call; the AD stagnation_state is just this call.
+template<typename Real>
+void stagnation_state_impl(const Real* U1, const Real* U2,
+                           const Real x1, const Real x2,
+                           Real (&Ust)[4], Real& xst) {
+    Real dx = x2-x1;
+    Real dx_x[2] = {-1, 1};
+    Real rx = x2/x1;
+    Real rx_x[2] = {-rx/x1,1/x1};
+
+    Real w1 =  x2/dx, w1_x[2] = {-w1/dx*dx_x[0], -w1/dx*dx_x[1] + 1/dx};
+    Real w2 = -x1/dx, w2_x[2] = {-w2/dx*dx_x[0] -1/dx, -w2/dx*dx_x[1]};
+
+    for (int i=0;i<4;++i){Ust[i] = U1[i]*w1 + U2[i]*w2;}
+    Real wk1 = rx/dx,      wk1_x[2] = {rx_x[0]/dx - wk1/dx*dx_x[0], rx_x[1]/dx - wk1/dx*dx_x[1]};
+    Real wk2 = -1/(rx*dx), wk2_x[2] = {-wk2*(rx_x[0]/rx + dx_x[0]/dx), -wk2*(rx_x[1]/rx + dx_x[1]/dx)};
+    Real K = wk1*U1[3] + wk2*U2[3];
+
+    xst = 1e-6;
+    Ust[3] = K*xst;
+}
+
 // ── build_wake_impl ──────────────────────────────────────────────────────────
 // Duck-typed on IsolcT — both Isol (fwd) and Isolc<Real> (AD) provide
 // .gammas[] and .uewi[]. Real deduced from op.Vinf.

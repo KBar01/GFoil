@@ -7,40 +7,30 @@
 #include "data_structs.h"
 #include "get_funcs.h"
 #include "vector_ops.hpp"
-
-
+#include "solver_funcs.hpp"
 
 
 void stagnation_state(const Real*U1,const Real*U2,const Real x1,const Real x2,
     Real (&Ust)[4],Real (&Ust_U)[32],Real (&Ust_x)[8],Real&xst){
 
+    // Shared kernel: fills Ust[0..3] and xst
+    stagnation_state_impl<Real>(U1, U2, x1, x2, Ust, xst);
 
+    // Fwd-only: reconstruct intermediate values needed for Jacobian fill
     Real dx = x2-x1;
     Real dx_x[2] = {-1, 1};
     Real rx = x2/x1;
     Real rx_x[2] = {-rx/x1,1/x1};
-  
-    // linear extrapolation weights and stagnation state
     Real w1 =  x2/dx, w1_x[2] = {-w1/dx*dx_x[0], -w1/dx*dx_x[1] + 1/dx};
     Real w2 = -x1/dx, w2_x[2] = {-w2/dx*dx_x[0] -1/dx, -w2/dx*dx_x[1]};
-        
-    for (int i=0;i<4;++i){Ust[i] = U1[i]*w1 + U2[i]*w2;}
-    // quadratic extrapolation of the edge velocity for better slope, ue=K*x
     Real wk1 = rx/dx,       wk1_x[2] = {rx_x[0]/dx - wk1/dx*dx_x[0], rx_x[1]/dx - wk1/dx*dx_x[1]};
-    Real wk2 = -1/(rx*dx),  wk2_x[2] = {-wk2*(rx_x[0]/rx + dx_x[0]/dx), -wk2*(rx_x[1]/rx + dx_x[1]/dx)}; 
-    Real K = wk1*U1[3] + wk2*U2[3] ;
+    Real wk2 = -1/(rx*dx),  wk2_x[2] = {-wk2*(rx_x[0]/rx + dx_x[0]/dx), -wk2*(rx_x[1]/rx + dx_x[1]/dx)};
     Real K_U[8] = {0,0,0,wk1, 0,0,0,wk2};
     Real K_x[2] = {U1[3]*wk1_x[0] + U2[3]*wk2_x[0], U1[3]*wk1_x[1] + U2[3]*wk2_x[1]};
-  
-    //stagnation coord cannot be zero, but must be small
-    xst = 1e-6;
-    Ust[3] = K*xst ; // linear dep of ue on x near stagnation
-    //Ust_U = np.block([[w1*np.eye(3,4), w2*np.eye(3,4)], [K_U*xst]])
-    
+
     // ---- columns 0‑3 :  w1 * eye(3,4)  ----
-    for (int c = 0; c < 4; ++c) {          // 4 columns
-        for (int r = 0; r < 4; ++r) {      // 4 rows
-            // identity on rows 0‑2 only
+    for (int c = 0; c < 4; ++c) {
+        for (int r = 0; r < 4; ++r) {
             Real val = (r == c && r < 3) ? w1 : 0.0;
             Ust_U[r + c*4] = val;
         }
@@ -54,19 +44,17 @@ void stagnation_state(const Real*U1,const Real*U2,const Real x1,const Real x2,
     }
     // ---- last row (row 3) : K_U * xst  ----
     for (int c = 0; c < 8; ++c) {
-        Ust_U[3 + c*4] = K_U[c] * xst;     // K_U is length‑8 array
+        Ust_U[3 + c*4] = K_U[c] * xst;
     }
 
     Real temp1[6] = {0}, temp2[6] = {0};
     cnp::outer_product<3,2>(U1,w1_x,temp1);
     cnp::outer_product<3,2>(U2,w2_x,temp2);
     cnp::add_inplace<6>(temp1,temp2);
-    
+
     Real botRow[2];
     cnp::scalar_mul<2>(K_x,xst,botRow);
     cnp::vstack<3,1,2>(temp1,botRow,Ust_x);
-    //Ust_x = np.vstack((np.outer(U1[0:3],w1_x) + np.outer(U2[0:3],w2_x), K_x*xst))
- 
 }
 
 
