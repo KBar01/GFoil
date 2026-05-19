@@ -225,11 +225,6 @@ struct Param {
 };
 
 
-struct Trans {
-    
-    int isForced[2] = {0,0}; // tracking if transition is forced or natural
-    int transNode[2] = {1,198}; // start node of trans of bottom/top surface
-    Real transPos[2] = {0.5,0.5}; // x position of trans of bottom/top surface
-};
+// Trans removed: forced transition deleted; natural e^9 only.
 
 #endif // AIRFOIL_STRUCTS_H

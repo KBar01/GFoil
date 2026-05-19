@@ -77,7 +77,7 @@ void stagnation_state(const Real*U1, const Real*U2, const Real x1, const Real x2
 }
 
 template<typename Real>
-void build_glob_RV_AD(const Foil<Real>&foil, const Vsol<Real>&vsol,const Isolv<Real>&isol,Glob<Real>&glob, Param<Real>&param, Trans<Real>&tdata){
+void build_glob_RV_AD(const Foil<Real>&foil, const Vsol<Real>&vsol, const Isolv<Real>&isol, Glob<Real>&glob, Param<Real>&param){
     
     constexpr int RVsize = 4*(Ncoords+Nwake);
     constexpr int RXsize = 3*(Ncoords+Nwake);
@@ -145,24 +145,7 @@ void build_glob_RV_AD(const Foil<Real>&foil, const Vsol<Real>&vsol,const Isolv<R
             Real* Ucurr = &glob.U[colMajorIndex(0,Is[currI],4)];
 
             if (tran){
-
-                int isForced = tdata.isForced[si];
-                Real transPos = tdata.transPos[si];
-
-                if (!isForced){
-                    residual_transition<Real>(Uprev,Ucurr,xi[Is[prevI]],xi[Is[currI]],0,0,param,Ri);
-                }
-                else {
-
-                    // do linear interp to find y value
-                    Real x1 = foil.x[colMajorIndex(0,Is[prevI],2)],y1 = foil.x[colMajorIndex(1,Is[prevI],2)];
-                    Real x2 = foil.x[colMajorIndex(0,Is[currI],2)],y2 = foil.x[colMajorIndex(1,Is[currI],2)];
-
-                    Real yt = y1 + ((tdata.transPos[si] - x1) / (x2 - x1)) * (y2 - y1);                
-                    Real distFromStagTrans =  isol.distFromStag[Is[prevI]] + std::sqrt((tdata.transPos[si]-x1)*(tdata.transPos[si]-x1) + (yt-y1)*(yt-y1));
-
-                    residual_transition_forced(Uprev,Ucurr,xi[Is[prevI]],xi[Is[currI]],param,distFromStagTrans,Ri);
-                }
+                residual_transition<Real>(Uprev,Ucurr,xi[Is[prevI]],xi[Is[currI]],0,0,param,Ri);
             }
             else {
                 Real aux1=0,aux2=0;

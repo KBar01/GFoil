@@ -35,13 +35,10 @@ bool runCode(
     Real (&inYcoords)[Nin],
     // actual aero parameters
     Real alphad,
-    Real Re, 
+    Real Re,
     Real Ma,
     Real rhoInf,
     Real kinViscInf,
-    const Real &topTransPos,
-    const Real &botTransPos,
-    const bool force,
     // acoustic model parameters
     const std::string model,
     const Real sampleTE,
@@ -67,42 +64,6 @@ bool runCode(
     }
     make_panels(inCoords,flattenedCoords,Ufac,TEfac); // does spline to redist nodes over aerofoil for fixed number of 200 nodes
     
-    // finding node positions to force transition ------------------------
-    Real xTransTop = topTransPos * geom.chord ;
-    Real xTransBot = botTransPos * geom.chord ;
-    
-    int idx_closest_bot = 0;
-    int idx_closest_top = Ncoords - 1;  // top TE node
-    
-    if (force) {
-        
-        // Bottom surface: from bottom TE forward
-        for (int i = 1; i < Ncoords; ++i) {
-            Real x = flattenedCoords[colMajorIndex(0, i, 2)];
-            Real dist = x - xTransBot;
-            if (dist < 0.0) {
-                idx_closest_bot = i;
-                break;
-            }
-        }
-
-        // Top surface: from top TE backward
-        for (int i = Ncoords - 2; i >= 0; --i) {
-            Real x = flattenedCoords[colMajorIndex(0, i, 2)];
-            Real dist = x - xTransTop;
-            if (dist < 0.0) {
-                idx_closest_top = i;
-                break;
-            }
-        }
-    }
-
-    Trans tdata;
-
-    tdata.transNode[0] = idx_closest_bot;
-    tdata.transNode[1] = idx_closest_top;
-    tdata.transPos[0] = xTransBot ;
-    tdata.transPos[1] = xTransTop ;
 
     Foil foil(flattenedCoords);
     Isol isol;
@@ -139,17 +100,13 @@ bool runCode(
             vsol.turb[i] = val;
         }
 
-        if (force){
-            tdata.isForced[0]  = 1;
-            tdata.isForced[1]  = 1;
-        }
     }
     else {
-        init_boundary_layer(oper,foil,param,isol,vsol,glob,tdata,force);
+        init_boundary_layer(oper,foil,param,isol,vsol,glob);
     }
     
     stagpoint_move(isol,glob,foil,wake,vsol);
-    bool converged = solve_coupled(oper,foil,wake,param,vsol,isol,glob,tdata,force);
+    bool converged = solve_coupled(oper,foil,wake,param,vsol,isol,glob);
     Post post;
     calc_force<>(oper,geom,param,foil,glob,post);
     
@@ -207,16 +164,6 @@ bool runCode(
         if (doCps){
             
             json restart;
-            //std::vector<double> states_d(RVdimension);
-            // Extract numeric values from CoDiPack types
-            //for (size_t i = 0; i < RVdimension; ++i){
-            //    states_d[i] = glob.U[i].getValue();
-            //} 
-            //restart["states"] = states_d;
-            //restart["turb"]   = vsol.turb;
-            //std::ofstream restartFile("restart.json");
-            //restartFile << restart.dump(4);  // pretty print with 4 spaces indentation
-            //restartFile.close();
 
             //  calc transition point
             Real botTransX = geom.chord;
@@ -390,15 +337,9 @@ int main(){
     const Real Ufac = j["Ufac"].get<double>();
     const Real TEfac = j["TEfac"].get<double>();
     const std::string model = j["model"].get<std::string>();
-    // forcing transition variables
-    const bool force = j["forcetrans"].get<int>();
-    const Real topTransPos = j["toptrans"].get<double>();
-    const Real botTransPos = j["bottrans"].get<double>();
-
     bool converged = runCode(doRestart,
         Ncrit,Ufac,TEfac,custChord,inXcoords,inYcoords,
         targetAlphaDeg,Re,Ma,rhoInf,nuInf,
-        topTransPos,botTransPos,force,
         model,sampleTE,X,Y,Z,S,doCps);
     
     return converged;

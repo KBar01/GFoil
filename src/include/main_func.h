@@ -11,17 +11,18 @@
 // before the struct bodies are defined.
 struct Isol; struct Glob;
 struct Geom; struct Foil; struct Wake; struct Oper; struct Param;
-struct Vsol; struct Post; struct Trans;
+struct Vsol; struct Post;
+// Trans removed: forced transition deleted.
 
 // Functions that remain as separate .cpp translation units:
-void init_boundary_layer(const Oper&oper, const Foil&foil, Param&param, Isol&isol, Vsol&vsol, Glob&glob, Trans&tdata, const bool force);
+void init_boundary_layer(const Oper&oper, const Foil&foil, Param&param, Isol&isol, Vsol&vsol, Glob&glob);
 void init_boundary_layer_from_xfoil(const Oper&oper, const Foil&foil, const Param&param, Isol&isol, Vsol&vsol, Glob&glob);
-void build_glob_RV(const Foil&foil, const Vsol&vsol,const Isol&isol,Glob&glob, Param&param, Trans&tdata);
+void build_glob_RV(const Foil&foil, const Vsol&vsol, const Isol&isol, Glob&glob, Param&param);
 void solve_glob(const Foil&foil, const Isol&isol, Glob& glob, Vsol& vsol, const Oper& oper, const int doSolve);
-void update_state(const Oper&oper, const Param&param, Glob&glob,Vsol&vsol);
-void update_transition(Glob &glob, Vsol &vsol, Isol &isol, Param&param, Trans&tdata,const bool force);
+void update_state(const Oper&oper, const Param&param, Glob&glob, Vsol&vsol);
+void update_transition(Glob &glob, Vsol &vsol, Isol &isol, Param&param);
 bool solve_coupled(const Oper& oper, const Foil& foil, const Wake& wake,
-    Param& param, Vsol& vsol, Isol& isol, Glob& glob, Trans&tdata, const bool force);
+    Param& param, Vsol& vsol, Isol& isol, Glob& glob);
 
 // Everything else is now a template in a shared .hpp:
 //   colMajorIndex       → inline in real_type.h

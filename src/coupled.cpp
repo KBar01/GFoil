@@ -26,7 +26,7 @@ Real euc_norm(const Real* R, int size) {
 }
 
 bool solve_coupled(const Oper& oper, const Foil& foil, const Wake& wake,
-    Param& param, Vsol& vsol, Isol& isol, Glob& glob, Trans&tdata, const bool force) {
+    Param& param, Vsol& vsol, Isol& isol, Glob& glob) {
 
     int nNewton = param.niglob;
     bool converged = false;
@@ -37,8 +37,7 @@ bool solve_coupled(const Oper& oper, const Foil& foil, const Wake& wake,
         
         // Main loop solving coupled system
 
-
-        build_glob_RV(foil, vsol, isol, glob, param,tdata);
+        build_glob_RV(foil, vsol, isol, glob, param);
         Real residualNorm = euc_norm(glob.R, Rsize);
 
 
@@ -85,7 +84,7 @@ bool solve_coupled(const Oper& oper, const Foil& foil, const Wake& wake,
             glob.R[entry] = 0;
         }
         stagpoint_move(isol, glob, foil, wake, vsol);
-        update_transition(glob, vsol, isol, param, tdata, force);
+        update_transition(glob, vsol, isol, param);
 
     }
 

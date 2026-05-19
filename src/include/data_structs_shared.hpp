@@ -142,9 +142,4 @@ struct Param_t {
     int breakLoop = 100;
 };
 
-template<typename Real>
-struct Trans_t {
-    int  isForced[2]  = {0, 0};
-    int  transNode[2] = {1, 198};
-    Real transPos[2]  = {0.5, 0.5};
-};
+// Trans_t removed: forced transition deleted; natural e^9 only.

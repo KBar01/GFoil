@@ -176,10 +176,6 @@ int main(){
     const RealVec2 Ncrit = j["ncrit"].get<double>();
     const RealVec2 Ufac = j["Ufac"].get<double>();
     const RealVec2 TEfac = j["TEfac"].get<double>();
-    // forcing transition variables
-    const bool force = j["forcetrans"].get<int>();
-    const RealVec2 topTransPos = j["toptrans"].get<double>();
-    const RealVec2 botTransPos = j["bottrans"].get<double>();
     const std::string model = j["model"].get<std::string>();
 
     // Read input variables
@@ -192,9 +188,6 @@ int main(){
     const RealRev Ufac_r = j["Ufac"].get<double>();
     const RealRev TEfac_r = j["TEfac"].get<double>();
 
-    // forcing transition variables
-    const RealRev topTransPos_r = j["toptrans"].get<double>();
-    const RealRev botTransPos_r = j["bottrans"].get<double>();
 
     // Open JSON file
     std::ifstream restartfile("restart.json");
@@ -279,7 +272,7 @@ int main(){
     double dgdalpha_CD = {0};
     double dgdalpha_OASPL = {0};
     
-    partialRpartialx<RealRev>(Ncrit_r,Ufac_r,TEfac_r,inXcoords_d,Re_r,Ma_r,rhoInf_r,topTransPos_r,botTransPos_r,currStag,
+    partialRpartialx<RealRev>(Ncrit_r,Ufac_r,TEfac_r,inXcoords_d,Re_r,Ma_r,rhoInf_r,currStag,
         adlambda_CL,adlambda_CD,adlambda_OASPL,
         inYcoords_Rev,targetAlphaDeg_r,states_d,turb,
         dgdy_CL,dgdy_CD,dgdy_OASPL,dgdalpha_CL,dgdalpha_CD,dgdalpha_OASPL

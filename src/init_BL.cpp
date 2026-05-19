@@ -177,7 +177,7 @@ void wake_init(const Vsol& vsol, const Foil& foil, const Glob& glob, const Param
 
 
 
-void init_boundary_layer(const Oper&oper, const Foil&foil, Param&param, Isol&isol, Vsol&vsol, Glob&glob, Trans&tdata, const bool force) {
+void init_boundary_layer(const Oper&oper, const Foil&foil, Param&param, Isol&isol, Vsol&vsol, Glob&glob) {
     
     constexpr int Nsys = Ncoords + Nwake;
     const Real Hmaxl = 3.8;
@@ -298,12 +298,6 @@ void init_boundary_layer(const Oper&oper, const Foil&foil, Param&param, Isol&iso
             // create initial guess using previsous state + current node edge velocity
             Real currState[4] = {prevState[0],prevState[1],prevState[2],ue[currNode]} ;
 
-            // If forcing transition, and on node before tran location, switch to solving transition over the panel
-            if ((!turb && !tran && force) && prevNode == tdata.transNode[surf]){
-                tran = true;
-                tdata.isForced[surf] = 1;
-            }
-
             if (tran) {
                 Real ct, ct_U[4]={0};
                 ct = get_cttr(currState[0],currState[1],currState[2],currState[3],turb,param,ct_U);
@@ -320,21 +314,8 @@ void init_boundary_layer(const Oper&oper, const Foil&foil, Param&param, Isol&iso
                 Real R[3]={0}, R_U[24]={0}, R_x[6]={0};
                 
                 if (tran) {
-                    
-                    // do linear interp to find y value
-                    Real x1 = foil.x[colMajorIndex(0,prevNode,2)],y1 = foil.x[colMajorIndex(1,prevNode,2)];
-                    Real x2 = foil.x[colMajorIndex(0,currNode,2)],y2 = foil.x[colMajorIndex(1,currNode,2)];
-
-                    Real yt = y1 + ((tdata.transPos[surf] - x1) / (x2 - x1)) * (y2 - y1);
-                    
-                    Real distFromStagTrans =  isol.distFromStag[prevNode] + std::sqrt((tdata.transPos[surf]-x1)*(tdata.transPos[surf]-x1)  + (yt-y1)*(yt-y1));
-                    if (!tdata.isForced[surf]){
-                        residual_transition<true,Real>(prevState,currState,isol.distFromStag[prevNode],isol.distFromStag[currNode],0.0,0.0,param,R,R_U,R_x);
-                    }
-                    else{
-                        residual_transition_forced<true,Real>(prevState,currState,isol.distFromStag[prevNode],isol.distFromStag[currNode],param,distFromStagTrans,R,R_U,R_x);
-                    }
-                } 
+                    residual_transition<true,Real>(prevState,currState,isol.distFromStag[prevNode],isol.distFromStag[currNode],0.0,0.0,param,R,R_U,R_x);
+                }
                 else {
     
                     Real aux1=0,aux2=0;
@@ -453,20 +434,12 @@ void init_boundary_layer(const Oper&oper, const Foil&foil, Param&param, Isol&iso
             // HERE!!! add an additional statement inside the if, saying if not tran & ncrit exceeded OR forced trans node
             // set tran = true 
             
-            if (!turb && ((!tran && currState[2]>param.ncrit))){
+            if (!turb && (!tran && currState[2]>param.ncrit)){
                 tran = true;
-                tdata.isForced[surf] = 0; // in this case transition is natural so dont need to force 
-                
-                continue ; // amplification exceeds ncrit, redo node position with trans= true
+                continue; // amplification exceeds ncrit, redo node with tran=true
             }
 
-            //if ((!turb && !tran && force) && (prevNode==tdata.transNode[surf])){
-            //    tran = true;
-            //    tdata.isForced[surf] = 1;  // using the forced approach, changes the residual calc buy fixing x trans
-            //    continue ;
-            //}
-
-            if (tran){turb = true; tran=false;} // after tranistion, all nodes are turbulent
+            if (tran){turb = true; tran=false;} // after transition, all nodes are turbulent
             
             for (int r=0;r<4;++r){   // store in global struct
                 glob.U[colMajorIndex(r,currNode,4)] = currState[r];

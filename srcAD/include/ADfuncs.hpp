@@ -141,9 +141,8 @@ void partialRpartialx(
 
     
     // geometry parameters
-    const Real nCrit, const Real Ufac, const Real TEfac, 
-    const double (&inXcoords)[Nin], const Real Re, const Real Ma, const Real rhoInf, 
-    const Real &topTransPos, const Real &botTransPos,
+    const Real nCrit, const Real Ufac, const Real TEfac,
+    const double (&inXcoords)[Nin], const Real Re, const Real Ma, const Real rhoInf,
     
     int (&currStag)[2],
     
@@ -185,19 +184,6 @@ void partialRpartialx(
 
     make_panels(inCoords,flattenedCoords,Ufac,TEfac); // does spline to redist nodes over aerofoil for fixed number of 200 nodes
    
-    // finding node positions to force transition ------------------------
-    Real xTransTop = topTransPos * geom.chord ;
-    Real xTransBot = botTransPos * geom.chord ;
-    
-    int idx_closest_bot = 0;
-    int idx_closest_top = Ncoords - 1;  // top TE node
-    
-    Trans<Real> tdata;
-
-    tdata.transNode[0] = idx_closest_bot;
-    tdata.transNode[1] = idx_closest_top;
-    tdata.transPos[0] = xTransBot ;
-    tdata.transPos[1] = xTransTop ;
 
     Foil<Real> foil(flattenedCoords);
     Isolc<Real> isolc;
@@ -220,7 +206,7 @@ void partialRpartialx(
     calc_ue_m<Real>(foil,wake,isolc,vsol);
     Isolv<Real> isol_final;
     stagpoint_move_AD(isol_final,glob,foil,wake,vsol,currStag);
-    build_glob_RV_AD(foil,vsol,isol_final,glob,param,tdata);
+    build_glob_RV_AD(foil,vsol,isol_final,glob,param);
     finishdRdU_AD(foil,isolc,isol_final,glob,vsol,oper);
     
     Real hCL = 0.0;

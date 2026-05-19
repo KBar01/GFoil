@@ -17,7 +17,7 @@ template<typename Real> using Oper  = Oper_t<Real>;
 template<typename Real> using Vsol  = Vsol_t<Real>;
 template<typename Real> using Post  = Post_t<Real>;
 template<typename Real> using Param = Param_t<Real>;
-template<typename Real> using Trans = Trans_t<Real>;
+// Trans alias removed: forced transition deleted; natural e^9 only.
 
 //-------------------------------------------------------------------------------
 // Inviscid Solution Struct — split into constant (c) and variable (v) parts

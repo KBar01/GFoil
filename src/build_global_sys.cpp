@@ -142,7 +142,7 @@ inline void addColumnValues(
     }
 }
 
-void build_glob_RV(const Foil&foil, const Vsol&vsol,const Isol&isol,Glob&glob, Param&param, Trans&tdata){
+void build_glob_RV(const Foil&foil, const Vsol&vsol, const Isol&isol, Glob&glob, Param&param){
     
     constexpr int RVsize = 4*(Ncoords+Nwake);
     constexpr int RXsize = 3*(Ncoords+Nwake);
@@ -186,53 +186,12 @@ void build_glob_RV(const Foil&foil, const Vsol&vsol,const Isol&isol,Glob&glob, P
 
             int J[2] = {Is[i0],Is[i0+1]};
             
-            /*
-            I AM IGNORING FOR NOW, WILL FIX LATER BY ADDING IT ON THE END
-
-            // handlng the special case of stag on point not panel ///////////////////////////////
-            if (i0 == 1) {
-
-                // i0=0 point landed right on stagnation: set value to Ust
-                int Ig = 3 * Is[0];
-                for (int i = 0; i < 3; ++i)
-                    {glob.R[Ig + i] = glob.U[colMajorIndex(i,Is[0],4)] - Ust[i];
-                }
-
-                for (int col = 0; col < 4; ++col){
-                    for (int row = 0; row < 3; ++row){
-                        glob.R_V[colMajorIndex(Ig+row,4*Is[0]+col,RVsize)] += (row == col ? 1.0 : 0.0);
-                        glob.R_V[colMajorIndex(Ig+row,4*J[0]+col,RVsize)]  -= Ust_U[colMajorIndex(row,col,4)];
-                        glob.R_V[colMajorIndex(Ig+row,4*J[1]+col,RVsize)]  -= Ust_U[colMajorIndex(row,col+4,4)];
-                    }
-                }
-                
-                
-                // Swap out for building Rs_t directly:
-                for (int row=0;row<3;++row){
-                    
-                    Real firstVal = -Ust_x[colMajorIndex(row,0,4)];
-                    if (isol.edgeVelSign[J[0]] == -1){R_st[Ig+row] += firstVal;}
-                    else{R_st[Ig+row] -= firstVal;}
-
-                    Real secondVal = -Ust_x[colMajorIndex(row,1,4)];
-                    if (isol.edgeVelSign[J[1]] == -1){R_st[Ig+row] += secondVal;}
-                    else{R_st[Ig+row] -= secondVal;}
-                }
-            }
-            */
-            //////////////////////////////////////////////////////////////////////////////////////////
-            
             int Ig = 3*Is[i0];
             for (int row=0;row<3;++row){glob.R[Ig+row] = R1[row];}
 
             // here as well, swapping out the Rx build to build R_st directly
             for (int j = 0; j < 2; ++j){
-                
-                //cnp::equate_block_inplace(glob.R_V,RVsize,Ig,4*J[j],R1_U,3,0,4*j,3,4);
                 equate_block_inplace_sparse(glob,Ig,4*J[j],R1_U,3,0,4*j,3,4);
-
-                
-                //cnp::equate_block_inplace(glob.R_x,RXsize,Ig,J[j],R1_x,3,0,j,3,1); //TODO seperate out into two things as J not ordered
             }
             
             for (int row=0;row<3;++row){
@@ -276,24 +235,7 @@ void build_glob_RV(const Foil&foil, const Vsol&vsol,const Isol&isol,Glob&glob, P
             Real* Ucurr = &glob.U[colMajorIndex(0,Is[currI],4)];
 
             if (tran){
-
-                int isForced = tdata.isForced[si];
-                Real transPos = tdata.transPos[si];
-
-                if (!isForced){
-                    residual_transition<true,Real>(Uprev,Ucurr,xi[Is[prevI]],xi[Is[currI]],Real(0),Real(0),param,Ri,Ri_U,Ri_x);
-                }
-                else {
-
-                    // do linear interp to find y value
-                    Real x1 = foil.x[colMajorIndex(0,Is[prevI],2)],y1 = foil.x[colMajorIndex(1,Is[prevI],2)];
-                    Real x2 = foil.x[colMajorIndex(0,Is[currI],2)],y2 = foil.x[colMajorIndex(1,Is[currI],2)];
-
-                    Real yt = y1 + ((tdata.transPos[si] - x1) / (x2 - x1)) * (y2 - y1);                
-                    Real distFromStagTrans =  isol.distFromStag[Is[prevI]] + std::sqrt((tdata.transPos[si]-x1)*(tdata.transPos[si]-x1) + (yt-y1)*(yt-y1));
-
-                    residual_transition_forced<true,Real>(Uprev,Ucurr,xi[Is[prevI]],xi[Is[currI]],param,distFromStagTrans,Ri,Ri_U,Ri_x);
-                }
+                residual_transition<true,Real>(Uprev,Ucurr,xi[Is[prevI]],xi[Is[currI]],Real(0),Real(0),param,Ri,Ri_U,Ri_x);
             }
             else {
                 Real aux1=0,aux2=0;
@@ -306,10 +248,8 @@ void build_glob_RV(const Foil&foil, const Vsol&vsol,const Isol&isol,Glob&glob, P
             for (int j = 0; j < 3; ++j){glob.R[Ig + j] += Ri[j];}
             
             // update R_U (or R_V in this case)
-            //cnp::equate_block_inplace(glob.R_V,RVsize,Ig,4*Is[i-1],Ri_U,3,0,0,3,4);
+           
             equate_block_inplace_sparse(glob,Ig,4*Is[i-1],Ri_U,3,0,0,3,4);
-
-            //cnp::equate_block_inplace(glob.R_V,RVsize,Ig,4*Is[i  ],Ri_U,3,0,4,3,4);
             equate_block_inplace_sparse(glob,Ig,4*Is[i  ],Ri_U,3,0,4,3,4);
 
             // Swap out for building Rs_t directly instead of R_x build first:
@@ -332,8 +272,6 @@ void build_glob_RV(const Foil&foil, const Vsol&vsol,const Isol&isol,Glob&glob, P
 
     cnp::scalar_mul_inplace<RXsize>(R_st,isol.sstag_ue[0]);
 
-    //Real* rvColPointer = &glob.R_V[colMajorIndex(0,(4*isol.stagIndex[0] + 3),RVsize)];
-    //cnp::add_inplace<RXsize>(rvColPointer,R_st);
     std::vector<int> colIdxList;
     findColumnIndices(glob, (4*isol.stagIndex[0] + 3), colIdxList);
     addColumnValues(glob, (4*isol.stagIndex[0] + 3), colIdxList, R_st, 3*(Ncoords+Nwake));
@@ -342,9 +280,6 @@ void build_glob_RV(const Foil&foil, const Vsol&vsol,const Isol&isol,Glob&glob, P
     Real scale = isol.sstag_ue[1] / isol.sstag_ue[0] ;
 
     cnp::scalar_mul_inplace<RXsize>(R_st,scale);
-
-    //rvColPointer = &glob.R_V[colMajorIndex(0,(4*isol.stagIndex[1] + 3),RVsize)];
-    //cnp::add_inplace<RXsize>(rvColPointer,R_st);
 
     std::vector<int> colIdxList2;
     findColumnIndices(glob, (4*isol.stagIndex[1] + 3), colIdxList2);
