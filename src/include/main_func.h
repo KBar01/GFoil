@@ -55,13 +55,6 @@ bool solve_coupled(const Oper& oper, const Foil& foil, const Wake& wake,
 
 void calc_force(const Oper&op, const Geom&geom, const Param&par, const Isol&isol,const Foil&foil, const Glob&glob, Post& post);
 
-void turbulent_BL_profile_XFOIL(
-    Real theta,        // Momentum thickness [m]
-    Real Ue,           // Edge velocity [m/s]
-    Real utau,         // Friction velocity [m/s]
-    Real nu,           // Kinematic viscosity [m^2/s]
-    Real& delta                    // Output: BL thickness (where u/Ue = 0.99)
-);
 
 
 // interpolate_at_95_both_surfaces is now template<typename Real, typename OperT, typename ParamT>

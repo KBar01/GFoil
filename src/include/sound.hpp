@@ -117,8 +117,8 @@ Real calc_OASPL(const Real* botStates, const Real* topStates,
     // ── far-field PSD ─────────────────────────────────────────────────────────
     Real farfieldSpectra[Nsound];
     Real c = Uinf / 340.0;
-    TE_noise_outer<Real>(c, Uinf, X, Y, Z, chordScale / 2.0, 0.0, chordScale,
-                         S, 340.0, rho, nu, omega,
+    TE_noise_outer<Real>(c, Uinf, X, Y, Z, chordScale / 2.0, chordScale,
+                         S, 340.0, omega,
                          edgeVel_bot, edgeVel_top,
                          WPSLower, WPSUpper, farfieldSpectra);
 
