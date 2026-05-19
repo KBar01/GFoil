@@ -7,8 +7,7 @@
 #include "real_type.h"
 #include "data_structs.h"
 
-// You already have these
-inline int colMajorIndex(int i, int j, int n) { return i + j * n; };
+// colMajorIndex is inline in real_type.h
 
 // -----------------------------
 // External-function data

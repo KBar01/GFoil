@@ -242,10 +242,9 @@ void panel_linsource_velocity(const Real& panelStartX, const Real& panelStartY,
 
 }
 
-// Forward declaration required for two-phase lookup in the FoilT templates below.
-// colMajorIndex is defined in real_type.hpp (AD build) and
-// inviscid_solve_codi.cpp (fwd build).
-int colMajorIndex(int row, int col, int num_rows);
+// Forward declaration for two-phase lookup in the FoilT templates below.
+// colMajorIndex is inline constexpr in real_type.h (fwd) and defined in real_type.hpp (AD).
+inline int colMajorIndex(int row, int col, int num_rows);
 
 // ── inviscid_velocity and dvelocity_dgamma ────────────────────────────────────
 // Templated on FoilT so both Foil (fwd, non-template) and Foil<Real> (AD) work.

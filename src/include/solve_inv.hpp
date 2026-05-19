@@ -237,3 +237,11 @@ void build_gamma_codi(IsolT& isol, const FoilT& foil, const OperT& op)
                        + isol.gammasRef[colMajorIndex(i,1,Ncoords)] * std::sin(op.alpha);
     }
 }
+
+
+// Fwd non-template wrapper — only when data_structs.h has been included.
+#ifdef AIRFOIL_STRUCTS_H
+inline void build_gamma_codi(Isol& isol, const Foil& foil, const Oper& op) {
+    build_gamma_codi<Real>(isol, foil, op);
+}
+#endif // AIRFOIL_STRUCTS_H

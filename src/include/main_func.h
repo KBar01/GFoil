@@ -18,9 +18,8 @@ struct Wake;
 struct Glob;
 struct Trans;
 
-int colMajorIndex(int row, int col, int num_rows);
-
-void build_gamma_codi(Isol &isol, const Foil& foil, const Oper& oper);
+// colMajorIndex → inline constexpr in real_type.h
+// build_gamma_codi → inline wrapper in solve_inv.hpp (AIRFOIL_STRUCTS_H guard)
 
 // init_thermo → template in solver_funcs.hpp
 

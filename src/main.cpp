@@ -10,6 +10,7 @@
 #include "extract_BL_TE.hpp"
 #include "panel_funcs.hpp"
 #include "calc_ue_m.hpp"
+#include "solve_inv.hpp"
 #include "solver_funcs.hpp"
 #include "sound.hpp"
 #include <chrono>
