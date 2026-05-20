@@ -43,6 +43,8 @@ set(NOISE_INCLUDES_FWD ${PROJECT_SOURCE_DIR}/src/noise_includes)
 
 file(GLOB_RECURSE SOURCES src/*.cpp)
 list(REMOVE_ITEM SOURCES "${CMAKE_SOURCE_DIR}/src/main.cpp")
+list(REMOVE_ITEM SOURCES "${CMAKE_SOURCE_DIR}/src/gfoil_fwd_bindings.cpp")
+list(REMOVE_ITEM SOURCES "${CMAKE_SOURCE_DIR}/src/gfoil_ad_bindings.cpp")
 
 add_executable(GFoil_fwd_codi src/main.cpp ${SOURCES})
 target_link_libraries(GFoil_fwd_codi PRIVATE Eigen3::Eigen CoDiPack nlohmann_json::nlohmann_json)
@@ -87,8 +89,53 @@ target_compile_definitions(GFoil_AD PRIVATE
   -DDO_BL_GRADIENT=${DO_BL_GRADIENT_DEFINE}
 )
 if(CMAKE_BUILD_TYPE STREQUAL "Release")
-  target_compile_options(GFoil_AD PRIVATE 
+  target_compile_options(GFoil_AD PRIVATE
     -O2
     -fno-fast-math
   )
 endif()
+
+######## pybind11 module ########
+
+find_package(Python3 COMPONENTS Interpreter Development REQUIRED)
+
+FetchContent_Declare(
+  pybind11
+  GIT_REPOSITORY https://github.com/pybind/pybind11.git
+  GIT_TAG        v2.13.6
+)
+FetchContent_MakeAvailable(pybind11)
+
+# All src/ sources except main.cpp (run_forward.cpp, coupled.cpp, etc.)
+# SOURCES is already defined above.
+
+pybind11_add_module(gfoil_cpp
+    src/gfoil_fwd_bindings.cpp
+    src/gfoil_ad_bindings.cpp
+    ${SOURCES}
+    src/error_package.cpp
+)
+
+target_link_libraries(gfoil_cpp PRIVATE Eigen3::Eigen CoDiPack nlohmann_json::nlohmann_json)
+
+target_include_directories(gfoil_cpp PRIVATE
+    ${COMMON_INCLUDES_FWD}
+    ${NOISE_INCLUDES_FWD}
+    ${PROJECT_SOURCE_DIR}/srcAD/include
+    ${PROJECT_SOURCE_DIR}/srcAD/noise_includes
+    ${codipack_SOURCE_DIR}/include
+)
+
+target_compile_definitions(gfoil_cpp PRIVATE
+    -DUSE_CODIPACK
+    -DCODI_EnableEigen
+    -DFWD_CODI_VERSION
+    -DDO_BL_GRADIENT=${DO_BL_GRADIENT_DEFINE}
+)
+
+target_compile_options(gfoil_cpp PRIVATE -O2 -fno-fast-math)
+
+# Place the .so in the Python package directory so `from . import gfoil_cpp` works
+set_target_properties(gfoil_cpp PROPERTIES
+    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/GFoil"
+)

@@ -93,8 +93,12 @@ void update_transition(Glob &glob, Vsol &vsol, Isol &isol, Param&param) {
         int ilam = march_amplification(glob, vsol, isol, si, param);
 
         if (ilam == ilam0) {
-            for (int state=0;state<Ncoords;++state){
-                glob.U[colMajorIndex(2,state,4)] = sa[state];
+            // Keep march-computed laminar amps (they satisfy the eN ODE exactly).
+            // Only restore turbulent nodes whose ctau march overwrote with amp values.
+            for (int state = 0; state < Ncoords; ++state) {
+                if (vsol.turb[state]) {
+                    glob.U[colMajorIndex(2, state, 4)] = sa[state];
+                }
             }
             continue;
         }

@@ -72,13 +72,17 @@ class Acoustics:
     observerXYZ: np.ndarray
     TESampleLoc: Optional[float] = 0.97
     model: Optional[str] = "roz"
+    aWeighting: bool = False
 
     def __post_init__(self):
-        self.observerXYZ = _as_float_array(self.observerXYZ, "Acoustics.observerXYZ").astype(float)
-
-        if self.observerXYZ.size != 3:
-            raise ValueError(f"observerXYZ must have length 3, got shape {self.observerXYZ.shape}")
-        self.observerXYZ = self.observerXYZ.reshape(3,)
+        arr = _as_float_array(self.observerXYZ, "Acoustics.observerXYZ").astype(float)
+        if arr.ndim == 1 and arr.size == 3:
+            arr = arr.reshape(1, 3)
+        elif arr.ndim == 2 and arr.shape[1] == 3:
+            pass  # already (N, 3)
+        else:
+            raise ValueError(f"observerXYZ must be shape (3,) or (N,3), got {arr.shape}")
+        self.observerXYZ = arr  # always (N, 3)
 
         if self.TESampleLoc is not None:
             if not (0.0 <= self.TESampleLoc <= 1.0):
@@ -92,7 +96,8 @@ class OperatingConds:
     rho: Optional[float] = 1.225
     Ma: Optional[float] = 0.0
     nu: Optional[float] = 0.000015
-    nCrit: Optional[float] = 9.0
+    nCrit:     Optional[float] = 9.0
+    ncrithyst: float           = 0.2
     transition: np.ndarray = field(default_factory=lambda: np.array([1.0, 1.0], dtype=float))
 
     def __post_init__(self):
@@ -101,6 +106,39 @@ class OperatingConds:
         if self.transition.size != 2:
             raise ValueError(f"transition must have length 2, got shape {self.transition.shape}")
         self.transition = self.transition.reshape(2,)
+
+
+@dataclass
+class FwdResult:
+    """Returned by fwd_run. Pass to grad_run to get gradients."""
+    converged: bool
+    CL:    float = 0.0
+    CD:    float = 0.0
+    CM:    float = 0.0
+    OASPL: float = 0.0
+    # Jacobian state for the AD pass
+    states:  Optional[list] = None
+    turb:    Optional[list] = None
+    stag:    Optional[list] = None
+    RVvals:  Optional[list] = None
+    RVrows:  Optional[list] = None
+    RVcols:  Optional[list] = None
+    RVnz:    int = 0
+    # Design point (for Jacobian-validity checks)
+    ycoords: Optional[np.ndarray] = None
+    alpha:   float = 0.0
+
+
+@dataclass
+class GradResult:
+    """Returned by grad_run."""
+    converged: bool
+    dCL_dy:        Optional[np.ndarray] = None
+    dCD_dy:        Optional[np.ndarray] = None
+    dOASPL_dy:     Optional[np.ndarray] = None
+    dCL_dalpha:    float = 0.0
+    dCD_dalpha:    float = 0.0
+    dOASPL_dalpha: float = 0.0
 
 
 @dataclass

@@ -35,7 +35,8 @@ double partialOutputspartialInputs(
     const Real nCrit, const Real Ufac, const Real TEfac, const Real chordScaling, 
     const double (&inXcoords)[Nin], const Real Re, const Real Ma, const Real rhoInf, 
     const Real kinViscInf,
-    const std::string model, const Real sampleTE, const Real X, const Real Y, const Real Z,
+    const std::string model, const Real sampleTE,
+    const Real* obsX, const Real* obsY, const Real* obsZ, int nObs,
     const Real S,
     
     // inputs x ---------------------------------------------------
@@ -51,7 +52,8 @@ double partialOutputspartialInputs(
     double& jacobianCL_alf,
     double& jacobianOASPL_alf,
     double (&jacobianCL_states)[RVdimension],
-    double (&jacobianOASPL_states)[RVdimension]
+    double (&jacobianOASPL_states)[RVdimension],
+    int aWeighting = 0
     ){
     
     using Tape = typename Real::Tape;
@@ -105,7 +107,7 @@ double partialOutputspartialInputs(
     }
 
     interpolate_at_95_both_surfaces(xcoords,glob.U,post.cp,oper,turb,param,topsurf,botsurf,Uinf,sampleTE,chordScaling);
-    Real OASPL = calc_OASPL<Real>(botsurf,topsurf,chordScaling,Uinf,X,Y,Z,S,kinViscInf,rhoInf,model);
+    Real OASPL = calc_OASPL<Real>(botsurf,topsurf,chordScaling,Uinf,obsX,obsY,obsZ,nObs,S,kinViscInf,rhoInf,model,0,aWeighting);
 
     Real outputs[2] = {post.cl,OASPL} ;
 

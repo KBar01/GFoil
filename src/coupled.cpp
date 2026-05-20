@@ -9,10 +9,11 @@
 #include "vector_ops.hpp"
 #include "main_func.h"
 #include "solver_funcs.hpp"
+#include "restart_state.h"
 #include <chrono>
 #include <fstream>
 
-#include "nlohmann/json.hpp"  // nlohmann/json
+#include "nlohmann/json.hpp"
 
 using json = nlohmann::json;
 
@@ -26,7 +27,8 @@ Real euc_norm(const Real* R, int size) {
 }
 
 bool solve_coupled(const Oper& oper, const Foil& foil, const Wake& wake,
-    Param& param, Vsol& vsol, Isol& isol, Glob& glob) {
+    Param& param, Vsol& vsol, Isol& isol, Glob& glob,
+    RestartState* restartOut) {
 
     int nNewton = param.niglob;
     bool converged = false;
@@ -42,35 +44,43 @@ bool solve_coupled(const Oper& oper, const Foil& foil, const Wake& wake,
 
 
         if (residualNorm < param.rtol) {
-            
-            // if converged return states and also dR/dU info for AD code
-            solve_glob(foil,isol,glob,vsol,oper,0);
-            json restart;
-            std::vector<double> states_vec(RVdimension);
-            for (int k = 0; k < RVdimension; ++k){
-                states_vec[k] = glob.U[k].getValue();
-            }
 
-            restart["states"] = states_vec;
-            restart["turb"]   = vsol.turb;
-            restart["stag"] = isol.stagIndex;
+            solve_glob(foil,isol,glob,vsol,oper,0);
+
+            std::vector<double> states_vec(RVdimension);
+            for (int k = 0; k < RVdimension; ++k)
+                states_vec[k] = glob.U[k].getValue();
 
             std::vector<double> jac_vec(glob.R_V_latest);
             std::vector<int> jac_row_vec(glob.R_V_latest);
             std::vector<int> jac_col_vec(glob.R_V_latest);
-            for (int k = 0; k < glob.R_V_latest; ++k){
-                jac_vec[k] = glob.R_V_vals[k].getValue();
-                jac_row_vec[k] = glob.R_V_rows[k] ;
-                jac_col_vec[k] = glob.R_V_cols[k] ;
+            for (int k = 0; k < glob.R_V_latest; ++k) {
+                jac_vec[k]     = glob.R_V_vals[k].getValue();
+                jac_row_vec[k] = glob.R_V_rows[k];
+                jac_col_vec[k] = glob.R_V_cols[k];
             }
-            restart["RVvals"] = jac_vec;
-            restart["RVrows"] = jac_row_vec;
-            restart["RVcols"] = jac_col_vec;
-            restart["RVnz"] = glob.R_V_latest;
-            // Write JSON file
-            std::ofstream fout("restart.json");
-            fout << restart.dump(4); 
-            
+
+            if (restartOut != nullptr) {
+                restartOut->states = states_vec;
+                restartOut->turb.assign(vsol.turb, vsol.turb + Ncoords + Nwake);
+                restartOut->stag   = {isol.stagIndex[0], isol.stagIndex[1]};
+                restartOut->RVnz   = glob.R_V_latest;
+                restartOut->RVvals = jac_vec;
+                restartOut->RVrows = jac_row_vec;
+                restartOut->RVcols = jac_col_vec;
+            } else {
+                json restart;
+                restart["states"] = states_vec;
+                restart["turb"]   = vsol.turb;
+                restart["stag"]   = isol.stagIndex;
+                restart["RVvals"] = jac_vec;
+                restart["RVrows"] = jac_row_vec;
+                restart["RVcols"] = jac_col_vec;
+                restart["RVnz"]   = glob.R_V_latest;
+                std::ofstream fout("restart.json");
+                fout << restart.dump(4);
+            }
+
             clear_RV(glob, isol, vsol, foil, param);
             converged = true;
             glob.convergenceIteration = i;

@@ -169,10 +169,25 @@ int main(){
     RealVec2 nuInf = j["nu"].get<double>();
     RealVec2 custChord = j["chord"].get<double>();
     RealVec2 sampleTE = j["sampleTE"].get<double>();
-    const RealVec2 X = j["X"].get<double>();
-    const RealVec2 Y = j["Y"].get<double>();
-    const RealVec2 Z = j["Z"].get<double>();
     const RealVec2 S = j["S"].get<double>();
+
+    std::vector<double> obsX_d, obsY_d, obsZ_d;
+    if (j["X"].is_array()) {
+        obsX_d = j["X"].get<std::vector<double>>();
+        obsY_d = j["Y"].get<std::vector<double>>();
+        obsZ_d = j["Z"].get<std::vector<double>>();
+    } else {
+        obsX_d = { j["X"].get<double>() };
+        obsY_d = { j["Y"].get<double>() };
+        obsZ_d = { j["Z"].get<double>() };
+    }
+    int nObs = static_cast<int>(obsX_d.size());
+    std::vector<RealVec2> obsX_2(nObs), obsY_2(nObs), obsZ_2(nObs);
+    for (int i = 0; i < nObs; ++i) {
+        obsX_2[i] = obsX_d[i];
+        obsY_2[i] = obsY_d[i];
+        obsZ_2[i] = obsZ_d[i];
+    }
     const RealVec2 Ncrit = j["ncrit"].get<double>();
     const RealVec2 Ufac = j["Ufac"].get<double>();
     const RealVec2 TEfac = j["TEfac"].get<double>();
@@ -248,7 +263,7 @@ int main(){
     Realfwd Cddue = (2.0 * theta) * exponent * std::pow(ue, exponent - 1.0);
 
     double OASPL = partialOutputspartialInputs<RealVec2>(Ncrit,Ufac,TEfac,custChord,inXcoords_d,Re,Ma,rhoInf,nuInf,
-        model,sampleTE,X,Y,Z,S,inYcoords_2,targetAlphaDeg,states,turb,
+        model,sampleTE,obsX_2.data(),obsY_2.data(),obsZ_2.data(),nObs,S,inYcoords_2,targetAlphaDeg,states,turb,
         d_CL_d_y,d_OASPL_d_y,d_CL_dalpha,d_OASPL_dalpha,d_CL_d_States,d_OASPL_d_States
     );
 

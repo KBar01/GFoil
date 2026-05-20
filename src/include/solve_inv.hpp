@@ -182,6 +182,21 @@ void build_gamma_codi(IsolT& isol, const FoilT& foil, const OperT& op)
 {
     Real rhs[2*(Ncoords + 1)];
 
+    // Precompute panel-fixed geometry (t, n, d) once per panel.
+    // Indices 0..Ncoords-2: body panels (j → j+1).
+    // Index Ncoords-1: TE panel (Ncoords-1 → 0).
+    PanelGeom<Real> panelGeoms[Ncoords];
+    for (int j = 0; j < Ncoords - 1; ++j) {
+        precompute_panel_geom<Real>(
+            foil.x[colMajorIndex(0,j,2)],   foil.x[colMajorIndex(1,j,2)],
+            foil.x[colMajorIndex(0,j+1,2)], foil.x[colMajorIndex(1,j+1,2)],
+            panelGeoms[j]);
+    }
+    precompute_panel_geom<Real>(
+        foil.x[colMajorIndex(0,Ncoords-1,2)], foil.x[colMajorIndex(1,Ncoords-1,2)],
+        foil.x[colMajorIndex(0,0,2)],          foil.x[colMajorIndex(1,0,2)],
+        panelGeoms[Ncoords-1]);
+
     PanelInfo<Real> panelInfo;
     Real aij = 1.0;
     Real bij = 1.0;
@@ -193,9 +208,9 @@ void build_gamma_codi(IsolT& isol, const FoilT& foil, const OperT& op)
 
         for (int j = 0; j < Ncoords-1; j++) {
             panel_linvortex_stream(
-                foil.x[colMajorIndex(0,j,2)],   foil.x[colMajorIndex(1,j,2)],
-                foil.x[colMajorIndex(0,j+1,2)], foil.x[colMajorIndex(1,j+1,2)],
-                foil.x[colMajorIndex(0,i,2)],   foil.x[colMajorIndex(1,i,2)],
+                panelGeoms[j],
+                foil.x[colMajorIndex(0,j,2)], foil.x[colMajorIndex(1,j,2)],
+                foil.x[colMajorIndex(0,i,2)], foil.x[colMajorIndex(1,i,2)],
                 panelInfo, aij, bij);
 
             isol.infMatrix[colMajorIndex(i,j,Ncoords+1)]   += aij;
@@ -208,8 +223,8 @@ void build_gamma_codi(IsolT& isol, const FoilT& foil, const OperT& op)
         rhs[colMajorIndex(i,1,Ncoords+1)] =  foil.x[colMajorIndex(0,i,2)];
 
         panel_constsource_stream(
+            panelGeoms[Ncoords-1],
             foil.x[colMajorIndex(0,Ncoords-1,2)], foil.x[colMajorIndex(1,Ncoords-1,2)],
-            foil.x[colMajorIndex(0,0,2)],          foil.x[colMajorIndex(1,0,2)],
             foil.x[colMajorIndex(0,i,2)],          foil.x[colMajorIndex(1,i,2)],
             panelInfo, a);
 
@@ -217,8 +232,8 @@ void build_gamma_codi(IsolT& isol, const FoilT& foil, const OperT& op)
         isol.infMatrix[colMajorIndex(i,Ncoords-1,Ncoords+1)] +=  a*(0.5 * foil.te.tcp);
 
         panel_linvortex_stream(
+            panelGeoms[Ncoords-1],
             foil.x[colMajorIndex(0,Ncoords-1,2)], foil.x[colMajorIndex(1,Ncoords-1,2)],
-            foil.x[colMajorIndex(0,0,2)],          foil.x[colMajorIndex(1,0,2)],
             foil.x[colMajorIndex(0,i,2)],          foil.x[colMajorIndex(1,i,2)],
             panelInfo, a_vortex, b_vortex);
 

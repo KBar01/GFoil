@@ -116,6 +116,16 @@ or as:
   const Real (&obsX)[N]
 Never as double* or std::vector<double>.
 
+### Do NOT add Real fields to Param_t<Real> in data_structs_shared.hpp
+`Param_t<Real>` is instantiated inside CoDi active tape regions (e.g. inside
+`partialOutputspartialInputs` after `tape.setActive()`). Any `Real` field with a
+default initializer (`Real foo = X`) will execute a tape assignment statement at
+construction time, creating a spurious tape entry and silently corrupting AD
+gradients. This was confirmed when adding `ncrithyst` to `Param_t<Real>` shifted
+gradient arrays by ~6×10⁻⁷.
+Rule: fields needed only by the forward solver belong in the non-template `Param`
+struct in `data_structs.h`, not in `Param_t`.
+
 ---
 
 ## Shared solver template headers
@@ -146,6 +156,91 @@ via a one-line non-template wrapper. main_func.hpp includes it directly.
 - `GFoil_fwd_codi`: builds and links cleanly ✓
 - `GFoil_AD`: builds and links cleanly ✓
 - All newAmiet.hpp CoDi issues (fabs→abs, hypot, using-declarations) resolved.
+
+---
+
+## Bug Fixes
+
+### Transition location period-2 limit cycle fix (May 2026) — COMPLETE
+Failure mode: at certain operating conditions (confirmed at alpha=−4.9°,
+Re=2×10⁶, Ma=0, ncrit=5) the Newton solver entered a stable period-2 limit
+cycle. Residual reached ~1.5×10⁻⁴ then oscillated indefinitely between two
+states differing only in amplification factor at the last-laminar node.
+Transition node index did NOT move — the oscillation was entirely in the amp
+values feeding back into the Newton system.
+
+Root cause: in `update_transition.cpp`, the `ilam == ilam0` branch (transition
+node unchanged) restored ALL `sa[]` values including the ODE-consistent laminar
+amplifications computed by `march_amplification`. This discarded the
+march-computed values and reinstated the Newton-perturbed values, which
+oscillated with period-2 amplitude ~3.2×10⁻³ at `Is[ilam0]`. The corrupted
+amp then fed back into the next Newton step, perpetuating the cycle.
+
+Fix: in the `ilam == ilam0` branch, restore only **turbulent** nodes' ctau from
+`sa[]` (undoing march's corruption of ctau at turbulent nodes), but keep the
+march-computed laminar amp values which satisfy the eN ODE exactly. One branch
+changed in `update_transition.cpp`.
+
+Verified:
+- alpha=−4.8° (was already converging): still converges; CL/CD/OASPL differ by
+  2–7×10⁻⁶ relative from pre-fix (expected: different convergence path near
+  transition changes which amp values feed into the final Newton iterate)
+- alpha=−4.9° (previously 2-cycled forever): now converges directly without
+  continuation; CL/CD/OASPL match continuation reference to <10⁻⁴ relative
+
+`ncrithyst` parameter: added to `Param` in `data_structs.h` (default 0.2) and
+plumbed through the full stack (`run_forward.h`, `run_forward.cpp`, `main.cpp`,
+`gfoil_fwd_bindings.cpp`, `OperatingConds` in `inputs.py`, `_build_input_dict`
+in `gfoil.py`) but not yet actively used in any computation. Retained as a
+future tuning knob for the brief's originally-proposed hysteresis approach.
+
+**CRITICAL CoDi constraint discovered:** do NOT add `Real` fields with default
+initializers to `Param_t<Real>` in `data_structs_shared.hpp`. `Param_t<Real>`
+is instantiated inside CoDi active tape regions; a new `Real` field creates a
+spurious tape entry and corrupts AD gradients silently. `ncrithyst` is therefore
+kept only in the non-template `Param` in `data_structs.h`.
+
+Golden files regenerated: prior golden files were stale (GFoil_AD binary
+crashed against them). New golden files pass 10/10 at 0.00e+00 error.
+
+Files modified: `src/update_transition.cpp`, `src/include/data_structs.h`,
+`src/include/run_forward.h`, `src/run_forward.cpp`, `src/main.cpp`,
+`src/gfoil_fwd_bindings.cpp`, `GFoil/inputs.py`, `GFoil/gfoil.py`
+
+---
+
+## Performance Optimisations
+
+### AIC panel geometry precomputation (May 2026) — COMPLETE
+Hot path: `build_gamma_codi` in `solve_inv.hpp` runs a 200×200 double loop to
+assemble the influence coefficient matrix. Previously each (i,j) iteration
+called `panel_info()` in full, recomputing the panel-fixed quantities (t, n, d)
+200 times per panel.
+
+Changes made:
+- `panel_funcs.hpp`: added `PanelGeom<Real>` struct holding `t[2]`, `n[2]`, `d`
+- `panel_funcs.hpp`: added `precompute_panel_geom()` — fills `PanelGeom` from two
+  endpoint coordinates; uses `sqrt(dx*dx+dy*dy)` directly
+- `panel_funcs.hpp`: added `panel_info_cp()` — fills `PanelInfo` given a
+  precomputed `PanelGeom` and a control-point position; copies t/n/d from
+  struct, computes x/z/r1/r2/theta1/theta2 only
+- `panel_funcs.hpp`: added two new overloads of `panel_linvortex_stream` and
+  `panel_constsource_stream` that accept `PanelGeom` instead of endpoint coords
+- `solve_inv.hpp`: allocates `PanelGeom<Real> panelGeoms[Ncoords]` on the stack
+  before the i-loop; indices 0..Ncoords-2 for body panels, Ncoords-1 for TE
+  panel; all three stream calls inside the loop use the precomputed overloads
+
+Deferred: `info.d = norm_t_init` fix in `panel_info()` — NOT applied. The
+original `panel_info` is still used in `calc_ue_m.hpp` paths; applying the fix
+there would change the CoDi tape accumulation order and shift gradients.
+Left as a known minor inefficiency.
+
+Golden files regenerated: `PanelGeom<Real>` stores CoDi active types, so
+reordering the tape accumulation causes floating-point associativity shifts
+of 3–6×10⁻⁸ relative in gradient arrays. Forward scalars (CL/CD/CM/OASPL)
+are bit-for-bit unchanged. New golden files committed.
+
+Files modified: `src/include/panel_funcs.hpp`, `src/include/solve_inv.hpp`
 
 ---
 
@@ -209,7 +304,8 @@ binary exit codes.
 
 ## Planned Features
 
-### Multiple observer locations (next to implement)
+### Multiple observer locations (COMPLETE)
+### Pybind11 bindings (COMPLETE)
 Average OASPL across N observers using power averaging:
   OASPL_avg = 10 * log10( (1/N) * sum_i( 10^(OASPL_i / 10) ) )
 
@@ -238,10 +334,7 @@ Real throughout — never cast to double or pass as double*.
 Re-implement cleanly after multiple observer support is complete.
 Infrastructure was removed in commit 1065ed2.
 
-### A-weighting
-Post-process farfieldSpectra with A-weighting curve before
-integration. Apply inside calc_OASPL after TE_noise_outer call,
-before the frequency integration loop.
+### A-weighting (COMPLETE)
 
 ### Pybind11 Python bindings
 Defer until C++ API is stable (after multiple observers + forced
@@ -250,12 +343,60 @@ Python object between run_forward() and run_AD() calls, eliminating
 file I/O. See design notes in conversation history.
 
 ## Current Work
-Next task: implement multiple observer locations.
-See "## Planned Features" above for the full design spec.
-Key constraint to remember: ALL types must be Real — no double* for
-observer coordinates. See "## CoDi Type Rules (EXTENDED)".
+Multiple observer locations: COMPLETE.
+Pybind11 bindings + clean Python API: COMPLETE.
+  - `gfoil_cpp.cpython-38-*.so` built into `GFoil/GFoil/` (importable as `from . import gfoil_cpp`)
+  - `fwd_run()` returns `FwdResult`; `grad_run(result, ...)` returns `GradResult`
+  - No file I/O in pybind11 path; subprocess fallback still available
+  - Build: `cmake -B build . -DPYBIND11_PYTHON_VERSION=3.8 -DPYTHON_EXECUTABLE=$(pyenv which python3.8) && cmake --build build --target gfoil_cpp`
+Warm-start in pybind11 continuation path: COMPLETE.
+A-weighting toggle: COMPLETE.
+AIC panel geometry precomputation: COMPLETE.
+Transition period-2 limit cycle fix: COMPLETE.
+Next task: remaining noise-path optimisations (Estar caching, surf-loop
+hoisting), then pyOptSparse integration or forced transition.
 
 ### Completed since last CLAUDE.md update
+- Transition period-2 limit cycle fix (May 2026):
+    - See "## Bug Fixes" section above for full details
+    - One branch changed in update_transition.cpp (`ilam == ilam0`: restore
+      only turbulent ctau from sa[], keep march-computed laminar amps)
+    - ncrithyst plumbed through stack (default 0.2, unused in computation)
+    - CRITICAL: ncrithyst NOT in Param_t<Real> — spurious tape entry risk
+    - Golden files regenerated (stale; now 10/10 at 0.00e+00)
+- AIC panel geometry precomputation (May 2026):
+    - See "## Performance Optimisations" section above for full details
+    - Golden files regenerated: floating-point associativity shift only
+      (3–6×10⁻⁸ relative in gradient arrays); forward scalars unchanged
+- A-weighting toggle (May 2026):
+    - calc_OASPL gains `const int aWeighting = 0` as final parameter (after WPSjson)
+    - Inside the per-observer loop, after TE_noise_outer and before the iObs==0
+      cache block, an A-weighting loop multiplies farfieldSpectra[i] by RA²
+      using the IEC 61672 formula; all arithmetic stays as Real with
+      `static_cast<Real>(precomputed_double)` constants
+    - runCode (run_forward.h / run_forward.cpp) gains `int aWeighting = 0`,
+      forwarded to calc_OASPL
+    - src/main.cpp: both WPSonly branch and normal branch read
+      `j.value("aWeighting", 0)` and pass through
+    - gfoil_fwd_bindings.cpp: reads aWeighting from input dict
+      (inp.contains guard for backward compat), passes to runCode
+    - gfoil_ad_bindings.cpp: same, passes to partialOutputspartialInputs
+    - srcAD/include/ADfuncs.hpp: partialOutputspartialInputs gains
+      `int aWeighting = 0`, forwarded to calc_OASPL
+    - GFoil/inputs.py: Acoustics gets `aWeighting: bool = False`
+    - GFoil/gfoil.py: _build_input_dict includes `"aWeighting": int(acoustics.aWeighting)`
+    - AD differentiates through A-weighting correctly (pure Real arithmetic,
+      no tape detachment); golden files unchanged (aWeighting=0 by default)
+- Warm-start fix in pybind11 path (May 2026):
+    - runCode gains `const RestartState* warmStart = nullptr` parameter
+    - When non-null, initialises glob.U and vsol.turb from in-memory state
+      instead of reading restart.json
+    - run_forward_py gains optional `prev_jacobian` argument
+    - _call_forward in gfoil.py passes prev_result states/turb through
+    - standard_run tracks last_converged and passes it as warm start
+      in the forward-stepping loop
+    - Subprocess fallback: writes restart.json from prev_result if available
+    - Binary path unchanged: fromRestart=1 still reads restart.json
 - newAmiet.hpp physics fixes (supervisor review):
     - Fresnel_int_conj renamed to Estar throughout
     - G_e coefficient corrected: sqrt(0.5*k/D) not sqrt(k/D)
@@ -274,7 +415,8 @@ observer coordinates. See "## CoDi Type Rules (EXTENDED)".
   Medium tier dedup:     -109 lines net
   Forced trans removal:  -813 lines net
   newAmiet.hpp cleanup:  ~-50 lines net (fabs, using decls, comments)
+  A-weighting feature:   +~60 lines net (new param plumbing + IEC loop)
   ─────────────────────────────────────
-  Total net reduction:  ~-1279 lines
+  Total net reduction:  ~-1219 lines
   Duplicate function definitions eliminated: 13
   Dead code removed: Trans struct + 5 functions + forced-trans plumbing

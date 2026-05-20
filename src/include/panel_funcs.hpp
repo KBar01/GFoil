@@ -2,6 +2,15 @@
 
 #include <cmath>
 
+// Panel-fixed geometry (depends only on panel endpoints, not on the control point).
+// Precompute once per panel and reuse across all control points.
+template<typename Real>
+struct PanelGeom {
+    Real t[2];  // unit tangent
+    Real n[2];  // unit normal  (n = [-t[1], t[0]])
+    Real d;     // panel length
+};
+
 // Structure to hold panel information (templatised on Real)
 template<typename Real>
 struct PanelInfo {
@@ -40,7 +49,7 @@ void panel_info(const Real& panelStartX, const Real& panelStartY,
     info.z = xz[0]*info.n[0] + xz[1]*info.n[1];  // Dot product in panel-aligned coord system
 
     // Panel length
-    info.d = std::sqrt(std::pow(t_init[0],2) + std::pow(t_init[1],2)) ;
+    info.d = std::sqrt(std::pow(t_init[0],2) + std::pow(t_init[1],2));
 
     // Distances and angles
     info.r1 = std::sqrt(info.x*info.x + info.z*info.z);
@@ -51,6 +60,41 @@ void panel_info(const Real& panelStartX, const Real& panelStartY,
 
 }
 
+
+// Fill a PanelGeom from two panel endpoint coordinates.
+// Call once per panel before the control-point loop.
+template<typename Real>
+void precompute_panel_geom(
+    const Real& x0, const Real& y0,
+    const Real& x1, const Real& y1,
+    PanelGeom<Real>& g)
+{
+    Real dx = x1 - x0, dy = y1 - y0;
+    g.d    = std::sqrt(dx*dx + dy*dy);
+    g.t[0] = dx / g.d;  g.t[1] = dy / g.d;
+    g.n[0] = -g.t[1];   g.n[1] =  g.t[0];
+}
+
+// Fill a PanelInfo using a precomputed PanelGeom (skips t/n/d recomputation).
+// panelStartX/Y is the panel's first node — needed to locate the control point
+// in panel-aligned coordinates.
+template<typename Real>
+void panel_info_cp(const PanelGeom<Real>& g,
+                   const Real& cpX, const Real& cpY,
+                   const Real& panelStartX, const Real& panelStartY,
+                   PanelInfo<Real>& info)
+{
+    info.t[0] = g.t[0];  info.t[1] = g.t[1];
+    info.n[0] = g.n[0];  info.n[1] = g.n[1];
+    info.d    = g.d;
+    Real xz0 = cpX - panelStartX, xz1 = cpY - panelStartY;
+    info.x      = xz0*g.t[0] + xz1*g.t[1];
+    info.z      = xz0*g.n[0] + xz1*g.n[1];
+    info.r1     = std::sqrt(info.x*info.x + info.z*info.z);
+    info.r2     = std::sqrt((info.x - g.d)*(info.x - g.d) + info.z*info.z);
+    info.theta1 = std::atan2(info.z, info.x);
+    info.theta2 = std::atan2(info.z, info.x - g.d);
+}
 
 template<typename Real>
 void panel_linvortex_stream(const Real& panelStartX, const Real& panelStartY,
@@ -70,6 +114,26 @@ void panel_linvortex_stream(const Real& panelStartX, const Real& panelStartY,
     Real P2 = panelInfo.x*P1 + (0.5/M_PI)*(0.5*panelInfo.r2*panelInfo.r2*logr2 - 0.5*panelInfo.r1*panelInfo.r1*logr1 - (panelInfo.r2*panelInfo.r2)/4.0 + (panelInfo.r1*panelInfo.r1)/4.0);
 
     // Influence coefficients
+    a = P1 - P2 / panelInfo.d;
+    b = P2 / panelInfo.d;
+}
+
+// Overload: panel geometry is precomputed; panelEndX/Y not needed.
+template<typename Real>
+void panel_linvortex_stream(const PanelGeom<Real>& geom,
+    const Real& panelStartX, const Real& panelStartY,
+    const Real& controlPointX, const Real& controlPointY,
+    PanelInfo<Real>& panelInfo, Real& a, Real& b)
+{
+    panel_info_cp(geom, controlPointX, controlPointY, panelStartX, panelStartY, panelInfo);
+
+    const Real ep = 1e-9;
+    Real logr1 = (panelInfo.r1 < ep) ? Real(0.0) : std::log(panelInfo.r1);
+    Real logr2 = (panelInfo.r2 < ep) ? Real(0.0) : std::log(panelInfo.r2);
+
+    Real P1 = (0.5/M_PI)*(panelInfo.z*(panelInfo.theta2 - panelInfo.theta1) - panelInfo.d + panelInfo.x*logr1 - (panelInfo.x - panelInfo.d)*logr2);
+    Real P2 = panelInfo.x*P1 + (0.5/M_PI)*(0.5*panelInfo.r2*panelInfo.r2*logr2 - 0.5*panelInfo.r1*panelInfo.r1*logr1 - (panelInfo.r2*panelInfo.r2)/4.0 + (panelInfo.r1*panelInfo.r1)/4.0);
+
     a = P1 - P2 / panelInfo.d;
     b = P2 / panelInfo.d;
 }
@@ -113,6 +177,44 @@ void panel_constsource_stream(const Real& panelStartX, const Real& panelStartY,
     }
 
     // Influence coefficient
+    a = P;
+}
+
+// Overload: panel geometry is precomputed; panelEndX/Y not needed.
+template<typename Real>
+void panel_constsource_stream(const PanelGeom<Real>& geom,
+    const Real& panelStartX, const Real& panelStartY,
+    const Real& controlPointX, const Real& controlPointY,
+    PanelInfo<Real>& panelInfo, Real& a)
+{
+    panel_info_cp(geom, controlPointX, controlPointY, panelStartX, panelStartY, panelInfo);
+
+    Real ep = 1e-9;
+    Real logr1, logr2;
+
+    if (panelInfo.r1 < ep) {
+        logr1 = 0.0;
+        panelInfo.theta1 = M_PI;
+        panelInfo.theta2 = M_PI;
+    } else {
+        logr1 = std::log(panelInfo.r1);
+    }
+
+    if (panelInfo.r2 < ep) {
+        logr2 = 0.0;
+        panelInfo.theta1 = 0.0;
+        panelInfo.theta2 = 0.0;
+    } else {
+        logr2 = std::log(panelInfo.r2);
+    }
+
+    Real P = (panelInfo.x*(panelInfo.theta1 - panelInfo.theta2) + panelInfo.d*panelInfo.theta2 + panelInfo.z*logr1 - panelInfo.z*logr2) / (2*M_PI);
+    if ((panelInfo.theta1 + panelInfo.theta2) > M_PI) {
+        P = P - 0.25*panelInfo.d;
+    } else {
+        P = P + 0.75*panelInfo.d;
+    }
+
     a = P;
 }
 

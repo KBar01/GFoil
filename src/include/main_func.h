@@ -6,6 +6,7 @@
 #include <cmath>
 #include "real_type.h"
 #include "panel_funcs.hpp"
+#include "restart_state.h"
 
 // Forward declarations — needed because main_func.h is #included inside data_structs.h
 // before the struct bodies are defined.
@@ -22,7 +23,8 @@ void solve_glob(const Foil&foil, const Isol&isol, Glob& glob, Vsol& vsol, const 
 void update_state(const Oper&oper, const Param&param, Glob&glob, Vsol&vsol);
 void update_transition(Glob &glob, Vsol &vsol, Isol &isol, Param&param);
 bool solve_coupled(const Oper& oper, const Foil& foil, const Wake& wake,
-    Param& param, Vsol& vsol, Isol& isol, Glob& glob);
+    Param& param, Vsol& vsol, Isol& isol, Glob& glob,
+    RestartState* restartOut = nullptr);
 
 // Everything else is now a template in a shared .hpp:
 //   colMajorIndex       → inline in real_type.h

@@ -184,9 +184,13 @@ void Radiation_integral2(
     // D = mu_bar*(1 - x/S0); k_min_bar = mu_bar at mid-span (K_2_bar=0)
     Real D = mu_bar * (1.0 - x / S0);
 
+    // Cache Estar(4·k_min_bar) — reused in Ẽ block, G_c, and G_d.
+    Real Fr_4k, Fi_4k;
+    Estar<Real>(4.0*k_min_bar, 0.0, Fr_4k, Fi_4k);
+
     // Ẽ = exp(4i·k_min_bar)·(1 - (1+i)·E*(4·k_min_bar))
     Real Fr, Fi;
-    Estar<Real>(4.0*k_min_bar, 0.0, Fr, Fi);
+    Fr = Fr_4k; Fi = Fi_4k;
     Real t1r = Fr - Fi;   // (1+i)·E*: real part
     Real t1i = Fi + Fr;   // (1+i)·E*: imag part
     Real oneMinus_r = 1.0 - t1r;
@@ -226,7 +230,7 @@ void Radiation_integral2(
     Real coeffi = (1.0+error)*m1i / denC;
     epr = std::cos(4.0*k_min_bar);
     epi = std::sin(4.0*k_min_bar);
-    Estar<Real>(4.0*k_min_bar, 0.0, Fr, Fi);
+    Fr = Fr_4k; Fi = Fi_4k;
     Real tmp_r = epr*Fr - epi*Fi;
     Real tmp_i = epr*Fi + epi*Fr;
     Real G_cr = coeffr*tmp_r - coeffi*tmp_i;
@@ -243,9 +247,8 @@ void Radiation_integral2(
     Real coeffDi = (1.0-error)*p1i / denD;
     epr = std::cos(-4.0*k_min_bar);
     epi = std::sin(-4.0*k_min_bar);
-    // E(4k) = conj(E*(4k)): compute E* then negate imaginary part
-    Estar<Real>(4.0*k_min_bar, 0.0, Fr, Fi);
-    Fi = -Fi;
+    // E(4k) = conj(E*(4k)): negate imaginary part of cached E*(4k)
+    Fr = Fr_4k; Fi = -Fi_4k;
     tmp_r = epr*Fr - epi*Fi;
     tmp_i = epr*Fi + epi*Fr;
     Real G_dr = coeffDr*tmp_r - coeffDi*tmp_i;
@@ -393,13 +396,14 @@ void TE_noise_outer(
 {
     Real Ue[2] = {Ue_top, Ue_bot};
 
-    for (int surf = 0; surf < 2; ++surf) {
-
-    Real beta = std::sqrt(1.0 - M*M);
+    // beta and S0 depend only on M, x, z — hoist outside the surf loop.
     // Mid-span implementation: y is ignored and assumed to be zero.
     // Including y in S0 while K2_bar=0 is physically inconsistent
     // (R&M Section 3, mid-span observer: x2=0 throughout).
-    Real S0 = std::sqrt(x*x + beta*beta*z*z);
+    Real beta = std::sqrt(1.0 - M*M);
+    Real S0   = std::sqrt(x*x + beta*beta*z*z);
+
+    for (int surf = 0; surf < 2; ++surf) {
 
     Real U_c  = 0.7 * Ue[surf];
     Real alpha = U / U_c;
@@ -435,7 +439,8 @@ void TE_noise_outer(
     // b = semi-chord (half-chord), passed directly as parameter
     Real b_half = b;  // b is already the semi-chord (c/2) passed by caller
     for (int i = 0; i < Nsound; ++i) {
-        Real term1 = std::pow((omega[i]*b_half*z) / (2.0*M_PI*c0*S0*S0), 2.0);
+        Real _t1   = (omega[i]*b_half*z) / (2.0*M_PI*c0*S0*S0);
+        Real term1 = _t1 * _t1;
 
         if (surf == 0) {
             farfieldSpectra[i]  = term1 * 2.0*span * I_abs2[i] * WPS_upper[i] * l_y[i];

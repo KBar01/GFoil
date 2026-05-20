@@ -55,10 +55,12 @@ void calc_WPS(const std::string& model,
 template<typename Real, bool WriteJSON = false>
 Real calc_OASPL(const Real* botStates, const Real* topStates,
                 const Real chordScale, const Real Uinf,
-                const Real X, const Real Y, const Real Z,
+                const Real* obsX, const Real* obsY, const Real* obsZ,
+                int nObs,
                 const Real S, const Real nu, const Real rho,
                 const std::string& model,
-                const int WPSjson = 0)
+                const int WPSjson = 0,
+                const int aWeighting = 0)
 {
     const Real f_min = 200.0;
     const Real f_max = 20000.0;
@@ -68,20 +70,17 @@ Real calc_OASPL(const Real* botStates, const Real* topStates,
 
     Real log_fmin = std::log10(f_min);
     Real log_fmax = std::log10(f_max);
-    Real count = 0.0;
-    const Real Nfreq = 250.0;
     for (int i = 0; i < Nsound; ++i) {
-        Real frac = count / (Nfreq - 1.0);
+        Real frac = static_cast<Real>(i) / static_cast<Real>(Nsound - 1);
         Real logf = log_fmin + frac * (log_fmax - log_fmin);
-        Freq[i]  = std::pow(10.0, logf);
+        Freq[i]  = std::pow(static_cast<Real>(10.0), logf);
         omega[i] = 2.0 * M_PI * Freq[i];
-        count += 1.0;
     }
 
     Real WPSUpper[Nsound] = {0};
     Real WPSLower[Nsound] = {0};
 
-    // ── top surface ───────────────────────────────────────────────────────────
+    // ── top surface (observer-independent) ───────────────────────────────────
     Real theta    = topStates[0];
     Real deltaS   = topStates[1];
     Real tauMax   = topStates[2];
@@ -94,12 +93,12 @@ Real calc_OASPL(const Real* botStates, const Real* topStates,
 
     if (tauMax > 0.0) {
         calc_WPS<Real>(model, theta, deltaS, delta, tauWall, tauMax,
-                       edgeVel_top, dpdx, omega, nu, Uinf, X, Y, Z, S, rho, 1, WPSUpper);
+                       edgeVel_top, dpdx, omega, nu, Uinf, obsX[0], obsY[0], obsZ[0], S, rho, 1, WPSUpper);
     } else {
         edgeVel_top = Uinf;
     }
 
-    // ── bottom surface ────────────────────────────────────────────────────────
+    // ── bottom surface (observer-independent) ─────────────────────────────────
     theta    = botStates[0];
     deltaS   = botStates[1];
     tauMax   = botStates[2];
@@ -112,28 +111,52 @@ Real calc_OASPL(const Real* botStates, const Real* topStates,
 
     if (tauMax > 0.0) {
         calc_WPS<Real>(model, theta, deltaS, delta, tauWall, tauMax,
-                       edgeVel_bot, dpdx, omega, nu, Uinf, X, Y, Z, S, rho, 0, WPSLower);
+                       edgeVel_bot, dpdx, omega, nu, Uinf, obsX[0], obsY[0], obsZ[0], S, rho, 0, WPSLower);
     } else {
         edgeVel_bot = Uinf;
     }
 
-    // ── far-field PSD ─────────────────────────────────────────────────────────
-    Real farfieldSpectra[Nsound];
-    Real c = Uinf / 340.0;
-    TE_noise_outer<Real>(c, Uinf, X, Y, Z, chordScale / 2.0, chordScale,
-                         S, 340.0, omega,
-                         edgeVel_bot, edgeVel_top,
-                         WPSLower, WPSUpper, farfieldSpectra);
+    // ── per-observer loop: far-field PSD → integrate → power average ─────────
+    Real pref2 = (20e-6) * (20e-6);
+    Real powerSum = 0.0;
+    Real farfieldSpectra0[Nsound];  // first observer's spectra, cached for JSON
 
-    // ── integrate over frequency ──────────────────────────────────────────────
-    Real integral = 0.0;
-    for (int i = 0; i < Nsound - 1; ++i) {
-        Real df = Freq[i+1] - Freq[i];
-        integral += 0.5 * (farfieldSpectra[i] + farfieldSpectra[i+1]) * 2.0 * M_PI * df;
+    for (int iObs = 0; iObs < nObs; ++iObs) {
+        Real farfieldSpectra[Nsound];
+        Real c = Uinf / 340.0;
+        TE_noise_outer<Real>(c, Uinf, obsX[iObs], obsY[iObs], obsZ[iObs],
+                             chordScale / 2.0, chordScale,
+                             S, 340.0, omega,
+                             edgeVel_bot, edgeVel_top,
+                             WPSLower, WPSUpper, farfieldSpectra);
+
+        if (aWeighting) {
+            for (int i = 0; i < Nsound; ++i) {
+                Real f2 = Freq[i] * Freq[i];
+                Real RA = (static_cast<Real>(12194.0 * 12194.0) * f2 * f2)
+                        / ( (f2 + static_cast<Real>(20.6  * 20.6))
+                          * std::sqrt((f2 + static_cast<Real>(107.7 * 107.7))
+                                     * (f2 + static_cast<Real>(737.9 * 737.9)))
+                          * (f2 + static_cast<Real>(12194.0 * 12194.0)) );
+                farfieldSpectra[i] *= RA * RA;
+            }
+        }
+
+        if (iObs == 0) {
+            for (int i = 0; i < Nsound; ++i) { farfieldSpectra0[i] = farfieldSpectra[i]; }
+        }
+
+        Real integral = 0.0;
+        for (int i = 0; i < Nsound - 1; ++i) {
+            Real df = Freq[i+1] - Freq[i];
+            integral += 0.5 * (farfieldSpectra[i] + farfieldSpectra[i+1]) * 2.0 * M_PI * df;
+        }
+
+        Real OASPL_i = 10.0 * std::log10(integral / pref2);
+        powerSum += std::pow(static_cast<Real>(10.0), OASPL_i / 10.0);
     }
 
-    Real pref2 = (20e-6) * (20e-6);
-    Real OASPL = 10.0 * std::log10(integral / pref2);
+    Real OASPL = 10.0 * std::log10(powerSum / static_cast<Real>(nObs));
 
     // ── optional JSON output (compiled out when WriteJSON=false) ──────────────
     if constexpr (WriteJSON) {
@@ -148,7 +171,7 @@ Real calc_OASPL(const Real* botStates, const Real* topStates,
                 freq_d[i]     = Freq[i].getValue();
                 wpsupper_d[i] = WPSUpper[i].getValue() / prefSqrd;
                 wpslower_d[i] = WPSLower[i].getValue() / prefSqrd;
-                spectra_d[i]  = farfieldSpectra[i].getValue() / prefSqrd;
+                spectra_d[i]  = farfieldSpectra0[i].getValue() / prefSqrd;
             }
             j["frequency_Hz"]        = freq_d;
             j["WPS_upper/prefSqrd"]  = wpsupper_d;

@@ -203,7 +203,8 @@ struct Param {
     int niglob = 50;               // Max global iterations
 
     // Viscous parameters
-    Real ncrit = 9.0;
+    Real ncrit     = 9.0;
+    Real ncrithyst = 0.2;   // hysteresis margin for transition-node damping
     Real Cuq = 1.0;
     Real Dlr = 0.9;
     Real SlagK = 5.6;
