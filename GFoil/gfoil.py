@@ -2,7 +2,7 @@ import json
 import subprocess
 import numpy as np
 import os
-from .inputs import Aerofoil, Acoustics, OperatingConds, WPSinfo, FwdResult, GradResult
+from .inputs import Aerofoil, Acoustics, OperatingConds, WPSinfo, FwdResult, GradResult, VerboseResult
 
 # Try the compiled pybind11 module first (installed into this package dir).
 # Falls back to the standalone binaries via subprocess if not available.
@@ -21,7 +21,8 @@ def _build_input_dict(aerofoil: Aerofoil,
                       acoustics: Acoustics,
                       returnAllOutputs: bool,
                       alphaDeg: float = None,
-                      fromRestart: int = 0) -> dict:
+                      fromRestart: int = 0,
+                      verbose: bool = False) -> dict:
     force = 1 if (operating.transition[0] != 1.0 or operating.transition[1] != 1.0) else 0
     alpha = alphaDeg if alphaDeg is not None else float(operating.alpha)
     return {
@@ -50,6 +51,7 @@ def _build_input_dict(aerofoil: Aerofoil,
         "aWeighting":    int(acoustics.aWeighting),
         "chord":         float(aerofoil.chord),
         "WPSonly":       0,
+        "verbose":       verbose,
     }
 
 
@@ -64,6 +66,37 @@ def _call_forward(inp: dict, prev_result: "FwdResult" = None) -> "FwdResult":
         if r["conv"] == 0:
             return FwdResult(converged=False)
         jac = r["jacobian"]
+
+        verb = None
+        if r.get("innerFoilX") is not None:
+            try:
+                NS   = len(r["freq_Hz"])
+                nObs = r["nObs"]
+                verb = VerboseResult(
+                    x          = np.array(r["innerFoilX"]),
+                    y          = np.array(r["innerFoilY"]),
+                    Cp         = np.array(r["Cp_dist"]),
+                    delta_star = np.array(r["delta_star"]),
+                    theta      = np.array(r["theta"]),
+                    tau_wall   = np.array(r["tau_wall"]),
+                    tau_max    = np.array(r["tau_max"]),
+                    Ue         = np.array(r["Ue"]),
+                    dpdx       = np.array(r["dpdx"]),
+                    is_turb    = np.array(r["is_turb"], dtype=bool),
+                    topTransX  = float(r["topTransX"]),
+                    botTransX  = float(r["botTransX"]),
+                    BL_top     = np.array(r["BL_top"]),
+                    BL_bot     = np.array(r["BL_bot"]),
+                    freq_Hz    = np.array(r["freq_Hz"]),
+                    WPS_upper  = np.array(r["WPS_upper"]),
+                    WPS_lower  = np.array(r["WPS_lower"]),
+                    FF_spectra = np.array(r["FF_spectra"]).reshape(nObs, NS),
+                )
+            except (KeyError, TypeError, ValueError) as e:
+                raise RuntimeError(
+                    f"verbose output from C++ solver is incomplete or malformed: {e}"
+                ) from e
+
         return FwdResult(
             converged=True,
             CL=r["CL"], CD=r["CD"], CM=r["CM"], OASPL=r["OASPL"],
@@ -72,6 +105,7 @@ def _call_forward(inp: dict, prev_result: "FwdResult" = None) -> "FwdResult":
             RVnz=jac["RVnz"],
             ycoords=np.array(inp["ycoords"]),
             alpha=inp["alpha_degrees"],
+            verbose_data=verb,
         )
     else:
         cwd = os.getcwd()
@@ -115,12 +149,14 @@ def _call_forward(inp: dict, prev_result: "FwdResult" = None) -> "FwdResult":
 def standard_run(aerofoil: Aerofoil,
                  operating: OperatingConds,
                  acoustics: Acoustics,
-                 returnAllOutputs: bool = False) -> FwdResult:
+                 returnAllOutputs: bool = False,
+                 verbose: bool = False) -> FwdResult:
     """
     Forward solve with backstepping/continuation on failure.
     Returns FwdResult; result.converged is False if all attempts fail.
+    verbose=True populates result.verbose_data on the final converged solve.
     """
-    inp = _build_input_dict(aerofoil, operating, acoustics, returnAllOutputs)
+    inp = _build_input_dict(aerofoil, operating, acoustics, returnAllOutputs, verbose=verbose)
     result = _call_forward(inp)
     if result.converged:
         return result
@@ -142,6 +178,7 @@ def standard_run(aerofoil: Aerofoil,
            (step_direction > 0 and tempalf > min_alpha):
             print("Minimum backstep AoA reached. Cannot continue.")
             break
+        # backstepping: never verbose (intermediate alpha, not the target)
         bs_inp = _build_input_dict(aerofoil, operating, acoustics, False,
                                    alphaDeg=tempalf, fromRestart=0)
         r = _call_forward(bs_inp)
@@ -167,8 +204,10 @@ def standard_run(aerofoil: Aerofoil,
 
     while not completed and overallCount <= 6:
         print(f"Trying forward step to: {fwdalf:.2f}")
+        is_final = abs(fwdalf - alphaDeg) < 1e-3
         fs_inp = _build_input_dict(aerofoil, operating, acoustics, returnAllOutputs,
-                                   alphaDeg=fwdalf)
+                                   alphaDeg=fwdalf,
+                                   verbose=verbose if is_final else False)
         r = _call_forward(fs_inp, prev_result=last_converged)
 
         if r.converged:
@@ -195,15 +234,18 @@ def fwd_run(aerofoil: Aerofoil,
             operating: OperatingConds,
             acoustics: Acoustics,
             returnAllOutputs: bool = False,
-            repanel: bool = False) -> FwdResult:
+            repanel: bool = False,
+            verbose: bool = False) -> FwdResult:
     """
     Run forward solver. Returns FwdResult.
     result.converged is False on failure.
     result.CL, result.CD, result.CM, result.OASPL give the scalar outputs.
     Pass result to grad_run() to compute gradients.
+    If verbose=True, result.verbose_data is populated with per-node aero
+    and acoustic spectral data.
     """
     if repanel:
-        result = standard_run(aerofoil, operating, acoustics, returnAllOutputs)
+        result = standard_run(aerofoil, operating, acoustics, returnAllOutputs, verbose=verbose)
         if result.converged:
             return result
         for count, (uf, tef) in enumerate(
@@ -218,12 +260,12 @@ def fwd_run(aerofoil: Aerofoil,
                 panelTEspacing=tef,
             )
             print(f"Trying different panel distribution ({count}/6)")
-            result = standard_run(foil2, operating, acoustics, returnAllOutputs)
+            result = standard_run(foil2, operating, acoustics, returnAllOutputs, verbose=verbose)
             if result.converged:
                 return result
         return FwdResult(converged=False)
     else:
-        return standard_run(aerofoil, operating, acoustics, returnAllOutputs)
+        return standard_run(aerofoil, operating, acoustics, returnAllOutputs, verbose=verbose)
 
 
 def grad_run(fwd_result: FwdResult,

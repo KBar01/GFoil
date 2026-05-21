@@ -160,8 +160,7 @@ void residual_station(
         Real salog = std::log(sa2/sa1);
         Real salog_U[8] ={0,0,-1./sa1,0, 0,0,1./sa2,0};
 
-        // TODO: remove un-needed repeated calcs of Hk and other params etc
-        // Be careful with modifying values if they are needed later in different form
+        // Be careful: many quantities below are reused; do not simplify without checking dependencies.
 
         // --- BL thickness measure
         de1 = get_de(th1,ds1,ue1,param,de1_U1);
