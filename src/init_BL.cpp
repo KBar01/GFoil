@@ -429,47 +429,35 @@ void init_boundary_layer(const Oper&oper, const Foil&foil, Param&param, Isol&iso
                 }
             }
 
-            // Have converged BL state for given node, now need to check for transition based on amplification value
-            
-            // HERE!!! add an additional statement inside the if, saying if not tran & ncrit exceeded OR forced trans node
-            // set tran = true 
-            
-            if (!turb && (!tran && currState[2]>param.ncrit)){
+            if (!turb && (!tran && currState[2] > param.ncrit)) {
                 tran = true;
                 continue; // amplification exceeds ncrit, redo node with tran=true
             }
 
-            if (tran){turb = true; tran=false;} // after transition, all nodes are turbulent
-            
-            for (int r=0;r<4;++r){   // store in global struct
-                glob.U[colMajorIndex(r,currNode,4)] = currState[r];
+            // Cap the last laminar node's amp to ncrit before storing.
+            // march_amplification re-integrates the eN ODE each Newton iteration
+            // from glob.U.  If this node's amp is stored above ncrit, the first
+            // march call sees an inconsistent laminar state, drives a large amp
+            // residual, and can cause a catastrophic transition jump that collapses
+            // omega to ~0.001 for 20+ iterations.
+            if (tran) {
+                int prevNode = indexList[i - 1];
+                Real& prev_amp = glob.U[colMajorIndex(2, prevNode, 4)];
+                if (prev_amp > param.ncrit) {
+                    prev_amp = param.ncrit;
+                }
+            }
+
+            if (tran) { turb = true; tran = false; }
+
+            for (int r = 0; r < 4; ++r) {
+                glob.U[colMajorIndex(r, currNode, 4)] = currState[r];
                 prevState[r] = currState[r];
             }
-            i++; // move on to next node
+            i++;
         }
     }
 
-    // Debug: print initial transition node and amp after marching (surfaces 0 and 1 only).
-    if (std::getenv("GFOIL_DEBUG")) {
-        // Is[0] = lower surface (stag→lower TE); Is[1] = upper surface (stag→upper TE)
-        const char* surf_name[2] = {"bot", "top"};
-        for (int si = 0; si < 2; ++si) {
-            const auto& idx = vsol.Is[si];
-            int ilam_init = static_cast<int>(idx.size()) - 1;
-            for (int k = 0; k < static_cast<int>(idx.size()); ++k) {
-                if (vsol.turb[idx[k]]) { ilam_init = k - 1; break; }
-            }
-            double amp_val = (ilam_init >= 0 && ilam_init < static_cast<int>(idx.size()))
-                ? glob.U[colMajorIndex(2, idx[ilam_init], 4)].getValue() : 0.0;
-            double amp_next = (ilam_init + 1 < static_cast<int>(idx.size()))
-                ? glob.U[colMajorIndex(2, idx[ilam_init + 1], 4)].getValue() : 0.0;
-            std::fprintf(stderr,
-                "INIT %s: ilam=%d  amp_at_ilam=%.4f  amp_at_ilam+1=%.4f  "
-                "ncrit=%.2f  surf_size=%d\n",
-                surf_name[si], ilam_init, amp_val, amp_next,
-                param.ncrit.getValue(), static_cast<int>(idx.size()));
-        }
-    }
 }
 
 

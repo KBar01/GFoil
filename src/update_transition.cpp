@@ -68,7 +68,8 @@ int march_amplification(Glob &glob, Vsol &vsol, Isol &isol, int si, const Param&
 }
 
 
-void update_transition(Glob &glob, Vsol &vsol, Isol &isol, Param&param) {
+void update_transition(Glob &glob, Vsol &vsol, Isol &isol, Param &param,
+                       int newtonIter) {
 
     for (int si = 0; si < 2; ++si) {
 
@@ -91,6 +92,14 @@ void update_transition(Glob &glob, Vsol &vsol, Isol &isol, Param&param) {
         }
 
         int ilam = march_amplification(glob, vsol, isol, si, param);
+
+        // Advance cap: transition moving toward LE (ilam < ilam0, turbulent region grows).
+        // Kept tight because newly-turbulent nodes need ctau initialisation which is
+        // expensive to recover from if wrong.
+        int max_advance = (newtonIter < 5) ? 1 : 3;
+        if (ilam < ilam0) {
+            ilam = std::max(ilam, ilam0 - max_advance);
+        }
 
         if (ilam == ilam0) {
             // Keep march-computed laminar amps (they satisfy the eN ODE exactly).

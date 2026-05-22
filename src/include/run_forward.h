@@ -33,5 +33,6 @@ bool runCode(
     ForwardResult* fwdOut                = nullptr,
     const RestartState* warmStart        = nullptr,
     int aWeighting                       = 0,
-    Real ncrithyst                       = 0.2
+    Real ncrithyst                       = 0.2,
+    bool verbose                         = false
 );
