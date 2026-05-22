@@ -46,7 +46,8 @@ bool runCode(
     ForwardResult* fwdOut,
     const RestartState* warmStart,
     int aWeighting,
-    Real ncrithyst)
+    Real ncrithyst,
+    bool verbose)
 {
     Real alpha = (alphad / 180) * M_PI;
     Oper oper(alpha, Re, Ma);
@@ -102,7 +103,9 @@ bool runCode(
     }
 
     stagpoint_move(isol, glob, foil, wake, vsol);
-    bool converged = solve_coupled(oper, foil, wake, param, vsol, isol, glob, restartOut);
+    std::string failure_mode;
+    bool converged = solve_coupled(oper, foil, wake, param, vsol, isol, glob, restartOut,
+                                   (fwdOut != nullptr) ? &failure_mode : nullptr);
     Post post;
     calc_force<>(oper, geom, param, foil, glob, post);
 
@@ -140,12 +143,168 @@ bool runCode(
 
     if (fwdOut != nullptr) {
         // Pybind11 path: fill result struct, skip file writes
-        fwdOut->converged = converged;
+        fwdOut->converged     = converged;
+        fwdOut->failure_mode  = converged ? "" : failure_mode;
         if (converged) {
             fwdOut->CL    = post.cl.getValue();
             fwdOut->CD    = post.cd.getValue();
             fwdOut->CM    = post.cm.getValue();
             fwdOut->OASPL = OASPL.getValue();
+
+            if (verbose) {
+                const int N = Ncoords;
+                fwdOut->innerFoilX.resize(N);
+                fwdOut->innerFoilY.resize(N);
+                fwdOut->Cp.resize(N);
+                fwdOut->delta_star.resize(N);
+                fwdOut->theta.resize(N);
+                fwdOut->tau_wall.resize(N);
+                fwdOut->tau_max.resize(N);
+                fwdOut->Ue.resize(N);
+                fwdOut->dpdx.resize(N);
+                fwdOut->is_turb.resize(N);
+
+                Real cf_U[4] = {0};
+                double chord = chordScaling.getValue();
+
+                for (int i = 0; i < N; ++i) {
+                    fwdOut->innerFoilX[i] = xcoords[i].getValue();
+                    fwdOut->innerFoilY[i] = ycoords[i].getValue();
+                    fwdOut->Cp[i]         = post.cp[i].getValue();
+                    fwdOut->is_turb[i]    = vsol.turb[i];
+
+                    double th        = glob.U[colMajorIndex(0, i, 4)].getValue();
+                    double ds        = glob.U[colMajorIndex(1, i, 4)].getValue();
+                    double ctau_sqrt = glob.U[colMajorIndex(2, i, 4)].getValue();
+
+                    fwdOut->theta[i]      = th * chord;
+                    fwdOut->delta_star[i] = ds * chord;
+
+                    Real uk_ignore;
+                    double Ue_phys = get_uk(glob.U[colMajorIndex(3, i, 4)], param, uk_ignore).getValue()
+                                     * Uinf.getValue();
+                    fwdOut->Ue[i] = Ue_phys;
+
+                    if (vsol.turb[i]) {
+                        double Ctau = ctau_sqrt * ctau_sqrt;
+                        fwdOut->tau_max[i] = Ctau * oper.rho.getValue() * Ue_phys * Ue_phys;
+                    } else {
+                        fwdOut->tau_max[i] = 0.0;
+                    }
+
+                    double Cf = get_cf(
+                        glob.U[colMajorIndex(0, i, 4)],
+                        glob.U[colMajorIndex(1, i, 4)],
+                        glob.U[colMajorIndex(2, i, 4)],
+                        glob.U[colMajorIndex(3, i, 4)],
+                        vsol.turb[i], false, param, cf_U).getValue();
+                    fwdOut->tau_wall[i] = (Cf / 2.0) * oper.rho.getValue() * Ue_phys * Ue_phys;
+
+                    int im = (i > 0)   ? i - 1 : i;
+                    int ip = (i < N-1) ? i + 1 : i;
+                    double dx = xcoords[ip].getValue() - xcoords[im].getValue();
+                    double dCp_dx = (dx != 0.0)
+                        ? (post.cp[ip].getValue() - post.cp[im].getValue()) / dx
+                        : 0.0;
+                    fwdOut->dpdx[i] = dCp_dx / chord * 0.5 * oper.rho.getValue()
+                                      * Uinf.getValue() * Uinf.getValue();
+                }
+
+                // Transition x-locations (same coordinate frame as foil.x)
+                fwdOut->botTransX = chordScaling.getValue();
+                for (int i = 0; i < isol.stagIndex[0]; ++i) {
+                    if (vsol.turb[isol.stagIndex[0] - i]) {
+                        fwdOut->botTransX = foil.x[colMajorIndex(0, isol.stagIndex[0] - i, 2)].getValue();
+                        break;
+                    }
+                }
+                fwdOut->topTransX = chordScaling.getValue();
+                for (int i = 0; i < 200 - isol.stagIndex[1]; ++i) {
+                    if (vsol.turb[isol.stagIndex[1] + i]) {
+                        fwdOut->topTransX = foil.x[colMajorIndex(0, isol.stagIndex[1] + i, 2)].getValue();
+                        break;
+                    }
+                }
+
+                // TE BL sampling states
+                fwdOut->BL_top.resize(7);
+                fwdOut->BL_bot.resize(7);
+                for (int i = 0; i < 7; ++i) {
+                    fwdOut->BL_top[i] = topsurf[i].getValue();
+                    fwdOut->BL_bot[i] = botsurf[i].getValue();
+                }
+
+                // Acoustic spectra — rebuild freq/WPS/FF from the same BL states
+                {
+                    const int NS = Nsound;
+                    fwdOut->freq_Hz.resize(NS);
+                    fwdOut->WPS_upper.resize(NS, 0.0);
+                    fwdOut->WPS_lower.resize(NS, 0.0);
+                    fwdOut->nObs = nObs;
+                    fwdOut->FF_spectra.resize(nObs * NS, 0.0);
+
+                    Real omArr[Nsound];
+                    Real Freq_arr[Nsound];
+                    Real log_fmin = std::log10(Real(200.0));
+                    Real log_fmax = std::log10(Real(20000.0));
+                    for (int i = 0; i < NS; ++i) {
+                        Real frac  = Real(i) / Real(NS - 1);
+                        Real logf  = log_fmin + frac * (log_fmax - log_fmin);
+                        Freq_arr[i] = std::pow(Real(10.0), logf);
+                        omArr[i]    = 2.0 * M_PI * Freq_arr[i];
+                        fwdOut->freq_Hz[i] = Freq_arr[i].getValue();
+                    }
+
+                    Real WPS_U_arr[Nsound];
+                    Real WPS_L_arr[Nsound];
+                    for (int i = 0; i < NS; ++i) { WPS_U_arr[i] = 0.0; WPS_L_arr[i] = 0.0; }
+
+                    // Upper surface WPS (mirrors calc_OASPL logic)
+                    Real tauWall_top = topsurf[5];
+                    if (tauWall_top < 0.0) tauWall_top *= -1.0;
+                    Real edgeVel_top = topsurf[3];
+                    if (topsurf[2] > 0.0) {
+                        calc_WPS<Real>(model, topsurf[0], topsurf[1], topsurf[6],
+                                       tauWall_top, topsurf[2], edgeVel_top, topsurf[4],
+                                       omArr, kinViscInf, Uinf,
+                                       obsX[0], obsY[0], obsZ[0], S, rhoInf, 1, WPS_U_arr);
+                    } else {
+                        edgeVel_top = Uinf;
+                    }
+
+                    // Lower surface WPS
+                    Real tauWall_bot = botsurf[5];
+                    if (tauWall_bot < 0.0) tauWall_bot *= -1.0;
+                    Real edgeVel_bot = botsurf[3];
+                    if (botsurf[2] > 0.0) {
+                        calc_WPS<Real>(model, botsurf[0], botsurf[1], botsurf[6],
+                                       tauWall_bot, botsurf[2], edgeVel_bot, botsurf[4],
+                                       omArr, kinViscInf, Uinf,
+                                       obsX[0], obsY[0], obsZ[0], S, rhoInf, 0, WPS_L_arr);
+                    } else {
+                        edgeVel_bot = Uinf;
+                    }
+
+                    for (int i = 0; i < NS; ++i) {
+                        fwdOut->WPS_upper[i] = WPS_U_arr[i].getValue();
+                        fwdOut->WPS_lower[i] = WPS_L_arr[i].getValue();
+                    }
+
+                    // Far-field spectrum per observer
+                    for (int iObs = 0; iObs < nObs; ++iObs) {
+                        Real ff[Nsound];
+                        for (int i = 0; i < NS; ++i) ff[i] = 0.0;
+                        TE_noise_outer<Real>(Uinf / 340.0, Uinf,
+                                             obsX[iObs], obsY[iObs], obsZ[iObs],
+                                             chordScaling / 2.0, chordScaling,
+                                             S, Real(340.0), omArr,
+                                             edgeVel_bot, edgeVel_top,
+                                             WPS_L_arr, WPS_U_arr, ff);
+                        for (int i = 0; i < NS; ++i)
+                            fwdOut->FF_spectra[iObs * NS + i] = ff[i].getValue();
+                    }
+                }
+            } // end verbose block
         }
         return converged;
     }

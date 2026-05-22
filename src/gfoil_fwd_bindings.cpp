@@ -97,7 +97,8 @@ py::dict run_forward_py(py::dict inp, py::object prev_jacobian = py::none()) {
 
     // ── pack result ───────────────────────────────────────────────────────────
     py::dict result;
-    result["conv"] = converged ? 1 : 0;
+    result["conv"]         = converged ? 1 : 0;
+    result["failure_mode"] = fwd.failure_mode;
     if (converged) {
         result["CL"]    = fwd.CL;
         result["CD"]    = fwd.CD;

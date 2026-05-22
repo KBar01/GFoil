@@ -20,11 +20,13 @@ void init_boundary_layer(const Oper&oper, const Foil&foil, Param&param, Isol&iso
 void init_boundary_layer_from_xfoil(const Oper&oper, const Foil&foil, const Param&param, Isol&isol, Vsol&vsol, Glob&glob);
 void build_glob_RV(const Foil&foil, const Vsol&vsol, const Isol&isol, Glob&glob, Param&param);
 void solve_glob(const Foil&foil, const Isol&isol, Glob& glob, Vsol& vsol, const Oper& oper, const int doSolve);
-void update_state(const Oper&oper, const Param&param, Glob&glob, Vsol&vsol);
-void update_transition(Glob &glob, Vsol &vsol, Isol &isol, Param&param);
+Real update_state(const Oper&oper, const Param&param, Glob&glob, Vsol&vsol);
+void update_transition(Glob &glob, Vsol &vsol, Isol &isol, Param &param,
+                       int newtonIter);
 bool solve_coupled(const Oper& oper, const Foil& foil, const Wake& wake,
     Param& param, Vsol& vsol, Isol& isol, Glob& glob,
-    RestartState* restartOut = nullptr);
+    RestartState* restartOut    = nullptr,
+    std::string* failure_mode_out = nullptr);
 
 // Everything else is now a template in a shared .hpp:
 //   colMajorIndex       → inline in real_type.h

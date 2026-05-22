@@ -109,6 +109,45 @@ class OperatingConds:
 
 
 @dataclass
+class VerboseResult:
+    """
+    Rich per-node and acoustic data returned when fwd_run(verbose=True).
+
+    All per-node arrays are length Ncoords (200) and follow the internal
+    panel ordering: lower surface TE -> LE, then upper surface LE -> TE.
+    Physical units assume the chord length supplied in Aerofoil.chord.
+    """
+    # Geometry
+    x: np.ndarray        # panel node x-coords    shape (Ncoords,)
+    y: np.ndarray        # panel node y-coords     shape (Ncoords,)
+
+    # Per-node aero
+    Cp: np.ndarray          # pressure coefficient       shape (Ncoords,)
+    delta_star: np.ndarray  # displacement thickness [m] shape (Ncoords,)
+    theta: np.ndarray       # momentum thickness [m]     shape (Ncoords,)
+    tau_wall: np.ndarray    # wall shear stress [Pa]     shape (Ncoords,)
+    tau_max: np.ndarray     # max shear stress [Pa]      shape (Ncoords,); 0 if laminar
+    Ue: np.ndarray          # BL edge velocity [m/s]     shape (Ncoords,)
+    dpdx: np.ndarray        # pressure gradient [Pa/m]   shape (Ncoords,)
+    is_turb: np.ndarray     # bool turbulence flag       shape (Ncoords,)
+
+    # Transition
+    topTransX: float     # upper surface transition x
+    botTransX: float     # lower surface transition x
+
+    # TE sampling: BL inputs to WPS / Amiet
+    # Order: [theta, delta*, tau_max, Ue, dpdx, tau_wall, delta99]
+    BL_top: np.ndarray   # shape (7,)  upper surface TE BL properties
+    BL_bot: np.ndarray   # shape (7,)  lower surface TE BL properties
+
+    # Acoustic spectra
+    freq_Hz: np.ndarray    # frequency array [Hz]         shape (Nsound,)
+    WPS_upper: np.ndarray  # upper surface WPS [Pa^2/Hz]  shape (Nsound,)
+    WPS_lower: np.ndarray  # lower surface WPS [Pa^2/Hz]  shape (Nsound,)
+    FF_spectra: np.ndarray # far-field PSD [Pa^2/Hz]      shape (nObs, Nsound)
+
+
+@dataclass
 class FwdResult:
     """Returned by fwd_run. Pass to grad_run to get gradients."""
     converged: bool
@@ -127,6 +166,13 @@ class FwdResult:
     # Design point (for Jacobian-validity checks)
     ycoords: Optional[np.ndarray] = None
     alpha:   float = 0.0
+    # Verbose output (None unless fwd_run called with verbose=True)
+    verbose_data: Optional["VerboseResult"] = None
+    # Empty string when converged.  One of:
+    #   "transition_front_oscillation" — ilam stable 15+ iters, residual oscillating
+    #   "diverged"                     — residualNorm >= 1.0 at exit
+    #   "no_convergence"               — catch-all
+    failure_mode: str = ""
 
 
 @dataclass

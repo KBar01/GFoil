@@ -64,7 +64,8 @@ def _call_forward(inp: dict, prev_result: "FwdResult" = None) -> "FwdResult":
         else:
             r = gfoil_cpp.run_forward(inp)
         if r["conv"] == 0:
-            return FwdResult(converged=False)
+            return FwdResult(converged=False,
+                             failure_mode=r.get("failure_mode", ""))
         jac = r["jacobian"]
 
         verb = None
@@ -106,6 +107,7 @@ def _call_forward(inp: dict, prev_result: "FwdResult" = None) -> "FwdResult":
             ycoords=np.array(inp["ycoords"]),
             alpha=inp["alpha_degrees"],
             verbose_data=verb,
+            failure_mode=r.get("failure_mode", ""),
         )
     else:
         cwd = os.getcwd()
@@ -161,6 +163,10 @@ def standard_run(aerofoil: Aerofoil,
     if result.converged:
         return result
 
+    # Preserve the failure_mode from the initial attempt so it can be returned
+    # if all continuation attempts also fail.
+    initial_failure_mode = result.failure_mode
+
     print("Initial run failed. Starting backstepping ...")
 
     alphaDeg       = float(operating.alpha)
@@ -191,7 +197,7 @@ def standard_run(aerofoil: Aerofoil,
 
     if not back_converged:
         print("Backstepping failed. No converged base solution.")
-        return FwdResult(converged=False)
+        return FwdResult(converged=False, failure_mode=initial_failure_mode)
 
     # Step forward toward original alphaDeg, warm-starting each step from the
     # previous converged solution (both pybind11 and subprocess paths).
@@ -227,7 +233,11 @@ def standard_run(aerofoil: Aerofoil,
             fwdalf += step_direction * (stepsize / (2 ** attemptCount))
         overallCount += 1
 
-    return last_converged if completed else FwdResult(converged=False)
+    if completed:
+        return last_converged
+    # Forward stepping failed to reach target alpha — preserve the failure mode
+    # from the original cold-start attempt as context for the caller.
+    return FwdResult(converged=False, failure_mode=initial_failure_mode)
 
 
 def fwd_run(aerofoil: Aerofoil,

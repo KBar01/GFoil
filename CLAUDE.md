@@ -207,6 +207,85 @@ Files modified: `src/update_transition.cpp`, `src/include/data_structs.h`,
 `src/include/run_forward.h`, `src/run_forward.cpp`, `src/main.cpp`,
 `src/gfoil_fwd_bindings.cpp`, `GFoil/inputs.py`, `GFoil/gfoil.py`
 
+### Transition-node jump cap (May 2026) — COMPLETE
+Failure mode: cold-start Newton solve at certain alpha/nCrit combinations
+(confirmed at alpha=7.3°, Re=2×10⁶, nCrit=6) exhausted all 60 outer
+iterations without converging. Residual plateaued at ~1.1–1.3, omega locked
+at 0.001–0.02 for 57 of 60 iterations.
+
+Root cause: at alpha=7.3° the cold-start `init_BL` march left the amplification
+factor 2.34 below ncrit at the transition node (vs 1.44 at alpha=6.92° which
+converges). The large amp residual drove the first few Newton steps to overshoot
+the transition location from node 33 to node 63 in 4 iterations (30-node jump).
+This filled 30 nodes with inconsistent BL state (laminar theta/delta_star,
+turbulent ctau from `get_cttr`), driving the ctau limiter in `update_state`
+(`max ctau change = 0.05/step`) to omega~0.001 for the remainder of the run.
+
+Fix: in `update_transition.cpp`, immediately after `march_amplification` returns
+`ilam`, cap the forward advance at 3 nodes per Newton iteration:
+```cpp
+constexpr int max_transition_jump = 3;
+if (ilam < ilam0) {
+    ilam = std::max(ilam, ilam0 - max_transition_jump);
+}
+```
+The cap only applies to the `ilam < ilam0` branch (transition moving forward /
+more surface becoming turbulent). The `ilam > ilam0` branch (retreat) is
+unchanged — retreating transition removes turbulent nodes, which is benign for
+the ctau limiter.
+
+Verified:
+- alpha=7.3°, nCrit=6 cold-start: converges in 1 call, ~0.58s (was 7 calls,
+  3.45s with backstepping)
+- alpha=6.5°, nCrit=6 cold-start: converges in 1 call, ~0.55s (was failing cold,
+  needed backstepping: 4 calls, 1.46s)
+- alpha=6.92°, 8.0°, 9.0°: unchanged
+- alpha=−4.9° (period-2 fix case): unchanged
+- Regression golden (alpha=2°, nCrit=5): bit-for-bit identical (cap never
+  triggers when transition is stable)
+
+Instrumentation added (guarded by `GFOIL_DEBUG=1` env var, silent by default):
+- `src/coupled.cpp`: per-iteration print of L2 residual, omega, and last-laminar
+  node index for both surfaces, plus INIT state print from `init_BL.cpp`
+- `src/update_state.cpp`: return type changed `void → Real` (returns omega) so
+  `coupled.cpp` can print it without duplicating limiting logic
+- `src/include/main_func.h`: declaration updated to match
+
+Files modified: `src/update_transition.cpp`, `src/coupled.cpp`,
+`src/update_state.cpp`, `src/include/main_func.h`, `src/init_BL.cpp`
+
+---
+
+## Known Limitations
+
+### Cold-start period-2 oscillation (May 2026) — ACCEPTED LIMITATION
+
+Certain alphas near transition-sensitive operating points fail to converge
+on a cold start but converge correctly via warm-start continuation from a
+nearby alpha. Diagnosed cases:
+  Boeing 737 Midspan: α = −3.2°, −3.1°
+  NACA 2414:          α = −5.1° (pre-existing pybind11 crash, separate issue)
+
+Root cause: a large transition retreat at iter 3 (up to 78 nodes) leaves
+ctau values at the transition front far from equilibrium. The 0.05/step
+ctau limiter in update_state prevents convergence within 60 iterations.
+A period-2 oscillation develops once transition stabilises at the correct
+location: the Newton Jacobian makes a sign error in the ctau correction
+at the transition-front node, creating alternating over/undershoots.
+
+Approaches investigated and rejected:
+- Laminar amp cap in init_BL.cpp: correct invariant, kept, but does not
+  fire during the final oscillation phase (amp stays below ncrit then)
+- Symmetric retreat cap in update_transition.cpp: caused regression on
+  Boeing 737 Outboard α=−0.7° (24-node retreat physically necessary there)
+- Residual-adaptive ctau limit in update_state.cpp: relaxing the limit
+  near convergence made oscillation worse (larger ctau step → larger
+  overshoot the next iteration); reverted
+
+Mitigation: `failure_mode = "transition_front_oscillation"` is returned on
+FwdResult so callers can detect the pattern and retry with a warm start.
+The sweep script's continuation logic already handles these cases correctly.
+
 ---
 
 ## Performance Optimisations
@@ -353,8 +432,9 @@ Warm-start in pybind11 continuation path: COMPLETE.
 A-weighting toggle: COMPLETE.
 AIC panel geometry precomputation: COMPLETE.
 Transition period-2 limit cycle fix: COMPLETE.
-Next task: remaining noise-path optimisations (Estar caching, surf-loop
-hoisting), then pyOptSparse integration or forced transition.
+Transition-node jump cap: COMPLETE.
+Next task: pyOptSparse integration or forced transition (cold-start
+oscillation for 2 specific alphas is documented as accepted limitation).
 
 ### Completed since last CLAUDE.md update
 - Transition period-2 limit cycle fix (May 2026):
@@ -409,6 +489,15 @@ hoisting), then pyOptSparse integration or forced transition.
     - R&M equation references added to all function comment blocks
 - Note: golden files were regenerated after these changes (physics
   change — OASPL values shifted). Commit includes new golden files.
+- Transition-node jump cap (May 2026):
+    - See "## Bug Fixes" section above for full details
+    - 3-node-per-iteration cap on forward transition advance in
+      update_transition.cpp (`ilam < ilam0` branch only)
+    - update_state return type changed void→Real to expose omega for
+      GFOIL_DEBUG=1 instrumentation; main_func.h declaration updated
+    - GFOIL_DEBUG=1 env var enables per-iteration residual/omega/ilam
+      diagnostics from coupled.cpp and init state from init_BL.cpp
+    - Golden files unchanged (cap never triggers at golden alpha=2°)
 
 ### Running totals (all refactoring to date)
   Easy tier dedup:       -307 lines net

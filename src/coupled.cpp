@@ -30,7 +30,8 @@ Real euc_norm(const Real* R, int size) {
 
 bool solve_coupled(const Oper& oper, const Foil& foil, const Wake& wake,
     Param& param, Vsol& vsol, Isol& isol, Glob& glob,
-    RestartState* restartOut) {
+    RestartState* restartOut,
+    std::string* failure_mode_out) {
 
     int nNewton = param.niglob;
     bool converged = false;
@@ -63,6 +64,12 @@ bool solve_coupled(const Oper& oper, const Foil& foil, const Wake& wake,
         std::fprintf(stderr,
             "DBG  iter    L2_resid      omega  ilam_bot ilam_top  amp_bot  amp_top\n");
     }
+
+    // Failure-mode tracking: detect period-2 oscillation at the transition front.
+    int ilam_bot_prev = -1, ilam_top_prev = -1;
+    int stable_iters = 0;
+    int oscillation_count = 0;
+    double resid_prev = 1e20;
 
     for (int i = 0; i < 60; ++i) {
 
@@ -130,16 +137,40 @@ bool solve_coupled(const Oper& oper, const Foil& foil, const Wake& wake,
             glob.R[entry] = 0;
         }
         stagpoint_move(isol, glob, foil, wake, vsol);
-        update_transition(glob, vsol, isol, param);
+        update_transition(glob, vsol, isol, param, i);
 
-        if (debugMode) {
+        {
             int ib = find_ilam(0), it = find_ilam(1);
-            double ab = (ib >= 0) ? get_amp(0, ib) : 0.0;
-            double at = (it >= 0) ? get_amp(1, it) : 0.0;
-            std::fprintf(stderr,
-                "DBG  %4d  %12.5e  %8.5f  %8d %8d  %8.4f  %8.4f\n",
-                i, residualNorm.getValue(), omega.getValue(), ib, it, ab, at);
+            if (debugMode) {
+                double ab = (ib >= 0) ? get_amp(0, ib) : 0.0;
+                double at = (it >= 0) ? get_amp(1, it) : 0.0;
+                std::fprintf(stderr,
+                    "DBG  %4d  %12.5e  %8.5f  %8d %8d  %8.4f  %8.4f\n",
+                    i, residualNorm.getValue(), omega.getValue(), ib, it, ab, at);
+            }
+
+            bool ilam_stable = (ib == ilam_bot_prev && it == ilam_top_prev);
+            if (ilam_stable) {
+                ++stable_iters;
+                if (residualNorm.getValue() > resid_prev) ++oscillation_count;
+            } else {
+                stable_iters    = 0;
+                oscillation_count = 0;
+            }
+            ilam_bot_prev = ib;
+            ilam_top_prev = it;
+            resid_prev    = residualNorm.getValue();
         }
+    }
+
+    if (!converged && failure_mode_out != nullptr) {
+        double rn = resid_prev;  // residual at the last iteration
+        if (stable_iters >= 15 && oscillation_count >= 6 && rn < 1.0)
+            *failure_mode_out = "transition_front_oscillation";
+        else if (rn >= 1.0)
+            *failure_mode_out = "diverged";
+        else
+            *failure_mode_out = "no_convergence";
     }
 
     return converged;
