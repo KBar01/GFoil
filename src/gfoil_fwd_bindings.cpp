@@ -13,6 +13,10 @@
 
 namespace py = pybind11;
 
+static py::dict extract_obs(py::dict& d, const std::string& key) {
+    return d;  // unused helper placeholder
+}
+
 py::dict run_forward_py(py::dict inp, py::object prev_jacobian = py::none()) {
     // ── geometry / aero inputs ────────────────────────────────────────────────
     Real inXcoords[Nin] = {0};
@@ -41,7 +45,6 @@ py::dict run_forward_py(py::dict inp, py::object prev_jacobian = py::none()) {
     int  doCps       = inp["returnData"].cast<int>();
     int  aWeighting  = inp.contains("aWeighting") ? inp["aWeighting"].cast<int>() : 0;
     Real ncrithyst   = inp.contains("ncrithyst")  ? Real(inp["ncrithyst"].cast<double>()) : Real(0.2);
-    bool verbose     = inp.contains("verbose")    ? inp["verbose"].cast<bool>() : false;
     std::string model = inp["model"].cast<std::string>();
 
     // ── observer arrays ───────────────────────────────────────────────────────
@@ -90,8 +93,7 @@ py::dict run_forward_py(py::dict inp, py::object prev_jacobian = py::none()) {
         &rst, &fwd,
         warmStartPtr,
         aWeighting,
-        ncrithyst,
-        verbose);
+        ncrithyst);
 
     // ── pack result ───────────────────────────────────────────────────────────
     py::dict result;
@@ -111,28 +113,6 @@ py::dict run_forward_py(py::dict inp, py::object prev_jacobian = py::none()) {
         jac["RVcols"] = rst.RVcols;
         jac["RVnz"]   = rst.RVnz;
         result["jacobian"] = jac;
-
-        if (verbose && fwd.converged) {
-            result["innerFoilX"]  = fwd.innerFoilX;
-            result["innerFoilY"]  = fwd.innerFoilY;
-            result["Cp_dist"]     = fwd.Cp;
-            result["delta_star"]  = fwd.delta_star;
-            result["theta"]       = fwd.theta;
-            result["tau_wall"]    = fwd.tau_wall;
-            result["tau_max"]     = fwd.tau_max;
-            result["Ue"]          = fwd.Ue;
-            result["dpdx"]        = fwd.dpdx;
-            result["is_turb"]     = fwd.is_turb;
-            result["topTransX"]   = fwd.topTransX;
-            result["botTransX"]   = fwd.botTransX;
-            result["BL_top"]      = fwd.BL_top;
-            result["BL_bot"]      = fwd.BL_bot;
-            result["freq_Hz"]     = fwd.freq_Hz;
-            result["WPS_upper"]   = fwd.WPS_upper;
-            result["WPS_lower"]   = fwd.WPS_lower;
-            result["nObs"]        = fwd.nObs;
-            result["FF_spectra"]  = fwd.FF_spectra;
-        }
     }
     return result;
 }

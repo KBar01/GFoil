@@ -9,14 +9,13 @@
 #include "vector_ops.hpp"
 
 
-void update_state(const Oper&oper, const Param&param, Glob&glob,Vsol&vsol) {
+Real update_state(const Oper&oper, const Param&param, Glob&glob, Vsol&vsol) {
     
     constexpr int Nsys = Ncoords+Nwake;
 
     
 
-    // Check for imaginary components (not directly applicable in C++, skip unless you handle complex numbers)
-    // max ctau
+    // collect turbulent nodes and find max ctau
     std::vector<int> It;
     Real ctmax = -1e20;
     for (int i = 0; i < Nsys; ++i) {
@@ -130,4 +129,24 @@ void update_state(const Oper&oper, const Param&param, Glob&glob,Vsol&vsol) {
             glob.U[colMajorIndex(2, i, 4)] = 0.1 * ctmax;
         }
     }
+
+    // Clamp laminar-node amp to ncrit after the Newton increment.
+    //
+    // The Newton update can push amp above ncrit at a laminar node, putting it
+    // in a state that march_amplification's initial invariant (no laminar node
+    // already exceeds ncrit) does not expect.  Clamping here enforces that
+    // invariant before the next march call.  si < 2 only (never wake); loop
+    // breaks at the first turbulent node because Is[si] is ordered stag->TE
+    // with turbulent nodes contiguous from ilam+1 onward.
+    for (int si = 0; si < 2; ++si) {
+        const std::vector<int>& Is = vsol.Is[si];
+        for (int k = 0; k < static_cast<int>(Is.size()); ++k) {
+            int j = Is[k];
+            if (vsol.turb[j]) break;
+            Real& amp = glob.U[colMajorIndex(2, j, 4)];
+            if (amp > param.ncrit) amp = param.ncrit;
+        }
+    }
+
+    return omega;
 }
