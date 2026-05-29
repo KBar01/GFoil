@@ -77,6 +77,10 @@ bool solve_coupled(const Oper& oper, const Foil& foil, const Wake& wake,
     // Averaging the first 3 turbulent nodes damps the multi-node oscillation.
     double prev_ctau[2][3]      = {{-1.0,-1.0,-1.0},{-1.0,-1.0,-1.0}};
 
+    int    nan_skip_count = 0;    // consecutive iters matching the NaN-lock signature
+    double prev_resid_val = -1.0; // residual value from the previous iteration
+    bool   early_exit     = false; // set true when nan_lock forces early termination
+
     for (int i = 0; i < 60; ++i) {
 
         build_glob_RV(foil, vsol, isol, glob, param);
@@ -207,10 +211,31 @@ bool solve_coupled(const Oper& oper, const Foil& foil, const Wake& wake,
                     }
                 }
             }
+
+            // NaN-lock detection: sparselinsolve sets dU=0 when the Jacobian has
+            // NaN/Inf entries.  A single dU=0 skip is benign; but if the BL state
+            // is frozen (no external update can change it), every subsequent
+            // iteration produces the same singular Jacobian and the solver spins
+            // doing nothing.  Signature: NaN residual, or omega==1.0 with residual
+            // not decreasing (dU applied but BL state effectively unchanged).
+            {
+                double cur = residualNorm.getValue();
+                bool stagnant = std::isnan(cur) ||
+                    (omega.getValue() == 1.0 && resid_pos > 3 &&
+                     prev_resid_val >= 0.0 && cur >= prev_resid_val * 0.9999);
+                nan_skip_count = stagnant ? nan_skip_count + 1 : 0;
+                prev_resid_val = cur;
+                if (nan_skip_count >= 3) {
+                    if (failure_mode_out != nullptr)
+                        *failure_mode_out = "nan_lock";
+                    early_exit = true;
+                    break;
+                }
+            }
         }
     }
 
-    if (!converged && failure_mode_out != nullptr) {
+    if (!converged && !early_exit && failure_mode_out != nullptr) {
         double rn = (resid_pos > 0) ? resid_buf[(resid_pos - 1) % 8] : 1.0;
         bool had_osc = (stable_ilam_iters[0] >= 15 || stable_ilam_iters[1] >= 15);
         if (had_osc && rn < 1.0)

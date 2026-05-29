@@ -165,8 +165,8 @@ def standard_run(aerofoil: Aerofoil,
     overallCount = 0
     completed    = False
 
-    while not completed and overallCount <= 6:
-        print(f"Trying forward step to: {fwdalf:.2f}")
+    while not completed and overallCount <= 10:
+        print(f"Trying forward step to: {fwdalf:.3f}")
         is_final = abs(fwdalf - alphaDeg) < 1e-3
         fs_inp = _build_input_dict(aerofoil, operating, acoustics, returnAllOutputs,
                                    alphaDeg=fwdalf,
@@ -187,7 +187,11 @@ def standard_run(aerofoil: Aerofoil,
             if attemptCount > 6:
                 print("Forward stepping failed repeatedly.")
                 break
-            fwdalf += step_direction * (stepsize / (2 ** attemptCount))
+            # Bisect between last converged point and the failing target.
+            # This always probes a new point, avoiding the stuck cycle where
+            # retreating by stepsize/2^n lands on a previously-failed point.
+            last_good = float(last_converged.alpha)
+            fwdalf = last_good + (fwdalf - last_good) * 0.5
         overallCount += 1
 
     if completed:

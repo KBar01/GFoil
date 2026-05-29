@@ -436,6 +436,43 @@ Approaches investigated and rejected:
 `failure_mode = "transition_front_oscillation"` is returned so callers can
 detect it, but warm-start continuation cannot rescue this case.
 
+### Additional multi-node BL attractor cases — NACA 0012, nCrit=5 (May 2026) — ACCEPTED LIMITATIONS
+
+Two further cold-start failure modes identified and characterised on NACA 0012,
+nCrit=5 during investigation of newly-backstepping angles.
+
+**α=±2.5° — NaN-lock (fast exit implemented):**
+The Newton path reaches ilam_top=44 with amp≈4.91 at iteration 3, placing the
+eN ODE in a near-critical state that produces a singular BL Jacobian block
+(confirmed at fixed entries: rows 180/417, cols 244/552). The sparselinsolve
+NaN fix sets dU=0, but stagpoint_move and update_transition see the same frozen
+BL state each time and produce the same output — every subsequent iteration
+re-triggers the same singular Jacobian. Previously burned all 56 remaining
+iterations returning no_convergence. Now returns failure_mode="nan_lock" after
+7 iterations (see NaN-lock early exit fix). Warm-start from a neighbouring
+alpha converges without issue. Most likely cause: the period-2 fix in
+update_transition.cpp (ilam==ilam0 branch) shifted the iter-3 BL state to
+this NaN-triggering configuration.
+
+**α=4.7° — multi-node BL attractor (same class as NACA 0008-34):**
+Distinct from the single-node period-2 oscillation. omega drops to 0.001 by
+iteration 7 with ilam stable from iteration 1 — the ctau limiter is saturated
+before the freeze fires. Both surfaces independently satisfy the primary freeze
+condition at iteration 10 (stable_ilam_iters=9 ≥ 8, and current residual 0.171
+exceeds iter-2 oldest/2 = 0.141). Co-activation plays no role — both surfaces
+freeze simultaneously via the primary condition regardless of the co-activation
+threshold. Confirmed by disabling co-activation entirely: identical failure.
+The freeze damps ctau oscillations but the residual plateaus at ~0.17 (340×
+larger than NACA 0008-34 which reached ~5×10⁻⁴). Root cause: the Newton step
+direction at this BL state produces large ctau corrections that the 0.05/step
+limiter caps every iteration, preventing net progress. Warm-start from
+α=4.5° or α=5.0° converges correctly. failure_mode="transition_front_oscillation"
+is returned; backstepping continuation handles it automatically.
+
+Do NOT attempt to fix α=4.7° via the co-activation threshold — the two surfaces
+freeze simultaneously through the primary condition, making the co-activation
+threshold irrelevant.
+
 ### pybind11 in-process segfault fix (May 2026) — COMPLETE
 
 **Symptom**: `convergence_sweep.py` (using the pybind11 in-process path) crashed
@@ -636,6 +673,10 @@ pybind11 in-process segfault fix: COMPLETE.
   - SparseLU::compute NaN failure now handled gracefully (dU=0 skip iteration)
   - Diagnostic available under GFOIL_DEBUG=1; silent by default
   - Sweep: 84.6% cold / 98.8% total; regression: 10/10 at 0.000e+00
+NaN-lock early exit: COMPLETE.
+  - α=±2.5° exits after 7 iterations with failure_mode='nan_lock' instead of 59
+  - Total convergence rate unchanged; wall time reduced for NaN-lock cases
+  - Regression: 10/10 at 0.000e+00
 Next task: pyOptSparse integration or forced transition (cold-start
   oscillation for 2+ specific alphas is documented as accepted limitation).
 
@@ -732,6 +773,23 @@ Next task: pyOptSparse integration or forced transition (cold-start
     - Diagnostic (NaN count, location) gated on GFOIL_DEBUG=1; silent by default
     - Sweep improved: 84.6% cold / 98.8% total; regression: 10/10 at 0.000e+00
     - Files modified: src/include/sparselinsolve.hpp
+- NaN-lock early exit (May 2026):
+    - Failure mode: at α=±2.5°, nCrit=5, the BL Jacobian goes singular when
+      the eN ODE reaches near-critical state (amp≈4.91, ilam_top=44) at iter 3.
+      sparselinsolve NaN fix correctly sets dU=0, but every subsequent iteration
+      produces the same NaN-triggering Jacobian — frozen BL state means
+      stagpoint_move and update_transition always produce the same output.
+      Previously ran all 56 remaining iterations doing nothing before returning
+      no_convergence.
+    - Fix: added nan_skip_count counter (plain int, no CoDi risk) and
+      prev_resid_val (plain double) to solve_coupled loop. Detects 3 consecutive
+      stagnant iterations: residualNorm is NaN, or omega==1.0 with residual not
+      decreasing by >0.01%. Returns early with failure_mode="nan_lock". Final
+      failure-mode classifier guarded with !early_exit to prevent overwrite.
+    - Effect: α=±2.5° exits after 7 iterations instead of 59. Total convergence
+      rate unchanged (cases still need warm-start continuation). NaN entry
+      confirmed at same fixed Jacobian location every time, confirming frozen state.
+    - Files modified: src/coupled.cpp
 
 ### Running totals (all refactoring to date)
   Easy tier dedup:       -307 lines net
