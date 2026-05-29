@@ -1,0 +1,20 @@
+[build-system]
+requires = ["scikit-build-core>=0.9", "pybind11>=2.13"]
+build-backend = "scikit_build_core.build"
+
+[project]
+name = "GFoil"
+version = "0.1.0"
+description = "Viscous-inviscid aerofoil solver with pybind11 Python interface"
+requires-python = ">=3.8"
+dependencies = ["numpy"]
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[tool.scikit-build]
+cmake.build-type = "Release"
+wheel.packages = ["GFoil"]
+
+[tool.scikit-build.cmake.define]
+DO_BL_GRADIENT = "OFF"

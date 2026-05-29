@@ -23,6 +23,7 @@ FetchContent_Declare(
   eigen
   GIT_REPOSITORY https://gitlab.com/libeigen/eigen.git
   GIT_TAG 3.4.0
+  EXCLUDE_FROM_ALL
 )
 FetchContent_MakeAvailable(eigen)
 
@@ -30,10 +31,14 @@ FetchContent_Declare(
   codipack
   GIT_REPOSITORY https://github.com/SciCompKL/CoDiPack.git
   GIT_TAG master
+  EXCLUDE_FROM_ALL
 )
 FetchContent_MakeAvailable(codipack)
 
-FetchContent_Declare(json URL https://github.com/nlohmann/json/releases/download/v3.12.0/json.tar.xz)
+FetchContent_Declare(json
+  URL https://github.com/nlohmann/json/releases/download/v3.12.0/json.tar.xz
+  EXCLUDE_FROM_ALL
+)
 FetchContent_MakeAvailable(json)
 
 #############################################
@@ -97,14 +102,18 @@ endif()
 
 ######## pybind11 module ########
 
-find_package(Python3 COMPONENTS Interpreter Development REQUIRED)
-
-FetchContent_Declare(
-  pybind11
-  GIT_REPOSITORY https://github.com/pybind/pybind11.git
-  GIT_TAG        v2.13.6
-)
-FetchContent_MakeAvailable(pybind11)
+# Prefer the pip-installed pybind11 (scikit-build-core advertises it via
+# pybind11_DIR); fall back to FetchContent for standalone cmake builds.
+find_package(pybind11 CONFIG QUIET)
+if(NOT pybind11_FOUND)
+    find_package(Python3 COMPONENTS Interpreter Development REQUIRED)
+    FetchContent_Declare(
+      pybind11
+      GIT_REPOSITORY https://github.com/pybind/pybind11.git
+      GIT_TAG        v2.13.6
+    )
+    FetchContent_MakeAvailable(pybind11)
+endif()
 
 # All src/ sources except main.cpp (run_forward.cpp, coupled.cpp, etc.)
 # SOURCES is already defined above.
@@ -139,7 +148,11 @@ if(CMAKE_BUILD_TYPE STREQUAL "Release")
   target_compile_options(gfoil_cpp PRIVATE -O2 -fno-fast-math)
 endif()
 
-# Place the .so in the Python package directory so `from . import gfoil_cpp` works
+# Place the .so in the Python package directory for in-tree development builds.
 set_target_properties(gfoil_cpp PROPERTIES
     LIBRARY_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/GFoil"
 )
+
+# scikit-build-core packages whatever is installed via install(); the
+# LIBRARY_OUTPUT_DIRECTORY above covers manual cmake builds only.
+install(TARGETS gfoil_cpp DESTINATION GFoil)
