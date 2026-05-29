@@ -191,8 +191,8 @@ Verified:
 `ncrithyst` parameter: added to `Param` in `data_structs.h` (default 0.2) and
 plumbed through the full stack (`run_forward.h`, `run_forward.cpp`, `main.cpp`,
 `gfoil_fwd_bindings.cpp`, `OperatingConds` in `inputs.py`, `_build_input_dict`
-in `gfoil.py`) but not yet actively used in any computation. Retained as a
-future tuning knob for the brief's originally-proposed hysteresis approach.
+in `gfoil.py`). Activated as a single-node retreat gate in `update_transition.cpp`
+(see "Bug Fixes — ncrithyst" entry). The regression test uses `ncrithyst=0`.
 
 **CRITICAL CoDi constraint discovered:** do NOT add `Real` fields with default
 initializers to `Param_t<Real>` in `data_structs_shared.hpp`. `Param_t<Real>`
@@ -206,6 +206,51 @@ crashed against them). New golden files pass 10/10 at 0.00e+00 error.
 Files modified: `src/update_transition.cpp`, `src/include/data_structs.h`,
 `src/include/run_forward.h`, `src/run_forward.cpp`, `src/main.cpp`,
 `src/gfoil_fwd_bindings.cpp`, `GFoil/inputs.py`, `GFoil/gfoil.py`
+
+### Ctau freeze cycle-detection mechanism (May 2026) — COMPLETE
+Failure mode: at transition-sensitive operating points, the Newton solver
+can enter a period-N limit cycle after transition stabilises. Residual
+oscillates indefinitely above tolerance even though the transition node
+index (ilam) is no longer moving.
+
+Mechanism: when (a) ilam has been stable for ≥8 consecutive iterations
+AND (b) the L2 residual has not improved by 2× over the last 8 iterations
+(circular residual buffer in `coupled.cpp`), a per-surface `ctau_freeze`
+flag is set. While frozen, `update_transition.cpp` averages the ctau at
+the first turbulent node (Is[ilam0+1]) between its current Newton-updated
+value and the previous Newton-updated value, storing the pre-averaging value
+so a period-2 cycle collapses after exactly 2 freeze iterations.
+
+Co-activation: once either surface freezes, the partner surface is also
+frozen if it has had ≥4 consecutive stable-ilam iterations (prevents
+cross-coupling oscillations when one surface cycles while the other is frozen).
+
+Release: freeze is maintained until ilam moves (transition shifts) or the
+solver converges. Releasing early resets the averaged history and restarts
+the same cycle.
+
+CoDi compatibility: freeze detection uses only plain doubles (resid_buf,
+prev_ctau, ilam counters) — no getValue() on design variables. The single
+getValue() call inside the freeze block reads ctau at Is[ilam0+1] and writes
+it back as Real((prev+curr)*0.5), which detaches that node's ctau from the
+CoDi tape only when freeze is active. For the regression golden case (alpha=2°,
+ncrit=5) the freeze never activates (converges in 10 iterations), so the AD
+computation is unaffected.
+
+Effectiveness: the freeze successfully resolves single-node ctau oscillations
+(period-2 cases such as Boeing 737 Midspan α=−3.1°/−3.2°) by collapsing the
+cycle after exactly 2 averaging iterations. It cannot break multi-node coupled
+BL attractors of the type originally diagnosed at NACA 0008-34 α=−2.6° (see
+Known Limitations); that case was subsequently resolved by the ncrithyst
+hysteresis activation (see ncrithyst entry below).
+
+Files modified: `src/coupled.cpp`, `src/update_transition.cpp`,
+`src/include/main_func.h`
+
+Regression test: golden files regenerated after restoring input.json to
+alpha=2°, ncrit=5.0, NACA 0012 (n0012_sharp.dat), observer [0, 3, 0.5].
+10/10 at 0.000e+00. Note: OASPL in this test depends only on observer x and z
+(not y) since newAmiet.hpp uses mid-span formulation (y ignored in S0).
 
 ### Transition-node jump cap (May 2026) — COMPLETE
 Failure mode: cold-start Newton solve at certain alpha/nCrit combinations
@@ -254,6 +299,70 @@ Instrumentation added (guarded by `GFOIL_DEBUG=1` env var, silent by default):
 Files modified: `src/update_transition.cpp`, `src/coupled.cpp`,
 `src/update_state.cpp`, `src/include/main_func.h`, `src/init_BL.cpp`
 
+### ncrithyst transition hysteresis activation (May 2026) — COMPLETE
+`ncrithyst` (default 0.2) was plumbed through the full stack when the period-2
+fix was implemented but left inactive (unused in any computation).
+
+Design constraint (derived from testing): applying hysteresis as a threshold
+offset inside `march_amplification` shifts the ODE solution — physically wrong.
+Applying it as a gate on BOTH advance and retreat in `update_transition` breaks
+convergence because `amp_break` is always only slightly above `ncrit` (set by
+the ODE), so the `amp_break > ncrit+ncrithyst` advance gate fires at every
+normal convergence step.
+
+Correct implementation: `march_amplification` uses `param.ncrit` exactly
+(unchanged). The gate is applied only to **single-node retreats** in
+`update_transition` — the minimum change that damps spurious 1-node
+laminar-recovery oscillations without affecting any advance direction:
+
+```cpp
+// march_amplification: unchanged ncrit threshold; amp_break output added
+if (U2[2] > param.ncrit) {
+    if (amp_break) *amp_break = U2[2];
+    break;
+}
+
+// update_transition: gate only 1-node retreats
+} else if (ilam > ilam0 && (ilam - ilam0 == 1) && (ilam0 + 1 < nSurfPoints)) {
+    Real amp_first_turb = glob.U[colMajorIndex(2, Is[ilam0+1], 4)];
+    if (amp_first_turb >= param.ncrit - param.ncrithyst) {
+        ilam = ilam0;  // hysteresis: suppress spurious 1-node retreat
+    }
+}
+```
+
+Rationale: advance is ODE-authoritative (march already returns the physically
+correct transition node). Only retreat needs damping: a single-node laminar
+recovery oscillation where amp barely drops below ncrit is suppressed when the
+node's virtual amp (from march) is still within the hysteresis band. Multi-node
+retreats needed for convergence from an off-equilibrium initial state are always
+unrestricted.
+
+With `ncrithyst=0`: gate condition `amp_first_turb >= ncrit - 0 = ncrit` is
+essentially never met (amp < ncrit by march construction), giving bit-for-bit
+identical results to pre-ncrithyst. The regression test uses `ncrithyst=0` in
+`input.json` for this reason.
+
+Verified (NACA 0012 unless noted, `ncrithyst=0` unless noted):
+- alpha=2°, ncrit=5, ncrithyst=0 (regression golden): bit-for-bit identical to
+  pre-ncrithyst. 10/10 at 0.000e+00 against restored golden files.
+- alpha=2°, ncrit=5, ncrithyst=0.2: converges; CL shifts by ~1×10⁻³ rel (retreat
+  gate alters convergence path slightly near ncrit=5). Expected physical effect.
+- alpha=−4.9°, ncrit=5, ncrithyst=0.2: converges; CL matches ncrithyst=0 to ~2×10⁻¹¹
+  rel (retreat gate never fires for this case).
+- alpha=7.3°, ncrit=6, ncrithyst=0.2: converges; CL shifts by ~3×10⁻³ rel (retreat
+  gate fires on some convergence iterations near this ncrit).
+- NACA 0008-34, alpha=−2.6°, ncrit=9: fails both with and without ncrithyst.
+  This case is the genuine multi-node coupled BL attractor (period-14 cycle).
+  The correct hysteresis implementation does not resolve it (see Known Limitations).
+
+Full 12-aerofoil sweep (Re=2e6, Ma=0, ncrit=9, ncrithyst=0.2, 1452 cases):
+  Cold converged: 83.8%  (1217/1452)
+  Total converged: 98.8% (1434/1452)
+  Failures: 18
+
+Files modified: `src/update_transition.cpp`, `tests/golden/*.json`
+
 ---
 
 ## Known Limitations
@@ -285,6 +394,86 @@ Approaches investigated and rejected:
 Mitigation: `failure_mode = "transition_front_oscillation"` is returned on
 FwdResult so callers can detect the pattern and retry with a warm start.
 The sweep script's continuation logic already handles these cases correctly.
+
+### Ctau multi-node coupled BL attractor — NACA 0008-34 α=−2.6° (May 2026) — GENUINE FAILURE
+
+**Distinct from cold-start period-2 oscillation** (see above). The cold-start
+oscillation cases (Boeing 737 Midspan α=−3.1°/−3.2°) are characterised by:
+  - A large initial transition retreat that leaves ctau far from equilibrium
+  - Single-node ctau cycling at the transition front after ilam stabilises
+  - Resolution by warm-start continuation from a neighbouring alpha
+
+NACA 0008-34 α=−2.6° is categorically different:
+  - Warm starts from α=−2.7° AND α=−2.5° both fail identically — this is
+    confirmed NOT cold-start sensitivity
+  - The transition node settles normally (no large initial retreat), then
+    a stable period-14 limit cycle develops within the final Newton approach phase
+  - The cycle is a multi-node coupled BL attractor: multiple turbulent nodes near
+    the transition front oscillate simultaneously through the Newton Jacobian, not
+    a single-node ctau oscillation at Is[ilam0+1]
+  - The ctau freeze activates correctly on both surfaces and reduces cycle
+    amplitude from ~1×10⁻² to ~5×10⁻⁴, but the minimum residual ~5×10⁻⁴ does
+    NOT decrease across freeze iterations — it is a true stable attractor
+  - Single-node ctau intervention at Is[ilam0+1] is insufficient because the
+    coupling involves BL state at multiple coupled nodes simultaneously
+  - The ncrithyst retreat hysteresis does not resolve it: the period-14 cycle
+    involves a multi-node coupled attractor, not a single-node retreat oscillation
+
+Root cause: at this alpha/ncrit combination the Newton Jacobian simultaneously
+makes a sign error in the ctau correction at multiple turbulent nodes near the
+transition front, creating correlated alternating overshoots that single-node
+averaging cannot decouple.
+
+Approaches investigated and rejected:
+- get_cttr anchor for transition-front ctau: oscillates because get_cttr reads
+  the already-oscillating BL state (theta/ds/ue) from glob.U
+- ctau averaging over 3 nodes (instead of 1): made things worse (minima ~4×10⁻³
+  vs ~5×10⁻⁴ for 1-node averaging)
+- 1e-3 residual release of freeze: re-triggers the cycle immediately
+- ncrithyst hysteresis activation: correctly gates single-node retreats but
+  cannot decouple the multi-node Jacobian coupling
+
+`failure_mode = "transition_front_oscillation"` is returned so callers can
+detect it, but warm-start continuation cannot rescue this case.
+
+### pybind11 in-process segfault fix (May 2026) — COMPLETE
+
+**Symptom**: `convergence_sweep.py` (using the pybind11 in-process path) crashed
+deterministically around case 77 with a SIGSEGV inside
+`Eigen::SparseLU::solve()` / `MappedSuperNodalMatrix::solveInPlace()`.
+The subprocess path (standalone `GFoil_fwd_codi`) did not crash because each
+call is an isolated process.
+
+**Root cause**: In `solve_sys_sparse` (`src/include/sparselinsolve.hpp`), a call to
+`lu.compute(A)` with a matrix containing NaN/Inf entries fails silently with
+`info = NumericalIssue`. The subsequent `lu.solve(b)` then dereferences a null
+`supToCol()` pointer from the uninitialised factorisation internals, causing
+the SEGV.
+
+**Origin of NaN in the Jacobian**: During Newton iterations for certain
+aerofoil/alpha combinations, BL residual station computations produce NaN in
+the Jacobian blocks at specific nodes (typically consistent across cases: always
+the same consecutive-node pair). The NaN is transient — the Newton solver
+recovers over subsequent iterations via `stagpoint_move`/`update_transition`
+state updates even when `dU=0` — and does not indicate a fundamental physics
+failure. It is a pre-existing BL-solver behaviour, not caused by these changes.
+
+**Fix** (`src/include/sparselinsolve.hpp`):
+- Added `#include <cstdio>` and `#include <cmath>`
+- After `lu.compute(A)`, check `lu.info() != Eigen::Success`
+- On failure: set `glob.dU[i] = 0` for all i (no Newton step this iteration)
+  and return early; tape registration path is skipped correctly
+- Diagnostic (NaN count, location, out-of-bounds indices) printed only when
+  `GFOIL_DEBUG=1`, silent in production
+
+**Effect**: The Newton loop skips dU application for NaN iterations; the BL
+solver recovers through transition/stagnation point state updates and converges
+normally on subsequent iterations. No loss of convergence rate in practice:
+sweep statistics improved to 84.6% cold / 98.8% total (≥ prior 83.8%/98.8%).
+
+Regression: 10/10 at 0.000e+00 (golden test case never triggers NaN).
+
+File modified: `src/include/sparselinsolve.hpp`
 
 ---
 
@@ -339,6 +528,8 @@ all three gradient arrays + alpha scalars (AD).
 
 Golden files: tests/golden/fwd_scalars.json, ad_scalars.json,
               ad_gradients.json
+Test input:   tests/input.json  (committed; NACA 0012, alpha=2°, ncrit=5, ncrithyst=0)
+              regression_test.py copies this to repo root before running binaries.
 Tolerance: 1e-8 relative.
 
 Note: both binaries exit with code 1 even on success. The test script
@@ -433,15 +624,27 @@ A-weighting toggle: COMPLETE.
 AIC panel geometry precomputation: COMPLETE.
 Transition period-2 limit cycle fix: COMPLETE.
 Transition-node jump cap: COMPLETE.
+Ctau freeze cycle-detection mechanism: COMPLETE (see Bug Fixes).
+  - Detects and partially mitigates period-N ctau oscillations at stable
+    transition fronts.
+ncrithyst hysteresis activation: COMPLETE (see Bug Fixes).
+  - march_amplification uses ncrit exactly; only single-node retreats gated.
+  - Regression test uses ncrithyst=0 (bit-for-bit identical to pre-ncrithyst).
+  - Sweep (ncrithyst=0.2, ncrit=9): 83.8% cold / 98.8% total / 18 failures.
+  - NACA 0008-34 α=−2.6° remains a genuine failure (multi-node attractor).
+pybind11 in-process segfault fix: COMPLETE.
+  - SparseLU::compute NaN failure now handled gracefully (dU=0 skip iteration)
+  - Diagnostic available under GFOIL_DEBUG=1; silent by default
+  - Sweep: 84.6% cold / 98.8% total; regression: 10/10 at 0.000e+00
 Next task: pyOptSparse integration or forced transition (cold-start
-oscillation for 2 specific alphas is documented as accepted limitation).
+  oscillation for 2+ specific alphas is documented as accepted limitation).
 
 ### Completed since last CLAUDE.md update
 - Transition period-2 limit cycle fix (May 2026):
     - See "## Bug Fixes" section above for full details
     - One branch changed in update_transition.cpp (`ilam == ilam0`: restore
       only turbulent ctau from sa[], keep march-computed laminar amps)
-    - ncrithyst plumbed through stack (default 0.2, unused in computation)
+    - ncrithyst plumbed through stack (default 0.2, activated in subsequent change)
     - CRITICAL: ncrithyst NOT in Param_t<Real> — spurious tape entry risk
     - Golden files regenerated (stale; now 10/10 at 0.00e+00)
 - AIC panel geometry precomputation (May 2026):
@@ -498,6 +701,37 @@ oscillation for 2 specific alphas is documented as accepted limitation).
     - GFOIL_DEBUG=1 env var enables per-iteration residual/omega/ilam
       diagnostics from coupled.cpp and init state from init_BL.cpp
     - Golden files unchanged (cap never triggers at golden alpha=2°)
+- Ctau freeze cycle-detection mechanism (May 2026):
+    - See "## Bug Fixes" section above for full details
+    - Circular residual buffer (8 entries) + stable_ilam counters in coupled.cpp
+    - freeze flag activates when ilam stable ≥8 iters + residual not improving 2×
+    - In ilam==ilam0 branch: when frozen, average ctau at Is[ilam0+1] between
+      current and previous Newton values (store pre-averaging value)
+    - Co-activation: if one surface frozen + partner stable ≥4 iters, freeze both
+    - Reduces cycle amplitude; NACA 0008-34 α=−2.6° attractor remains genuine failure
+    - CoDi safe: getValue() only at Is[ilam0+1] when freeze is active
+    - Golden files regenerated: input.json restored to alpha=2°, ncrit=5,
+      NACA 0012 (n0012_sharp.dat), observer [0,3,0.5]; 10/10 at 0.000e+00
+    - Files modified: src/coupled.cpp, src/update_transition.cpp,
+      src/include/main_func.h, tests/golden/*.json
+- ncrithyst hysteresis activation (May 2026):
+    - See "## Bug Fixes — ncrithyst" entry above for full design rationale
+    - march_amplification: ncrit threshold unchanged; Real* amp_break output added
+    - update_transition: single-node retreat gate added (ilam > ilam0 and
+      ilam-ilam0==1): blocks retreat if amp_first_turb >= ncrit-ncrithyst
+    - Advance direction: no gate — march is ODE-authoritative for advance
+    - Regression: input.json uses ncrithyst=0 for bit-for-bit identity; 10/10
+    - Sweep (ncrithyst=0.2, ncrit=9): 83.8% cold / 98.8% total / 18 failures
+    - NACA 0008-34 α=−2.6° unchanged: remains genuine failure
+    - Files modified: src/update_transition.cpp, tests/golden/*.json
+- pybind11 in-process segfault fix (May 2026):
+    - Root cause: NaN/Inf BL Jacobian entries → SparseLU::compute fails → null
+      supToCol() → SEGV in lu.solve(b). Pre-existing NaN in BL residual blocks
+      at certain operating conditions; previously masked in subprocess path.
+    - Fix: check lu.info() after lu.compute(A); on failure set dU=0, return early
+    - Diagnostic (NaN count, location) gated on GFOIL_DEBUG=1; silent by default
+    - Sweep improved: 84.6% cold / 98.8% total; regression: 10/10 at 0.000e+00
+    - Files modified: src/include/sparselinsolve.hpp
 
 ### Running totals (all refactoring to date)
   Easy tier dedup:       -307 lines net

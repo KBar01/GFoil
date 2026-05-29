@@ -1,19 +1,8 @@
-import json
-import subprocess
 import numpy as np
 import os
 from .inputs import Aerofoil, Acoustics, OperatingConds, WPSinfo, FwdResult, GradResult, VerboseResult
 
-# Try the compiled pybind11 module first (installed into this package dir).
-# Falls back to the standalone binaries via subprocess if not available.
-try:
-    from . import gfoil_cpp
-    _USE_BINDINGS = True
-except ImportError:
-    _USE_BINDINGS = False
-    BIN_DIR = os.path.join(os.path.dirname(__file__), "bin")
-    EXEC_FWD_codi = os.path.join(BIN_DIR, "GFoil_fwd_codi")
-    EXEC_AD       = os.path.join(BIN_DIR, "GFoil_AD")
+from . import gfoil_cpp
 
 
 def _build_input_dict(aerofoil: Aerofoil,
@@ -56,96 +45,64 @@ def _build_input_dict(aerofoil: Aerofoil,
 
 
 def _call_forward(inp: dict, prev_result: "FwdResult" = None) -> "FwdResult":
-    """Single forward solve — pybind11 or subprocess. Returns FwdResult."""
-    if _USE_BINDINGS:
-        if prev_result is not None and prev_result.converged:
-            jac_in = {"states": prev_result.states, "turb": prev_result.turb}
-            r = gfoil_cpp.run_forward(inp, jac_in)
-        else:
-            r = gfoil_cpp.run_forward(inp)
-        if r["conv"] == 0:
-            return FwdResult(converged=False,
-                             failure_mode=r.get("failure_mode", ""))
-        jac = r["jacobian"]
-
-        verb = None
-        if r.get("innerFoilX") is not None:
-            try:
-                NS   = len(r["freq_Hz"])
-                nObs = r["nObs"]
-                verb = VerboseResult(
-                    x          = np.array(r["innerFoilX"]),
-                    y          = np.array(r["innerFoilY"]),
-                    Cp         = np.array(r["Cp_dist"]),
-                    delta_star = np.array(r["delta_star"]),
-                    theta      = np.array(r["theta"]),
-                    tau_wall   = np.array(r["tau_wall"]),
-                    tau_max    = np.array(r["tau_max"]),
-                    Ue         = np.array(r["Ue"]),
-                    dpdx       = np.array(r["dpdx"]),
-                    is_turb    = np.array(r["is_turb"], dtype=bool),
-                    topTransX  = float(r["topTransX"]),
-                    botTransX  = float(r["botTransX"]),
-                    BL_top     = np.array(r["BL_top"]),
-                    BL_bot     = np.array(r["BL_bot"]),
-                    freq_Hz    = np.array(r["freq_Hz"]),
-                    WPS_upper  = np.array(r["WPS_upper"]),
-                    WPS_lower  = np.array(r["WPS_lower"]),
-                    FF_spectra = np.array(r["FF_spectra"]).reshape(nObs, NS),
-                )
-            except (KeyError, TypeError, ValueError) as e:
-                raise RuntimeError(
-                    f"verbose output from C++ solver is incomplete or malformed: {e}"
-                ) from e
-
-        return FwdResult(
-            converged=True,
-            CL=r["CL"], CD=r["CD"], CM=r["CM"], OASPL=r["OASPL"],
-            states=jac["states"], turb=jac["turb"], stag=jac["stag"],
-            RVvals=jac["RVvals"], RVrows=jac["RVrows"], RVcols=jac["RVcols"],
-            RVnz=jac["RVnz"],
-            ycoords=np.array(inp["ycoords"]),
-            alpha=inp["alpha_degrees"],
-            verbose_data=verb,
-            failure_mode=r.get("failure_mode", ""),
-        )
+    """Single forward solve via pybind11. Returns FwdResult."""
+    if prev_result is not None and prev_result.converged:
+        jac_in = {"states": prev_result.states, "turb": prev_result.turb}
+        r = gfoil_cpp.run_forward(inp, jac_in)
     else:
-        cwd = os.getcwd()
-        # subprocess warm-start: write restart.json from prev_result if available
-        if prev_result is not None and prev_result.converged:
-            rs_out = {
-                "states": prev_result.states,
-                "turb":   prev_result.turb,
-                "stag":   prev_result.stag,
-                "RVvals": prev_result.RVvals,
-                "RVrows": prev_result.RVrows,
-                "RVcols": prev_result.RVcols,
-                "RVnz":   prev_result.RVnz,
-            }
-            with open(os.path.join(cwd, "restart.json"), "w") as f:
-                json.dump(rs_out, f)
-            inp = dict(inp)
-            inp["restart"] = 1
-        with open(os.path.join(cwd, "input.json"), "w") as f:
-            json.dump(inp, f)
-        result = subprocess.run([EXEC_FWD_codi], cwd=cwd, capture_output=True, text=True)
-        if result.returncode != 1:
-            return FwdResult(converged=False)
-        with open(os.path.join(cwd, "out.json")) as f:
-            out = json.load(f)
-        if out.get("conv", 0) == 0:
-            return FwdResult(converged=False)
-        with open(os.path.join(cwd, "restart.json")) as f:
-            rs = json.load(f)
+        r = gfoil_cpp.run_forward(inp)
+
+    if r["conv"] == 0:
         return FwdResult(
-            converged=True,
-            CL=out["CL"], CD=out["CD"], CM=out["CM"], OASPL=out["OASPL"],
-            states=rs["states"], turb=rs["turb"], stag=rs["stag"],
-            RVvals=rs["RVvals"], RVrows=rs["RVrows"], RVcols=rs["RVcols"],
-            RVnz=rs["RVnz"],
-            ycoords=np.array(inp["ycoords"]),
-            alpha=inp["alpha_degrees"],
+            converged=False,
+            failure_mode=r.get("failure_mode", ""),
+            newton_iterations=r.get("newton_iterations", 0),
         )
+
+    jac = r["jacobian"]
+
+    verb = None
+    if r.get("innerFoilX") is not None:
+        try:
+            NS   = len(r["freq_Hz"])
+            nObs = r["nObs"]
+            verb = VerboseResult(
+                x          = np.array(r["innerFoilX"]),
+                y          = np.array(r["innerFoilY"]),
+                Cp         = np.array(r["Cp_dist"]),
+                delta_star = np.array(r["delta_star"]),
+                theta      = np.array(r["theta"]),
+                tau_wall   = np.array(r["tau_wall"]),
+                tau_max    = np.array(r["tau_max"]),
+                Ue         = np.array(r["Ue"]),
+                dpdx       = np.array(r["dpdx"]),
+                is_turb    = np.array(r["is_turb"], dtype=bool),
+                topTransX  = float(r["topTransX"]),
+                botTransX  = float(r["botTransX"]),
+                BL_top     = np.array(r["BL_top"]),
+                BL_bot     = np.array(r["BL_bot"]),
+                freq_Hz    = np.array(r["freq_Hz"]),
+                WPS_upper  = np.array(r["WPS_upper"]),
+                WPS_lower  = np.array(r["WPS_lower"]),
+                FF_spectra = np.array(r["FF_spectra"]).reshape(nObs, NS),
+            )
+        except (KeyError, TypeError, ValueError) as e:
+            raise RuntimeError(
+                f"verbose output from C++ solver is incomplete or malformed: {e}"
+            ) from e
+
+    return FwdResult(
+        converged=True,
+        CL=r["CL"], CD=r["CD"], CM=r["CM"], OASPL=r["OASPL"],
+        states=jac["states"], turb=jac["turb"], stag=jac["stag"],
+        RVvals=jac["RVvals"], RVrows=jac["RVrows"], RVcols=jac["RVcols"],
+        RVnz=jac["RVnz"],
+        ycoords=np.array(inp["ycoords"]),
+        alpha=inp["alpha_degrees"],
+        verbose_data=verb,
+        failure_mode=r.get("failure_mode", ""),
+        newton_iterations=r.get("newton_iterations", 0),
+    )
 
 
 def standard_run(aerofoil: Aerofoil,
@@ -200,7 +157,7 @@ def standard_run(aerofoil: Aerofoil,
         return FwdResult(converged=False, failure_mode=initial_failure_mode)
 
     # Step forward toward original alphaDeg, warm-starting each step from the
-    # previous converged solution (both pybind11 and subprocess paths).
+    # previous converged solution.
     print("Starting forward stepping...")
     stepsize     = 0.5
     fwdalf       = tempalf - step_direction * stepsize
@@ -235,8 +192,6 @@ def standard_run(aerofoil: Aerofoil,
 
     if completed:
         return last_converged
-    # Forward stepping failed to reach target alpha — preserve the failure mode
-    # from the original cold-start attempt as context for the caller.
     return FwdResult(converged=False, failure_mode=initial_failure_mode)
 
 
@@ -300,43 +255,24 @@ def grad_run(fwd_result: FwdResult,
         "RVnz":   fwd_result.RVnz,
     }
 
-    if _USE_BINDINGS:
-        g = gfoil_cpp.run_AD(inp, jacobian)
-        return GradResult(
-            converged=True,
-            dCL_dy=np.array(g["dCL_dy"]),
-            dCD_dy=np.array(g["dCD_dy"]),
-            dOASPL_dy=np.array(g["dOASPL_dy"]),
-            dCL_dalpha=g["dCL_dalpha"],
-            dCD_dalpha=g["dCD_dalpha"],
-            dOASPL_dalpha=g["dOASPL_dalpha"],
-        )
-    else:
-        cwd = os.getcwd()
-        with open(os.path.join(cwd, "input.json"), "w") as f:
-            json.dump(inp, f)
-        with open(os.path.join(cwd, "restart.json"), "w") as f:
-            json.dump(jacobian, f)
-        subprocess.run([EXEC_AD], cwd=cwd, capture_output=True, text=True)
-        with open(os.path.join(cwd, "ad_gradients.json")) as f:
-            g = json.load(f)
-        return GradResult(
-            converged=True,
-            dCL_dy=np.array(g["d cl / d ycoords"]),
-            dCD_dy=np.array(g["d cd / d ycoords"]),
-            dOASPL_dy=np.array(g["d OASPL / d ycoords"]),
-            dCL_dalpha=g["d cl / d alpha"],
-            dCD_dalpha=g["d cd / d alpha"],
-            dOASPL_dalpha=g["d OASPL / d alpha"],
-        )
+    g = gfoil_cpp.run_AD(inp, jacobian)
+    return GradResult(
+        converged=True,
+        dCL_dy=np.array(g["dCL_dy"]),
+        dCD_dy=np.array(g["dCD_dy"]),
+        dOASPL_dy=np.array(g["dOASPL_dy"]),
+        dCL_dalpha=g["dCL_dalpha"],
+        dCD_dalpha=g["dCD_dalpha"],
+        dOASPL_dalpha=g["dOASPL_dalpha"],
+    )
 
 
 def WPS_run(data: WPSinfo) -> bool:
+    """Run WPS-only solve via the standalone binary (no aero solve)."""
+    import json
+    import subprocess
     cwd = os.getcwd()
-    if _USE_BINDINGS:
-        exec_path = os.path.join(os.path.dirname(__file__), "bin", "GFoil_fwd_codi")
-    else:
-        exec_path = EXEC_FWD_codi
+    exec_path = os.path.join(os.path.dirname(__file__), "bin", "GFoil_fwd_codi")
     payload = {
         "Re":        data.Re,   "rho":  data.rho,   "nu":  data.nu,
         "X":         [data.observerXYZ[0]],

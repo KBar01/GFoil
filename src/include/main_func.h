@@ -22,7 +22,13 @@ void build_glob_RV(const Foil&foil, const Vsol&vsol, const Isol&isol, Glob&glob,
 void solve_glob(const Foil&foil, const Isol&isol, Glob& glob, Vsol& vsol, const Oper& oper, const int doSolve);
 Real update_state(const Oper&oper, const Param&param, Glob&glob, Vsol&vsol);
 void update_transition(Glob &glob, Vsol &vsol, Isol &isol, Param &param,
-                       int newtonIter);
+                       int newtonIter,
+                       bool freeze_ctau_top = false,
+                       bool freeze_ctau_bot = false,
+                       double* prev_amp_top  = nullptr,
+                       double* prev_amp_bot  = nullptr,
+                       double* prev_ctau_top = nullptr,
+                       double* prev_ctau_bot = nullptr);
 bool solve_coupled(const Oper& oper, const Foil& foil, const Wake& wake,
     Param& param, Vsol& vsol, Isol& isol, Glob& glob,
     RestartState* restartOut    = nullptr,

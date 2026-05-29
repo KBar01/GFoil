@@ -168,6 +168,7 @@ class FwdResult:
     alpha:   float = 0.0
     # Verbose output (None unless fwd_run called with verbose=True)
     verbose_data: Optional["VerboseResult"] = None
+    newton_iterations: int = 0
     # Empty string when converged.  One of:
     #   "transition_front_oscillation" — ilam stable 15+ iters, residual oscillating
     #   "diverged"                     — residualNorm >= 1.0 at exit

@@ -8,7 +8,8 @@
 #include "get_funcs.hpp"
 #include "vector_ops.hpp"
 
-int march_amplification(Glob &glob, Vsol &vsol, Isol &isol, int si, const Param&param) {
+int march_amplification(Glob &glob, Vsol &vsol, Isol &isol, int si, const Param&param,
+                        Real* amp_break = nullptr) {
 
     const std::vector<int> &Is = vsol.Is[si];
     int N = Is.size();
@@ -57,6 +58,7 @@ int march_amplification(Glob &glob, Vsol &vsol, Isol &isol, int si, const Param&
         }
 
         if (U2[2] > param.ncrit) {
+            if (amp_break) *amp_break = U2[2];
             break;  // natural transition: amplification exceeds ncrit
         } else {
             glob.U[colMajorIndex(2,i2,4)] = U2[2];
@@ -69,7 +71,10 @@ int march_amplification(Glob &glob, Vsol &vsol, Isol &isol, int si, const Param&
 
 
 void update_transition(Glob &glob, Vsol &vsol, Isol &isol, Param &param,
-                       int newtonIter) {
+                       int newtonIter,
+                       bool freeze_ctau_top, bool freeze_ctau_bot,
+                       double* prev_amp_top,  double* prev_amp_bot,
+                       double* prev_ctau_top, double* prev_ctau_bot) {
 
     for (int si = 0; si < 2; ++si) {
 
@@ -91,14 +96,22 @@ void update_transition(Glob &glob, Vsol &vsol, Isol &isol, Param &param,
             sa[state] = glob.U[colMajorIndex(2,state,4)];
         }
 
-        int ilam = march_amplification(glob, vsol, isol, si, param);
+        Real amp_break = 0.0;
+        int ilam = march_amplification(glob, vsol, isol, si, param, &amp_break);
 
-        // Advance cap: transition moving toward LE (ilam < ilam0, turbulent region grows).
-        // Kept tight because newly-turbulent nodes need ctau initialisation which is
-        // expensive to recover from if wrong.
-        int max_advance = (newtonIter < 5) ? 1 : 3;
+        // Transition jump cap (advance) and single-node retreat hysteresis.
+        // Advance is never gated: march uses ncrit exactly, ODE-driven advance is
+        // authoritative.  Only retreat is gated, and only for 1-node retreats where
+        // amp barely drops below ncrit — targeting spurious laminar-recovery oscillations
+        // while leaving multi-node retreats (needed for convergence) unrestricted.
         if (ilam < ilam0) {
+            int max_advance = (newtonIter < 5) ? 1 : 3;
             ilam = std::max(ilam, ilam0 - max_advance);
+        } else if (ilam > ilam0 && (ilam - ilam0 == 1) && (ilam0 + 1 < nSurfPoints)) {
+            Real amp_first_turb = glob.U[colMajorIndex(2, Is[ilam0+1], 4)];
+            if (amp_first_turb >= param.ncrit - param.ncrithyst) {
+                ilam = ilam0;  // hysteresis: suppress spurious 1-node retreat
+            }
         }
 
         if (ilam == ilam0) {
@@ -109,6 +122,33 @@ void update_transition(Glob &glob, Vsol &vsol, Isol &isol, Param &param,
                     glob.U[colMajorIndex(2, state, 4)] = sa[state];
                 }
             }
+
+            // ctau freeze: when a period-N limit cycle is detected by solve_coupled,
+            // anchor the first turbulent node's ctau to equilibrium (get_cttr) instead
+            // of the Newton-updated value that is cycling.  This is additive — it runs
+            // after the restore loop above and overrides only the single transition-front
+            // node.  Only fires when ilam0+1 is a valid turbulent node.
+            bool freeze = (si == 0) ? freeze_ctau_bot : freeze_ctau_top;
+            if (freeze) {
+                // Average ctau at the first turbulent node (Is[ilam0+1]) between
+                // the current Newton-updated value and the previous Newton-updated
+                // value.  Storing the pre-averaging Newton value (not the averaged
+                // result) means a period-2 cycle (alternating C_A / C_B) collapses
+                // to (C_A+C_B)/2 after just two freeze iterations.
+                // Note: get_cttr was tried here but it reads the oscillating BL state
+                // and therefore itself oscillates; plain averaging is more robust.
+                double* prev_ctau = (si == 0) ? prev_ctau_bot : prev_ctau_top;
+                if (prev_ctau != nullptr && (ilam0 + 1 < nSurfPoints) &&
+                        vsol.turb[Is[ilam0 + 1]]) {
+                    double cn = glob.U[colMajorIndex(2, Is[ilam0 + 1], 4)].getValue();
+                    if (prev_ctau[0] >= 0.0) {
+                        glob.U[colMajorIndex(2, Is[ilam0 + 1], 4)] =
+                            Real((prev_ctau[0] + cn) * 0.5);
+                    }
+                    prev_ctau[0] = cn;
+                }
+            }
+
             continue;
         }
 

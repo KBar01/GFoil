@@ -68,6 +68,11 @@ py::dict run_AD_py(py::dict inp, py::dict jacobian) {
     using RealRev  = codi::RealReverseVec<3>;
     using Realfwd  = codi::RealForward;
 
+    // Hard-reset both AD tapes before each call to release chunk memory and
+    // prevent accumulation across repeated in-process AD solves.
+    RealVec2::getTape().resetHard();
+    RealRev::getTape().resetHard();
+
     // ── unpack jacobian ───────────────────────────────────────────────────────
     auto states_py = jacobian["states"].cast<std::vector<double>>();
     auto turb_py   = jacobian["turb"].cast<std::vector<int>>();

@@ -15,13 +15,19 @@ GFoil_fwd_codi
 GFoil_AD
 gfoil_core*.so
 
-# Runtime JSON
-input.json
-output.json
-out.json
-restart.json
-ad_gradients.json
-WPS.json
+# Runtime JSON (leading / scopes to repo root so tests/golden/*.json stay trackable)
+/input.json
+/output.json
+/out.json
+/restart.json
+/ad_gradients.json
+/WPS.json
+/xfoilstates.json
+
+# Generated outputs
+convergence_results.csv
+convergence_summary.txt
+debug_cold_start.txt
 
 # Python
 __pycache__/
@@ -29,5 +35,6 @@ __pycache__/
 
 # Editor
 .vscode/
+.idea/
 *.swp
 *~

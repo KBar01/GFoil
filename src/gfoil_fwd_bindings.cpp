@@ -45,6 +45,7 @@ py::dict run_forward_py(py::dict inp, py::object prev_jacobian = py::none()) {
     int  doCps       = inp["returnData"].cast<int>();
     int  aWeighting  = inp.contains("aWeighting") ? inp["aWeighting"].cast<int>() : 0;
     Real ncrithyst   = inp.contains("ncrithyst")  ? Real(inp["ncrithyst"].cast<double>()) : Real(0.2);
+    bool verbose     = inp.contains("verbose")    ? inp["verbose"].cast<bool>() : false;
     std::string model = inp["model"].cast<std::string>();
 
     // ── observer arrays ───────────────────────────────────────────────────────
@@ -93,12 +94,14 @@ py::dict run_forward_py(py::dict inp, py::object prev_jacobian = py::none()) {
         &rst, &fwd,
         warmStartPtr,
         aWeighting,
-        ncrithyst);
+        ncrithyst,
+        verbose);
 
     // ── pack result ───────────────────────────────────────────────────────────
     py::dict result;
-    result["conv"]         = converged ? 1 : 0;
-    result["failure_mode"] = fwd.failure_mode;
+    result["conv"]              = converged ? 1 : 0;
+    result["failure_mode"]      = fwd.failure_mode;
+    result["newton_iterations"] = fwd.newton_iterations;
     if (converged) {
         result["CL"]    = fwd.CL;
         result["CD"]    = fwd.CD;
@@ -114,6 +117,29 @@ py::dict run_forward_py(py::dict inp, py::object prev_jacobian = py::none()) {
         jac["RVcols"] = rst.RVcols;
         jac["RVnz"]   = rst.RVnz;
         result["jacobian"] = jac;
+
+        // ── verbose per-node and acoustic data ────────────────────────────────
+        if (!fwd.innerFoilX.empty()) {
+            result["innerFoilX"]  = fwd.innerFoilX;
+            result["innerFoilY"]  = fwd.innerFoilY;
+            result["Cp_dist"]     = fwd.Cp;
+            result["delta_star"]  = fwd.delta_star;
+            result["theta"]       = fwd.theta;
+            result["tau_wall"]    = fwd.tau_wall;
+            result["tau_max"]     = fwd.tau_max;
+            result["Ue"]          = fwd.Ue;
+            result["dpdx"]        = fwd.dpdx;
+            result["is_turb"]     = fwd.is_turb;
+            result["topTransX"]   = fwd.topTransX;
+            result["botTransX"]   = fwd.botTransX;
+            result["BL_top"]      = fwd.BL_top;
+            result["BL_bot"]      = fwd.BL_bot;
+            result["freq_Hz"]     = fwd.freq_Hz;
+            result["WPS_upper"]   = fwd.WPS_upper;
+            result["WPS_lower"]   = fwd.WPS_lower;
+            result["FF_spectra"]  = fwd.FF_spectra;
+            result["nObs"]        = fwd.nObs;
+        }
     }
     return result;
 }

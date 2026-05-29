@@ -87,8 +87,9 @@ The forward solver must run before the AD solver because the AD solver reads
 `restart.json`, which the forward solver writes when `"returnData": 1` is set in
 `input.json`.  The test script always runs them in the correct order.
 
-Both binaries must be run from the repo root (where `input.json` lives).
-`regression_test.py` handles this automatically via `cwd=REPO_ROOT`.
+Both binaries read `input.json` from the repo root.  `regression_test.py`
+automatically copies `tests/input.json` (the committed canonical configuration)
+to the repo root before each run — no manual setup required.
 
 ## Exit codes
 

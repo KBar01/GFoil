@@ -17,6 +17,7 @@
 #include "run_forward.h"
 #include <fstream>
 #include <string>
+#include <memory>
 
 #include "nlohmann/json.hpp"
 using json = nlohmann::json;
@@ -64,13 +65,16 @@ bool runCode(
     make_panels(inCoords, flattenedCoords, Ufac, TEfac);
 
     Foil foil(flattenedCoords);
-    Isol isol;
+    auto isolPtr = std::make_unique<Isol>();
+    auto vsolPtr = std::make_unique<Vsol>();
+    auto globPtr = std::make_unique<Glob>();
+    Isol& isol = *isolPtr;
+    Vsol& vsol = *vsolPtr;
+    Glob& glob = *globPtr;
     Param param;
     param.ncrit     = nCrit;
     param.ncrithyst = ncrithyst;
     Wake wake;
-    Vsol vsol;
-    Glob glob;
 
     build_gamma_codi(isol, foil, oper);
     init_thermo<>(oper, param, geom);
@@ -143,8 +147,9 @@ bool runCode(
 
     if (fwdOut != nullptr) {
         // Pybind11 path: fill result struct, skip file writes
-        fwdOut->converged     = converged;
-        fwdOut->failure_mode  = converged ? "" : failure_mode;
+        fwdOut->converged          = converged;
+        fwdOut->failure_mode       = converged ? "" : failure_mode;
+        fwdOut->newton_iterations  = glob.convergenceIteration;
         if (converged) {
             fwdOut->CL    = post.cl.getValue();
             fwdOut->CD    = post.cd.getValue();

@@ -65,15 +65,19 @@ bool solve_coupled(const Oper& oper, const Foil& foil, const Wake& wake,
             "DBG  iter    L2_resid      omega  ilam_bot ilam_top  amp_bot  amp_top\n");
     }
 
-    // Failure-mode tracking: detect period-2 oscillation at the transition front.
-    int ilam_bot_prev = -1, ilam_top_prev = -1;
-    int stable_iters = 0;
-    int oscillation_count = 0;
-    double resid_prev = 1e20;
+    // Per-surface transition tracking and ctau-freeze cycle detection.
+    // All plain doubles/ints/bools — no Real — so no CoDi tape contamination.
+    double resid_buf[8]         = {};        // circular buffer of last 8 L2 norms
+    int    resid_pos            = 0;         // total entries written (head = pos % 8)
+    int    ilam_prev[2]         = {-1, -1};  // ilam from previous iter per surface
+    int    stable_ilam_iters[2] = {0, 0};    // consecutive iters with ilam unchanged
+    bool   ctau_freeze[2]       = {false, false}; // freeze flag per surface
+    double prev_amp[2]          = {-1.0, -1.0};   // last amp at Is[ilam0] per surface
+    // prev_ctau[si][k]: last Newton-updated ctau at Is[ilam0+1+k] for surface si.
+    // Averaging the first 3 turbulent nodes damps the multi-node oscillation.
+    double prev_ctau[2][3]      = {{-1.0,-1.0,-1.0},{-1.0,-1.0,-1.0}};
 
     for (int i = 0; i < 60; ++i) {
-
-        // Main loop solving coupled system
 
         build_glob_RV(foil, vsol, isol, glob, param);
         Real residualNorm = euc_norm(glob.R, Rsize);
@@ -137,35 +141,79 @@ bool solve_coupled(const Oper& oper, const Foil& foil, const Wake& wake,
             glob.R[entry] = 0;
         }
         stagpoint_move(isol, glob, foil, wake, vsol);
-        update_transition(glob, vsol, isol, param, i);
+        update_transition(glob, vsol, isol, param, i, ctau_freeze[1], ctau_freeze[0],
+                          prev_amp + 1, prev_amp, prev_ctau[1], prev_ctau[0]);
 
         {
             int ib = find_ilam(0), it = find_ilam(1);
+            int cur_ilam[2] = {ib, it};
+
             if (debugMode) {
                 double ab = (ib >= 0) ? get_amp(0, ib) : 0.0;
                 double at = (it >= 0) ? get_amp(1, it) : 0.0;
                 std::fprintf(stderr,
                     "DBG  %4d  %12.5e  %8.5f  %8d %8d  %8.4f  %8.4f\n",
                     i, residualNorm.getValue(), omega.getValue(), ib, it, ab, at);
+                if (ctau_freeze[0] || ctau_freeze[1])
+                    std::fprintf(stderr,
+                        "DBG       FREEZE active: bot=%d top=%d\n",
+                        (int)ctau_freeze[0], (int)ctau_freeze[1]);
             }
 
-            bool ilam_stable = (ib == ilam_bot_prev && it == ilam_top_prev);
-            if (ilam_stable) {
-                ++stable_iters;
-                if (residualNorm.getValue() > resid_prev) ++oscillation_count;
-            } else {
-                stable_iters    = 0;
-                oscillation_count = 0;
+            // Update residual circular buffer (plain double, no CoDi).
+            int slot = resid_pos % 8;
+            double oldest_resid = resid_buf[slot];
+            resid_buf[slot] = residualNorm.getValue();
+            bool buf_full = (resid_pos >= 8);
+            ++resid_pos;
+
+            // Cycling: current residual has not improved by 2x vs 8 iterations ago.
+            bool not_improving = buf_full &&
+                (residualNorm.getValue() > oldest_resid / 2.0);
+
+            // Per-surface: update stable counter and freeze flags.
+            for (int si = 0; si < 2; ++si) {
+                if (cur_ilam[si] != ilam_prev[si]) {
+                    stable_ilam_iters[si] = 0;
+                    ctau_freeze[si] = false;      // reset when ilam moves
+                    prev_amp[si]  = -1.0;
+                    prev_ctau[si][0] = prev_ctau[si][1] = prev_ctau[si][2] = -1.0;
+                } else {
+                    ++stable_ilam_iters[si];
+                }
+                ilam_prev[si] = cur_ilam[si];
+
+                // Activate freeze when transition has been stable ≥8 iters,
+                // residual is cycling (not improving), and not yet converged.
+                if (stable_ilam_iters[si] >= 8 && not_improving &&
+                    residualNorm.getValue() > param.rtol.getValue()) {
+                    ctau_freeze[si] = true;
+                }
+                // Keep freeze active once triggered — releasing early resets
+                // the averaged history and restarts the same oscillation cycle.
+                // The only release paths are: ilam moves (transition shifts) or
+                // the solver converges (residualNorm < rtol → loop exits).
             }
-            ilam_bot_prev = ib;
-            ilam_top_prev = it;
-            resid_prev    = residualNorm.getValue();
+
+            // Co-activate: once either surface triggers a freeze, also freeze the
+            // partner surface if it has had ≥4 consecutive stable-ilam iterations.
+            // This prevents one surface cycling freely while the other is frozen,
+            // which creates cross-coupling oscillations in the global Newton system.
+            if (ctau_freeze[0] || ctau_freeze[1]) {
+                for (int si = 0; si < 2; ++si) {
+                    if (!ctau_freeze[si] && stable_ilam_iters[si] >= 4 &&
+                            residualNorm.getValue() > param.rtol.getValue()) {
+                        ctau_freeze[si] = true;
+                    }
+                }
+            }
         }
     }
 
     if (!converged && failure_mode_out != nullptr) {
-        double rn = resid_prev;  // residual at the last iteration
-        if (stable_iters >= 15 && oscillation_count >= 6 && rn < 1.0)
+        double rn = (resid_pos > 0) ? resid_buf[(resid_pos - 1) % 8] : 1.0;
+        bool had_osc = (stable_ilam_iters[0] >= 15 || stable_ilam_iters[1] >= 15);
+        if (had_osc && rn < 1.0)
             *failure_mode_out = "transition_front_oscillation";
         else if (rn >= 1.0)
             *failure_mode_out = "diverged";

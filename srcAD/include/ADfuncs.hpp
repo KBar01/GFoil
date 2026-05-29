@@ -133,8 +133,8 @@ double partialOutputspartialInputs(
         jacobianOASPL_states[i] = (states[i].getGradient()[1]);
     }
 
+    tape.resetHard();
     return post.cl.getValue();
-    tape.reset();
 
 };
 
@@ -239,7 +239,7 @@ void partialRpartialx(
     dgCDdalpha = alphad.getGradient()[1];
     dgOASPLdalpha = alphad.getGradient()[2];
 
-    tape.reset();
+    tape.resetHard();
 }
 
 

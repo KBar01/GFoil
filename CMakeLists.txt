@@ -109,12 +109,14 @@ FetchContent_MakeAvailable(pybind11)
 # All src/ sources except main.cpp (run_forward.cpp, coupled.cpp, etc.)
 # SOURCES is already defined above.
 
-pybind11_add_module(gfoil_cpp
+pybind11_add_module(gfoil_cpp NO_EXTRAS
     src/gfoil_fwd_bindings.cpp
     src/gfoil_ad_bindings.cpp
     ${SOURCES}
     src/error_package.cpp
 )
+# NO_EXTRAS disables hidden visibility; restore it so the module loads correctly
+set_target_properties(gfoil_cpp PROPERTIES CXX_VISIBILITY_PRESET hidden)
 
 target_link_libraries(gfoil_cpp PRIVATE Eigen3::Eigen CoDiPack nlohmann_json::nlohmann_json)
 
@@ -133,7 +135,9 @@ target_compile_definitions(gfoil_cpp PRIVATE
     -DDO_BL_GRADIENT=${DO_BL_GRADIENT_DEFINE}
 )
 
-target_compile_options(gfoil_cpp PRIVATE -O2 -fno-fast-math)
+if(CMAKE_BUILD_TYPE STREQUAL "Release")
+  target_compile_options(gfoil_cpp PRIVATE -O2 -fno-fast-math)
+endif()
 
 # Place the .so in the Python package directory so `from . import gfoil_cpp` works
 set_target_properties(gfoil_cpp PROPERTIES

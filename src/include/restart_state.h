@@ -44,4 +44,6 @@ struct ForwardResult {
     std::vector<double> WPS_lower;    // wall-pressure PSD lower [Pa^2/Hz]
     int nObs = 0;
     std::vector<double> FF_spectra;   // flat row-major (nObs, Nsound)
+
+    int newton_iterations = 0;        // converging Newton iteration (param.niglob if not converged)
 };

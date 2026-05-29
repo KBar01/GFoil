@@ -3,12 +3,14 @@
 
 import argparse
 import json
+import shutil
 import subprocess
 import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).parent.parent
 GOLDEN_DIR = Path(__file__).parent / "golden"
+TEST_INPUT = Path(__file__).parent / "input.json"
 
 FWD_SCALAR_KEYS = ["CL", "CD", "CM", "OASPL"]
 AD_SCALAR_KEYS  = ["d cl / d alpha", "d cd / d alpha", "d OASPL / d alpha"]
@@ -66,6 +68,12 @@ def run_binary(exe: Path, label: str, output_file: Path) -> None:
 
 
 def run_solvers(build_dir: Path) -> None:
+    # Place canonical input.json at repo root where the binaries expect it.
+    if not TEST_INPUT.exists():
+        print(f"ERROR: test input not found: {TEST_INPUT}")
+        sys.exit(1)
+    shutil.copy(TEST_INPUT, REPO_ROOT / "input.json")
+
     # Forward solver must run first — it writes restart.json needed by the AD solver.
     run_binary(build_dir / "GFoil_fwd_codi", "GFoil_fwd_codi",
                REPO_ROOT / "out.json")
@@ -73,7 +81,7 @@ def run_solvers(build_dir: Path) -> None:
                REPO_ROOT / "ad_gradients.json")
 
 
-def load_outputs() -> tuple[dict, dict]:
+def load_outputs():
     out = json.loads((REPO_ROOT / "out.json").read_text())
     ad  = json.loads((REPO_ROOT / "ad_gradients.json").read_text())
     return out, ad
