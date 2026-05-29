@@ -1,7 +1,5 @@
 #include <iostream>
 #include <cmath>
-#include <cstdlib>
-#include <cstdio>
 #include <Eigen/Dense>
 #include "real_type.h"
 #include "panel_funcs.hpp"
@@ -33,16 +31,11 @@ bool solve_coupled(const Oper& oper, const Foil& foil, const Wake& wake,
     RestartState* restartOut,
     std::string* failure_mode_out) {
 
-    int nNewton = param.niglob;
     bool converged = false;
     constexpr int Rsize = 3*(Ncoords + Nwake);
     constexpr int Rallsize = 4*(Ncoords + Nwake);
 
-    // GFOIL_DEBUG=1 enables per-iteration residual/omega/transition diagnostics.
-    bool debugMode = (std::getenv("GFOIL_DEBUG") != nullptr);
-
     // Return last-laminar node index (0-based in Is[si]) for surface si.
-    // Returns Is.size()-1 when fully laminar, -1 when fully turbulent from node 0.
     auto find_ilam = [&](int si) -> int {
         if (si >= static_cast<int>(vsol.Is.size())) return -1;
         const auto& Is = vsol.Is[si];
@@ -51,19 +44,6 @@ bool solve_coupled(const Oper& oper, const Foil& foil, const Wake& wake,
         }
         return static_cast<int>(Is.size()) - 1;
     };
-
-    // Return amp/ctau value at surface si, node index k (index into Is[si]).
-    auto get_amp = [&](int si, int k) -> double {
-        if (si >= static_cast<int>(vsol.Is.size())) return 0.0;
-        const auto& Is = vsol.Is[si];
-        if (k < 0 || k >= static_cast<int>(Is.size())) return 0.0;
-        return glob.U[colMajorIndex(2, Is[k], 4)].getValue();
-    };
-
-    if (debugMode) {
-        std::fprintf(stderr,
-            "DBG  iter    L2_resid      omega  ilam_bot ilam_top  amp_bot  amp_top\n");
-    }
 
     // Per-surface transition tracking and ctau-freeze cycle detection.
     // All plain doubles/ints/bools — no Real — so no CoDi tape contamination.
@@ -88,13 +68,6 @@ bool solve_coupled(const Oper& oper, const Foil& foil, const Wake& wake,
 
 
         if (residualNorm < param.rtol) {
-
-            if (debugMode) {
-                int ib = find_ilam(0), it = find_ilam(1);
-                std::fprintf(stderr,
-                    "DBG  %4d  %12.5e  CONVERGED  ilam_bot=%d ilam_top=%d\n",
-                    i, residualNorm.getValue(), ib, it);
-            }
 
             solve_glob(foil,isol,glob,vsol,oper,0);
 
@@ -149,20 +122,7 @@ bool solve_coupled(const Oper& oper, const Foil& foil, const Wake& wake,
                           prev_amp + 1, prev_amp, prev_ctau[1], prev_ctau[0]);
 
         {
-            int ib = find_ilam(0), it = find_ilam(1);
-            int cur_ilam[2] = {ib, it};
-
-            if (debugMode) {
-                double ab = (ib >= 0) ? get_amp(0, ib) : 0.0;
-                double at = (it >= 0) ? get_amp(1, it) : 0.0;
-                std::fprintf(stderr,
-                    "DBG  %4d  %12.5e  %8.5f  %8d %8d  %8.4f  %8.4f\n",
-                    i, residualNorm.getValue(), omega.getValue(), ib, it, ab, at);
-                if (ctau_freeze[0] || ctau_freeze[1])
-                    std::fprintf(stderr,
-                        "DBG       FREEZE active: bot=%d top=%d\n",
-                        (int)ctau_freeze[0], (int)ctau_freeze[1]);
-            }
+            int cur_ilam[2] = {find_ilam(0), find_ilam(1)};
 
             // Update residual circular buffer (plain double, no CoDi).
             int slot = resid_pos % 8;

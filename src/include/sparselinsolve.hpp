@@ -4,8 +4,6 @@
 #include <Eigen/Sparse>
 #include <Eigen/SparseLU>
 #include <vector>
-#include <cstdio>
-#include <cmath>
 #include "real_type.h"
 #include "data_structs.h"
 
@@ -149,25 +147,6 @@ void solve_sys_sparse(Glob &glob) {
   lu.compute(A);
 
   if (lu.info() != Eigen::Success) {
-    if (std::getenv("GFOIL_DEBUG") != nullptr) {
-      int nan_count = 0, oob_count = 0;
-      int first_nan_row = -1, first_nan_col = -1;
-      for (int k = 0; k < nnz; ++k) {
-        double v = (glob.R_V_vals[k]).getValue();
-        if (!std::isfinite(v)) {
-          if (first_nan_row < 0) { first_nan_row = glob.R_V_rows[k]; first_nan_col = glob.R_V_cols[k]; }
-          ++nan_count;
-        }
-        if (glob.R_V_rows[k] < 0 || glob.R_V_rows[k] >= Nsize ||
-            glob.R_V_cols[k] < 0 || glob.R_V_cols[k] >= Nsize)
-          ++oob_count;
-      }
-      std::fprintf(stderr,
-          "[GFoil] SparseLU::compute failed (info=%d): "
-          "nnz=%d Nsize=%d nan_count=%d first_nan_at[row=%d col=%d] oob=%d\n",
-          (int)lu.info(), nnz, Nsize, nan_count,
-          first_nan_row, first_nan_col, oob_count);
-    }
     for (int i = 0; i < Nsize; ++i)
       glob.dU[i] = Active(0.0);
     return;
