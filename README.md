@@ -4,86 +4,89 @@ Viscous-inviscid aerofoil solver with boundary-layer analysis, trailing-edge noi
 
 ---
 
-## Build
+## Requirements
 
-Requires: CMake ≥ 3.15, C++17 compiler, Eigen 3, pybind11, Python 3.8.
+- Python ≥ 3.8
+- C++17 compiler (GCC ≥ 9 or Clang ≥ 10)
+- CMake ≥ 3.14
+- ninja (recommended, not required)
+- numpy
+
+Eigen, CoDiPack, nlohmann/json, and pybind11 are downloaded automatically by CMake during the build — you do not need to install them.
+
+---
+
+## Installation
 
 ```bash
-# Configure (once)
-cmake -B build . \
-  -DPYBIND11_PYTHON_VERSION=3.8 \
-  -DPYTHON_EXECUTABLE=$(pyenv which python3.8)
-
-# Build all targets
-cmake --build build -j$(nproc)
+pip install .
 ```
 
-This produces:
-| Target | Location | Purpose |
-|--------|----------|---------|
-| `GFoil_fwd_codi` | `build/` | Standalone forward solver binary |
-| `GFoil_AD` | `build/` | Standalone AD (gradient) solver binary |
-| `gfoil_cpp.so` | `GFoil/` | pybind11 module for the Python API |
+The first install takes a few minutes: CMake downloads the C++ dependencies and compiles the extension module.
 
-Build a single target:
+For development (editable install, picks up Python changes without reinstalling):
+
 ```bash
-cmake --build build --target gfoil_cpp   # pybind11 module only
+pip install --no-build-isolation -e .
+```
+
+`--no-build-isolation` is required because scikit-build-core needs access to the already-built CMake cache when working in editable mode.
+
+---
+
+## Quick start
+
+```python
+import numpy as np
+from GFoil import fwd_run, Aerofoil, Acoustics, OperatingConds
+
+coords = np.loadtxt("your_aerofoil.dat")  # two columns: x, y; chord normalised to 1.0
+
+foil      = Aerofoil(coords[:, 0], coords[:, 1], chord=1.0, span=2.0)
+operating = OperatingConds(alpha=3.0, Re=2e6, Ma=0.0, nCrit=9.0)
+acoustics = Acoustics(observerXYZ=np.array([0.0, 0.0, 3.0]), model='kam')
+
+result = fwd_run(foil, operating, acoustics)
+
+if result.converged:
+    print(f"CL={result.CL:.4f}  CD={result.CD:.6f}  OASPL={result.OASPL:.2f} dB")
+else:
+    print(f"Did not converge: {result.failure_mode}")
 ```
 
 ---
 
-## Python API
+## Gradients
+
+`grad_run` computes dCL/dα, dCD/dα, dOASPL/dα and the full dCL/dy, dCD/dy, dOASPL/dy coordinate-sensitivity arrays via adjoint automatic differentiation (CoDiPack). Pass the `FwdResult` from a converged forward solve:
 
 ```python
-import numpy as np
-from GFoil import fwd_run, grad_run
-from GFoil.inputs import Aerofoil, Acoustics, OperatingConds
+from GFoil import grad_run
 
-# Load airfoil coordinates (any .dat file with x, y columns)
-coords = np.loadtxt("n0012_sharp.dat")
-foil = Aerofoil(xcoords=coords[:, 0], ycoords=coords[:, 1])
-
-op = OperatingConds(alpha=2.0, Re=2e6, nCrit=9.0)
-ac = Acoustics(observerXYZ=[0.0, 3.0, 0.5])
-
-result = fwd_run(foil, op, ac)
-print(result.CL, result.CD, result.OASPL)
-
-# Gradients (dCL/dy, dCD/dy, dOASPL/dy, plus alpha scalars)
-grads = grad_run(result, foil, op, ac)
+grads = grad_run(result, foil, operating, acoustics)
+# grads.dCL_dalpha, grads.dCD_dalpha, grads.dOASPL_dalpha
+# grads.dCL_dy, grads.dCD_dy, grads.dOASPL_dy  (arrays, length = number of coordinates)
 ```
+
+---
+
+## Coordinate file format
+
+Coordinates are two columns (x, y) with chord normalised to 1.0 and the trailing edge at x = 1.0. Both the upper and lower surface trailing-edge points must be present (x = 1.0 for each). XFOIL-format `.dat` files work directly with `numpy.loadtxt`.
 
 ---
 
 ## Regression test
 
 ```bash
-# After a fresh build (golden files already committed)
-python3 tests/regression_test.py --test
-
-# Rebuild then test
-python3 tests/regression_test.py --build --test
+python3 tests/regression_test.py --test        # test against committed golden files
+python3 tests/regression_test.py --build --test # rebuild then test
 ```
 
-Golden files are in `tests/golden/`. The canonical test input (`tests/input.json`) is copied to the repo root automatically before each run.
+Golden files are in `tests/golden/`. To regenerate after an intentional physics change:
 
-To regenerate golden files after an intentional physics change:
 ```bash
 python3 tests/regression_test.py --create-golden
 git add tests/golden/ tests/input.json
 git commit -m "update golden reference after <describe change>"
 ```
-
----
-
-## Airfoil data files
-
-The root directory contains `.dat` files in two-column `x y` format (one coordinate pair per line, 300–400 points, starting at the trailing edge). These are passed directly to `Aerofoil(xcoords=..., ycoords=...)` after loading with `numpy.loadtxt`.
-
----
-
-## Environment variables
-
-| Variable | Effect |
-|----------|--------|
-| `GFOIL_DEBUG=1` | Enable per-iteration diagnostics (residual, omega, ilam, SparseLU NaN reports) |
