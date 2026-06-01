@@ -53,7 +53,9 @@ double partialOutputspartialInputs(
     double& jacobianOASPL_alf,
     double (&jacobianCL_states)[RVdimension],
     double (&jacobianOASPL_states)[RVdimension],
-    int aWeighting = 0
+    int aWeighting = 0,
+    double f_min = 200.0,
+    double f_max = 20000.0
     ){
     
     using Tape = typename Real::Tape;
@@ -107,7 +109,7 @@ double partialOutputspartialInputs(
     }
 
     interpolate_at_95_both_surfaces(xcoords,glob.U,post.cp,oper,turb,param,topsurf,botsurf,Uinf,sampleTE,chordScaling);
-    Real OASPL = calc_OASPL<Real>(botsurf,topsurf,chordScaling,Uinf,obsX,obsY,obsZ,nObs,S,kinViscInf,rhoInf,model,0,aWeighting);
+    Real OASPL = calc_OASPL<Real>(botsurf,topsurf,chordScaling,Uinf,obsX,obsY,obsZ,nObs,S,kinViscInf,rhoInf,model,f_min,f_max,aWeighting);
 
     Real outputs[2] = {post.cl,OASPL} ;
 

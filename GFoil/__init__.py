@@ -1,8 +1,8 @@
-from .gfoil import fwd_run, grad_run, WPS_run
-from .inputs import Aerofoil, Acoustics, OperatingConds, WPSinfo, FwdResult, GradResult
+from .gfoil import fwd_run, grad_run
+from .inputs import Aerofoil, Acoustics, OperatingConds, FwdResult, GradResult
 
 __all__ = [
-    "fwd_run", "grad_run", "WPS_run",
-    "Aerofoil", "Acoustics", "OperatingConds", "WPSinfo",
+    "fwd_run", "grad_run",
+    "Aerofoil", "Acoustics", "OperatingConds",
     "FwdResult", "GradResult",
 ]

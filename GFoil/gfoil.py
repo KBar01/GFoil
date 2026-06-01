@@ -1,6 +1,6 @@
 import numpy as np
 import os
-from .inputs import Aerofoil, Acoustics, OperatingConds, WPSinfo, FwdResult, GradResult, VerboseResult
+from .inputs import Aerofoil, Acoustics, OperatingConds, FwdResult, GradResult, VerboseResult
 
 from . import gfoil_cpp
 
@@ -8,7 +8,6 @@ from . import gfoil_cpp
 def _build_input_dict(aerofoil: Aerofoil,
                       operating: OperatingConds,
                       acoustics: Acoustics,
-                      returnAllOutputs: bool,
                       alphaDeg: float = None,
                       fromRestart: int = 0,
                       verbose: bool = False) -> dict:
@@ -28,7 +27,6 @@ def _build_input_dict(aerofoil: Aerofoil,
         "Y":             acoustics.observerXYZ[:, 1].tolist(),
         "Z":             acoustics.observerXYZ[:, 2].tolist(),
         "S":             float(aerofoil.span),
-        "returnData":    int(returnAllOutputs),
         "ncrit":         float(operating.nCrit),
         "ncrithyst":     float(operating.ncrithyst),
         "Ufac":          float(aerofoil.panelUniformity),
@@ -39,7 +37,8 @@ def _build_input_dict(aerofoil: Aerofoil,
         "model":         acoustics.model,
         "aWeighting":    int(acoustics.aWeighting),
         "chord":         float(aerofoil.chord),
-        "WPSonly":       0,
+        "f_min":         float(acoustics.f_min),
+        "f_max":         float(acoustics.f_max),
         "verbose":       verbose,
     }
 
@@ -108,14 +107,13 @@ def _call_forward(inp: dict, prev_result: "FwdResult" = None) -> "FwdResult":
 def standard_run(aerofoil: Aerofoil,
                  operating: OperatingConds,
                  acoustics: Acoustics,
-                 returnAllOutputs: bool = False,
                  verbose: bool = False) -> FwdResult:
     """
     Forward solve with backstepping/continuation on failure.
     Returns FwdResult; result.converged is False if all attempts fail.
     verbose=True populates result.verbose_data on the final converged solve.
     """
-    inp = _build_input_dict(aerofoil, operating, acoustics, returnAllOutputs, verbose=verbose)
+    inp = _build_input_dict(aerofoil, operating, acoustics, verbose=verbose)
     result = _call_forward(inp)
     if result.converged:
         return result
@@ -141,8 +139,7 @@ def standard_run(aerofoil: Aerofoil,
            (step_direction > 0 and tempalf > min_alpha):
             print("Minimum backstep AoA reached. Cannot continue.")
             break
-        # backstepping: never verbose (intermediate alpha, not the target)
-        bs_inp = _build_input_dict(aerofoil, operating, acoustics, False,
+        bs_inp = _build_input_dict(aerofoil, operating, acoustics,
                                    alphaDeg=tempalf, fromRestart=0)
         r = _call_forward(bs_inp)
         if r.converged:
@@ -168,7 +165,7 @@ def standard_run(aerofoil: Aerofoil,
     while not completed and overallCount <= 10:
         print(f"Trying forward step to: {fwdalf:.3f}")
         is_final = abs(fwdalf - alphaDeg) < 1e-3
-        fs_inp = _build_input_dict(aerofoil, operating, acoustics, returnAllOutputs,
+        fs_inp = _build_input_dict(aerofoil, operating, acoustics,
                                    alphaDeg=fwdalf,
                                    verbose=verbose if is_final else False)
         r = _call_forward(fs_inp, prev_result=last_converged)
@@ -187,9 +184,6 @@ def standard_run(aerofoil: Aerofoil,
             if attemptCount > 6:
                 print("Forward stepping failed repeatedly.")
                 break
-            # Bisect between last converged point and the failing target.
-            # This always probes a new point, avoiding the stuck cycle where
-            # retreating by stepsize/2^n lands on a previously-failed point.
             last_good = float(last_converged.alpha)
             fwdalf = last_good + (fwdalf - last_good) * 0.5
         overallCount += 1
@@ -202,7 +196,6 @@ def standard_run(aerofoil: Aerofoil,
 def fwd_run(aerofoil: Aerofoil,
             operating: OperatingConds,
             acoustics: Acoustics,
-            returnAllOutputs: bool = False,
             repanel: bool = False,
             verbose: bool = False) -> FwdResult:
     """
@@ -214,7 +207,7 @@ def fwd_run(aerofoil: Aerofoil,
     and acoustic spectral data.
     """
     if repanel:
-        result = standard_run(aerofoil, operating, acoustics, returnAllOutputs, verbose=verbose)
+        result = standard_run(aerofoil, operating, acoustics, verbose=verbose)
         if result.converged:
             return result
         for count, (uf, tef) in enumerate(
@@ -229,12 +222,12 @@ def fwd_run(aerofoil: Aerofoil,
                 panelTEspacing=tef,
             )
             print(f"Trying different panel distribution ({count}/6)")
-            result = standard_run(foil2, operating, acoustics, returnAllOutputs, verbose=verbose)
+            result = standard_run(foil2, operating, acoustics, verbose=verbose)
             if result.converged:
                 return result
         return FwdResult(converged=False)
     else:
-        return standard_run(aerofoil, operating, acoustics, returnAllOutputs, verbose=verbose)
+        return standard_run(aerofoil, operating, acoustics, verbose=verbose)
 
 
 def grad_run(fwd_result: FwdResult,
@@ -248,7 +241,7 @@ def grad_run(fwd_result: FwdResult,
     if not fwd_result.converged:
         return GradResult(converged=False)
 
-    inp = _build_input_dict(aerofoil, operating, acoustics, False)
+    inp = _build_input_dict(aerofoil, operating, acoustics)
     jacobian = {
         "states": fwd_result.states,
         "turb":   fwd_result.turb,
@@ -271,29 +264,3 @@ def grad_run(fwd_result: FwdResult,
     )
 
 
-def WPS_run(data: WPSinfo) -> bool:
-    """Run WPS-only solve via the standalone binary (no aero solve)."""
-    import json
-    import subprocess
-    cwd = os.getcwd()
-    exec_path = os.path.join(os.path.dirname(__file__), "bin", "GFoil_fwd_codi")
-    payload = {
-        "Re":        data.Re,   "rho":  data.rho,   "nu":  data.nu,
-        "X":         [data.observerXYZ[0]],
-        "Y":         [data.observerXYZ[1]],
-        "Z":         [data.observerXYZ[2]],
-        "S":         data.span, "model": data.model, "chord": data.chord,
-        "WPSonly":   1,
-        "topdstar":  data.DispThick[0],  "toptheta":  data.MomThick[0],
-        "topdelta":  data.BLHeight[0],   "toptauw":   data.wallShear[0],
-        "toptaumax": data.maxShear[0],   "topue":     data.edgeVel[0],
-        "topdpdx":   data.dpdx[0],
-        "botdstar":  data.DispThick[1],  "bottheta":  data.MomThick[1],
-        "botdelta":  data.BLHeight[1],   "bottauw":   data.wallShear[1],
-        "bottaumax": data.maxShear[1],   "botue":     data.edgeVel[1],
-        "botdpdx":   data.dpdx[1],
-    }
-    with open(os.path.join(cwd, "input.json"), "w") as f:
-        json.dump(payload, f, indent=4)
-    r = subprocess.run([exec_path], cwd=cwd, capture_output=True, text=True)
-    return r.returncode == 1

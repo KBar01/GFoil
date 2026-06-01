@@ -42,10 +42,11 @@ py::dict run_forward_py(py::dict inp, py::object prev_jacobian = py::none()) {
     Real Ufac        = inp["Ufac"].cast<double>();
     Real TEfac       = inp["TEfac"].cast<double>();
     int  doRestart   = inp["restart"].cast<int>();
-    int  doCps       = inp["returnData"].cast<int>();
     int  aWeighting  = inp.contains("aWeighting") ? inp["aWeighting"].cast<int>() : 0;
     Real ncrithyst   = inp.contains("ncrithyst")  ? Real(inp["ncrithyst"].cast<double>()) : Real(0.2);
     bool verbose     = inp.contains("verbose")    ? inp["verbose"].cast<bool>() : false;
+    double f_min     = inp.contains("f_min")      ? inp["f_min"].cast<double>() : 200.0;
+    double f_max     = inp.contains("f_max")      ? inp["f_max"].cast<double>() : 20000.0;
     std::string model = inp["model"].cast<std::string>();
 
     // ── observer arrays ───────────────────────────────────────────────────────
@@ -90,12 +91,14 @@ py::dict run_forward_py(py::dict inp, py::object prev_jacobian = py::none()) {
         alphad, Re, Ma, rhoInf, kinViscInf,
         model, sampleTE,
         obsX.data(), obsY.data(), obsZ.data(), nObs,
-        S, doCps,
+        S,
         &rst, &fwd,
         warmStartPtr,
         aWeighting,
         ncrithyst,
-        verbose);
+        verbose,
+        f_min,
+        f_max);
 
     // ── pack result ───────────────────────────────────────────────────────────
     py::dict result;

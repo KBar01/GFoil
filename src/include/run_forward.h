@@ -28,11 +28,12 @@ bool runCode(
     const Real* obsZ,
     int nObs,
     const Real S,
-    const int doCps,
     RestartState* restartOut             = nullptr,
     ForwardResult* fwdOut                = nullptr,
     const RestartState* warmStart        = nullptr,
     int aWeighting                       = 0,
     Real ncrithyst                       = 0.2,
-    bool verbose                         = false
+    bool verbose                         = false,
+    double f_min                         = 200.0,
+    double f_max                         = 20000.0
 );

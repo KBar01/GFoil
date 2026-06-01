@@ -73,6 +73,8 @@ class Acoustics:
     TESampleLoc: Optional[float] = 0.97
     model: Optional[str] = "roz"
     aWeighting: bool = False
+    f_min: float = 200.0   # lower acoustic frequency bound [Hz]
+    f_max: float = 20000.0 # upper acoustic frequency bound [Hz]
 
     def __post_init__(self):
         arr = _as_float_array(self.observerXYZ, "Acoustics.observerXYZ").astype(float)
@@ -87,6 +89,9 @@ class Acoustics:
         if self.TESampleLoc is not None:
             if not (0.0 <= self.TESampleLoc <= 1.0):
                 raise ValueError("TESampleLoc must be between 0 and 1 (inclusive)")
+
+        if self.f_min <= 0 or self.f_max <= self.f_min:
+            raise ValueError("f_min must be > 0 and f_max > f_min")
 
 
 @dataclass
@@ -141,10 +146,10 @@ class VerboseResult:
     BL_bot: np.ndarray   # shape (7,)  lower surface TE BL properties
 
     # Acoustic spectra
-    freq_Hz: np.ndarray    # frequency array [Hz]         shape (Nsound,)
-    WPS_upper: np.ndarray  # upper surface WPS [Pa^2/Hz]  shape (Nsound,)
-    WPS_lower: np.ndarray  # lower surface WPS [Pa^2/Hz]  shape (Nsound,)
-    FF_spectra: np.ndarray # far-field PSD [Pa^2/Hz]      shape (nObs, Nsound)
+    freq_Hz: np.ndarray    # frequency array [Hz]              shape (Nsound,)
+    WPS_upper: np.ndarray  # upper surface WPS [dB/Hz re 20µPa] shape (Nsound,)
+    WPS_lower: np.ndarray  # lower surface WPS [dB/Hz re 20µPa] shape (Nsound,)
+    FF_spectra: np.ndarray # far-field PSD     [dB/Hz re 20µPa] shape (nObs, Nsound)
 
 
 @dataclass
@@ -188,39 +193,3 @@ class GradResult:
     dOASPL_dalpha: float = 0.0
 
 
-@dataclass
-class WPSinfo:
-    Re: float
-    observerXYZ: np.ndarray
-
-    DispThick: np.ndarray
-    MomThick: np.ndarray
-    BLHeight: np.ndarray
-    wallShear: np.ndarray
-    maxShear: np.ndarray
-    edgeVel: np.ndarray
-    dpdx: np.ndarray
-
-    chord: Optional[float] = 1.0
-    span: Optional[float] = 2.0
-    model: Optional[str] = "roz"
-    rho: Optional[float] = 1.225
-    nu: Optional[float] = 1.5e-5
-
-    def __post_init__(self):
-        self.observerXYZ = _as_1d_float_array(self.observerXYZ, "WPSinfo.observerXYZ")
-        _require_length(self.observerXYZ, 3, "WPSinfo.observerXYZ")
-        self.observerXYZ = self.observerXYZ.reshape(3,)
-
-        for name in (
-            "DispThick",
-            "MomThick",
-            "BLHeight",
-            "wallShear",
-            "maxShear",
-            "edgeVel",
-            "dpdx",
-        ):
-            arr = _as_1d_float_array(getattr(self, name), f"WPSinfo.{name}")
-            arr = _require_length(arr, 2, f"WPSinfo.{name}")
-            setattr(self, name, arr)

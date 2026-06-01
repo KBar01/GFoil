@@ -133,6 +133,8 @@ py::dict run_AD_py(py::dict inp, py::dict jacobian) {
     const RealVec2 TEfac    = inp["TEfac"].cast<double>();
     std::string model       = inp["model"].cast<std::string>();
     int aWeighting          = inp.contains("aWeighting") ? inp["aWeighting"].cast<int>() : 0;
+    double f_min            = inp.contains("f_min") ? inp["f_min"].cast<double>() : 200.0;
+    double f_max            = inp.contains("f_max") ? inp["f_max"].cast<double>() : 20000.0;
 
     RealRev targetAlphaDeg_r = inp["alpha_degrees"].cast<double>();
     RealRev Re_r             = inp["Re"].cast<double>();
@@ -188,7 +190,7 @@ py::dict run_AD_py(py::dict inp, py::dict jacobian) {
         S, inYcoords_2, targetAlphaDeg, states, turb,
         d_CL_d_y, d_OASPL_d_y, d_CL_dalpha, d_OASPL_dalpha,
         d_CL_d_States, d_OASPL_d_States,
-        aWeighting);
+        aWeighting, f_min, f_max);
 
     // ── adjoint solve ─────────────────────────────────────────────────────────
     d_CD_d_States[RVdimension - 4] = dCdcmom.getValue();
