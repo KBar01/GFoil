@@ -112,7 +112,7 @@ bool runCode(
                                     param, topsurf, botsurf, Uinf, sampleTE, chordScaling);
     Real OASPL = calc_OASPL<Real>(botsurf, topsurf, chordScaling, Uinf,
                                    obsX, obsY, obsZ, nObs, S, kinViscInf, rhoInf, model,
-                                   f_min, f_max, aWeighting);
+                                   f_min, f_max, aWeighting, alpha);
 
     if (std::isnan(OASPL) || std::isinf(OASPL))
         converged = false;
@@ -266,11 +266,18 @@ bool runCode(
                         fwdOut->WPS_lower[i] = (wps_l_hz > 0.0) ? 10.0 * std::log10(wps_l_hz / pref2) : -200.0;
                     }
 
+                    // Transform to TE-local Amiet frame (consistent with calc_OASPL)
+                    const Real cos_a     = std::cos(alpha);
+                    const Real sin_a     = std::sin(alpha);
+                    const Real te_offset = static_cast<Real>(0.75) * chordScaling;
                     for (int iObs = 0; iObs < nObs; ++iObs) {
                         Real ff[Nsound];
                         for (int i = 0; i < NS; ++i) ff[i] = 0.0;
+                        Real x_loc = obsX[iObs] * cos_a - obsZ[iObs] * sin_a - te_offset;
+                        Real y_loc = obsY[iObs];
+                        Real z_loc = obsX[iObs] * sin_a + obsZ[iObs] * cos_a;
                         TE_noise_outer<Real>(Uinf / 340.0, Uinf,
-                                             obsX[iObs], obsY[iObs], obsZ[iObs],
+                                             x_loc, y_loc, z_loc,
                                              chordScaling / 2.0, chordScaling,
                                              S, Real(340.0), omArr,
                                              edgeVel_bot, edgeVel_top,

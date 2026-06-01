@@ -49,7 +49,8 @@ Real calc_OASPL(const Real* botStates, const Real* topStates,
                 const Real S, const Real nu, const Real rho,
                 const std::string& model,
                 double f_min = 200.0, double f_max = 20000.0,
-                const int aWeighting = 0)
+                const int aWeighting = 0,
+                Real alpha_rad = Real(0.0))
 {
     Real omega[Nsound];
     Real Freq[Nsound];
@@ -106,10 +107,23 @@ Real calc_OASPL(const Real* botStates, const Real* topStates,
     Real pref2 = (20e-6) * (20e-6);
     Real powerSum = 0.0;
 
+    // Global → TE-local chord-aligned coordinate transformation.
+    // Observer coords are given in global frame (origin at 1/4-chord,
+    // x=freestream, z=up). TE-local frame has origin at TE, x1 along
+    // chord (positive downstream), z1 normal to chord (suction-side positive).
+    Real cos_a     = std::cos(alpha_rad);
+    Real sin_a     = std::sin(alpha_rad);
+    Real te_offset = static_cast<Real>(0.75) * chordScale;
+
     for (int iObs = 0; iObs < nObs; ++iObs) {
+        // Transform observer from global to TE-local Amiet frame.
+        Real x_loc = obsX[iObs] * cos_a - obsZ[iObs] * sin_a - te_offset;
+        Real y_loc = obsY[iObs];
+        Real z_loc = obsX[iObs] * sin_a + obsZ[iObs] * cos_a;
+
         Real farfieldSpectra[Nsound];
         Real c = Uinf / 340.0;
-        TE_noise_outer<Real>(c, Uinf, obsX[iObs], obsY[iObs], obsZ[iObs],
+        TE_noise_outer<Real>(c, Uinf, x_loc, y_loc, z_loc,
                              chordScale / 2.0, chordScale,
                              S, 340.0, omega,
                              edgeVel_bot, edgeVel_top,

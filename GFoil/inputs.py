@@ -69,6 +69,12 @@ class Aerofoil:
 
 @dataclass
 class Acoustics:
+    """
+    observerXYZ: Observer position(s) in the global freestream-aligned frame.
+    Origin at the quarter-chord point. x=downstream, z=up, y=spanwise.
+    Shape (N,3) or (3,) for a single observer. The code converts these to the
+    TE-local chord-aligned Amiet frame accounting for angle of attack.
+    """
     observerXYZ: np.ndarray
     TESampleLoc: Optional[float] = 0.97
     model: Optional[str] = "roz"

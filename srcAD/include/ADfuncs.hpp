@@ -109,7 +109,7 @@ double partialOutputspartialInputs(
     }
 
     interpolate_at_95_both_surfaces(xcoords,glob.U,post.cp,oper,turb,param,topsurf,botsurf,Uinf,sampleTE,chordScaling);
-    Real OASPL = calc_OASPL<Real>(botsurf,topsurf,chordScaling,Uinf,obsX,obsY,obsZ,nObs,S,kinViscInf,rhoInf,model,f_min,f_max,aWeighting);
+    Real OASPL = calc_OASPL<Real>(botsurf,topsurf,chordScaling,Uinf,obsX,obsY,obsZ,nObs,S,kinViscInf,rhoInf,model,f_min,f_max,aWeighting,alpha);
 
     Real outputs[2] = {post.cl,OASPL} ;
 
