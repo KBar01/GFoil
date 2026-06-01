@@ -226,8 +226,10 @@ void init_boundary_layer(const Oper&oper, const Foil&foil, Param&param, Isol&iso
         // Set per-surface forced-transition state on param and vsol
         param.forcet   = local_forcet;
         param.xift     = local_xift;
-        vsol.forcet[surf < 2 ? surf : 1] = local_forcet;
-        vsol.xift[surf < 2 ? surf : 1]   = local_xift;
+        if (surf < 2) {
+            vsol.forcet[surf] = local_forcet;
+            vsol.xift[surf]   = local_xift;
+        }
 
         bool turb = false, wake = false,simi=false;
 
