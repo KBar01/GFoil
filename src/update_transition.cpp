@@ -9,7 +9,7 @@
 #include "vector_ops.hpp"
 
 int march_amplification(Glob &glob, Vsol &vsol, Isol &isol, int si, const Param&param,
-                        Real* amp_break = nullptr) {
+                        Real* amp_break = nullptr, bool* forced_break = nullptr) {
 
     const std::vector<int> &Is = vsol.Is[si];
     int N = Is.size();
@@ -57,12 +57,24 @@ int march_amplification(Glob &glob, Vsol &vsol, Isol &isol, int si, const Param&
             U2[2] += omega*dU;
         }
 
+        // Check 1 — natural transition (ncrit wins, regardless of forced)
         if (U2[2] > param.ncrit) {
             if (amp_break) *amp_break = U2[2];
-            break;  // natural transition: amplification exceeds ncrit
-        } else {
-            glob.U[colMajorIndex(2,i2,4)] = U2[2];
+            break;
         }
+
+        // Check 2 — forced transition: xift falls in this interval
+        if (param.forcet && param.xift > 0.0) {
+            double xi1_val = isol.distFromStag[i1].getValue();
+            double xi2_val = isol.distFromStag[i2].getValue();
+            if (xi1_val <= param.xift && param.xift < xi2_val) {
+                if (amp_break)    *amp_break    = U2[2];
+                if (forced_break) *forced_break = true;
+                break;
+            }
+        }
+
+        glob.U[colMajorIndex(2,i2,4)] = U2[2];
         ++i;
     }
 
@@ -71,6 +83,7 @@ int march_amplification(Glob &glob, Vsol &vsol, Isol &isol, int si, const Param&
 
 
 void update_transition(Glob &glob, Vsol &vsol, Isol &isol, Param &param,
+                       const Foil& foil,
                        int newtonIter,
                        bool freeze_ctau_top, bool freeze_ctau_bot,
                        double* prev_amp_top,  double* prev_amp_bot,
@@ -80,6 +93,33 @@ void update_transition(Glob &glob, Vsol &vsol, Isol &isol, Param &param,
 
         const std::vector<int> &Is = vsol.Is[si];
         int nSurfPoints = Is.size();
+
+        // Precompute forced transition arc-length for this surface.
+        // update_transition is forward-only; .getValue() is safe here.
+        vsol.forcet[si] = false;
+        vsol.xift[si]   = 0.0;
+        if (param.xft_xc[si] < 1.0 - 1e-9) {
+            double x_max = 0.0;
+            for (int k = 0; k < Ncoords; ++k)
+                x_max = std::max(x_max, foil.x[2*k].getValue());
+            double xft_abs = param.xft_xc[si] * x_max;
+
+            for (int k = 1; k < nSurfPoints; ++k) {
+                double x_prev = foil.x[2 * Is[k-1]].getValue();
+                double x_curr = foil.x[2 * Is[k  ]].getValue();
+                if ((x_prev - xft_abs) * (x_curr - xft_abs) <= 0.0) {
+                    double xi_prev = isol.distFromStag[Is[k-1]].getValue();
+                    double xi_curr = isol.distFromStag[Is[k  ]].getValue();
+                    double frac = (x_curr == x_prev) ? 0.0 :
+                                  (xft_abs - x_prev) / (x_curr - x_prev);
+                    vsol.xift[si]   = xi_prev + (xi_curr - xi_prev) * frac;
+                    vsol.forcet[si] = true;
+                    break;
+                }
+            }
+        }
+        param.forcet = vsol.forcet[si];
+        param.xift   = vsol.xift[si];
 
         // find current last laminar station
         int ilam0 = nSurfPoints - 1;
@@ -97,20 +137,28 @@ void update_transition(Glob &glob, Vsol &vsol, Isol &isol, Param &param,
         }
 
         Real amp_break = 0.0;
-        int ilam = march_amplification(glob, vsol, isol, si, param, &amp_break);
+        bool was_forced_break = false;
+        int ilam = march_amplification(glob, vsol, isol, si, param, &amp_break, &was_forced_break);
 
-        // Transition jump cap (advance) and single-node retreat hysteresis.
-        // Advance is never gated: march uses ncrit exactly, ODE-driven advance is
-        // authoritative.  Only retreat is gated, and only for 1-node retreats where
-        // amp barely drops below ncrit — targeting spurious laminar-recovery oscillations
-        // while leaving multi-node retreats (needed for convergence) unrestricted.
+        // Apply jump cap for advance direction on both natural and forced transition.
+        // The cap prevents large ctau-state discontinuities that cause NaN in the Jacobian.
+        // For forced transition, use a larger cap so the target is reached quickly.
+        // For forced transition, hysteresis is skipped (location is geometrically fixed).
         if (ilam < ilam0) {
-            int max_advance = (newtonIter < 5) ? 1 : 3;
+            int max_advance;
+            if (was_forced_break) {
+                // Reach the forced target in ~4 steps regardless of newtonIter
+                max_advance = std::max(1, (ilam0 - ilam + 3) / 4);
+            } else {
+                max_advance = (newtonIter < 5) ? 1 : 3;
+            }
             ilam = std::max(ilam, ilam0 - max_advance);
-        } else if (ilam > ilam0 && (ilam - ilam0 == 1) && (ilam0 + 1 < nSurfPoints)) {
+        } else if (!was_forced_break && ilam > ilam0 &&
+                   (ilam - ilam0 == 1) && (ilam0 + 1 < nSurfPoints)) {
+            // Hysteresis: suppress spurious 1-node retreat for free transition only.
             Real amp_first_turb = glob.U[colMajorIndex(2, Is[ilam0+1], 4)];
             if (amp_first_turb >= param.ncrit - param.ncrithyst) {
-                ilam = ilam0;  // hysteresis: suppress spurious 1-node retreat
+                ilam = ilam0;
             }
         }
 

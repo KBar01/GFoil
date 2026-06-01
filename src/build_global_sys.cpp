@@ -152,7 +152,9 @@ void build_glob_RV(const Foil&foil, const Vsol&vsol, const Isol&isol, Glob&glob,
 
     const Real* xi = isol.distFromStag;
     for (int si = 0; si < 3; ++si) {    // for each surface (upper/lower/wake)
-        
+        // Set forced-transition state for this surface (read from vsol, set on param)
+        param.forcet = (si < 2) ? vsol.forcet[si] : false;
+        param.xift   = (si < 2) ? vsol.xift[si]   : 0.0;
 
         const std::vector<int>& Is = vsol.Is[si]; // list of surface node indices from stag point
         const int nSurfPoints = Is.size();
@@ -235,7 +237,15 @@ void build_glob_RV(const Foil&foil, const Vsol&vsol, const Isol&isol, Glob&glob,
             Real* Ucurr = &glob.U[colMajorIndex(0,Is[currI],4)];
 
             if (tran){
-                residual_transition<true,Real>(Uprev,Ucurr,xi[Is[prevI]],xi[Is[currI]],Real(0),Real(0),param,Ri,Ri_U,Ri_x);
+                // For forced transition, only use the forced formula when xift
+                // actually falls in this interval.  If the jump cap placed the
+                // transition node elsewhere, fall back to free-transition formula.
+                bool use_forced = param.forcet &&
+                    (param.xift >= xi[Is[prevI]].getValue()) &&
+                    (param.xift <  xi[Is[currI]].getValue());
+                Param temp_param = param;
+                if (!use_forced) temp_param.forcet = false;
+                residual_transition<true,Real>(Uprev,Ucurr,xi[Is[prevI]],xi[Is[currI]],Real(0),Real(0),temp_param,Ri,Ri_U,Ri_x);
             }
             else {
                 Real aux1=0,aux2=0;

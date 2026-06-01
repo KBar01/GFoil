@@ -143,12 +143,14 @@ double partialOutputspartialInputs(
 template<typename Real>
 void partialRpartialx(
 
-    
+
     // geometry parameters
     const Real nCrit, const Real Ufac, const Real TEfac,
     const double (&inXcoords)[Nin], const Real Re, const Real Ma, const Real rhoInf,
-    
+
     int (&currStag)[2],
+    // forced transition x/c per surface (0=lower, 1=upper; 1.0 = no forcing)
+    const double xft_xc[2],
     
     // ADJOINT VECTOR size  4*(Ncoords+Nwake)
     const double (&adlambdaCL)[RVdimension],
@@ -208,6 +210,34 @@ void partialRpartialx(
     identify_surfaces(isol_pre,vsol);
     set_wake_gap(foil,isol_pre,vsol);
     calc_ue_m<Real>(foil,wake,isolc,vsol);
+    // Compute vsol.forcet[si] and vsol.xift[si] from xft_xc and foil geometry.
+    // Must run after identify_surfaces has populated vsol.Is.
+    for (int si = 0; si < 2; ++si) {
+        vsol.forcet[si] = false;
+        vsol.xift[si]   = 0.0;
+        if (xft_xc[si] < 1.0 - 1e-9 && si < (int)vsol.Is.size()) {
+            const std::vector<int>& Is_si = vsol.Is[si];
+            int nSP = (int)Is_si.size();
+            double x_max = 0.0;
+            for (int k = 0; k < Ncoords; ++k)
+                x_max = std::max(x_max, foil.x[2*k].getValue());
+            double xft_abs = xft_xc[si] * x_max;
+            for (int k = 1; k < nSP; ++k) {
+                double x_prev = foil.x[2 * Is_si[k-1]].getValue();
+                double x_curr = foil.x[2 * Is_si[k  ]].getValue();
+                if ((x_prev - xft_abs) * (x_curr - xft_abs) <= 0.0) {
+                    double xi_prev = isol_pre.distFromStag[Is_si[k-1]].getValue();
+                    double xi_curr = isol_pre.distFromStag[Is_si[k  ]].getValue();
+                    double frac = (x_curr == x_prev) ? 0.0 :
+                                  (xft_abs - x_prev) / (x_curr - x_prev);
+                    vsol.xift[si]   = xi_prev + (xi_curr - xi_prev) * frac;
+                    vsol.forcet[si] = true;
+                    break;
+                }
+            }
+        }
+    }
+
     Isolv<Real> isol_final;
     stagpoint_move_AD(isol_final,glob,foil,wake,vsol,currStag);
     build_glob_RV_AD(foil,vsol,isol_final,glob,param);

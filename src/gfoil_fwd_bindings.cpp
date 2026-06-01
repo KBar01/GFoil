@@ -47,6 +47,8 @@ py::dict run_forward_py(py::dict inp, py::object prev_jacobian = py::none()) {
     bool verbose     = inp.contains("verbose")    ? inp["verbose"].cast<bool>() : false;
     double f_min     = inp.contains("f_min")      ? inp["f_min"].cast<double>() : 200.0;
     double f_max     = inp.contains("f_max")      ? inp["f_max"].cast<double>() : 20000.0;
+    double xft_lower = inp.contains("bottrans")   ? inp["bottrans"].cast<double>() : 1.0;
+    double xft_upper = inp.contains("toptrans")   ? inp["toptrans"].cast<double>() : 1.0;
     std::string model = inp["model"].cast<std::string>();
 
     // ── observer arrays ───────────────────────────────────────────────────────
@@ -98,7 +100,9 @@ py::dict run_forward_py(py::dict inp, py::object prev_jacobian = py::none()) {
         ncrithyst,
         verbose,
         f_min,
-        f_max);
+        f_max,
+        xft_lower,
+        xft_upper);
 
     // ── pack result ───────────────────────────────────────────────────────────
     py::dict result;

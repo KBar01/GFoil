@@ -118,7 +118,7 @@ bool solve_coupled(const Oper& oper, const Foil& foil, const Wake& wake,
             glob.R[entry] = 0;
         }
         stagpoint_move(isol, glob, foil, wake, vsol);
-        update_transition(glob, vsol, isol, param, i, ctau_freeze[1], ctau_freeze[0],
+        update_transition(glob, vsol, isol, param, foil, i, ctau_freeze[1], ctau_freeze[0],
                           prev_amp + 1, prev_amp, prev_ctau[1], prev_ctau[0]);
 
         {

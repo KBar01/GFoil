@@ -45,7 +45,9 @@ bool runCode(
     Real ncrithyst,
     bool verbose,
     double f_min,
-    double f_max)
+    double f_max,
+    double xft_lower,
+    double xft_upper)
 {
     Real alpha = (alphad / 180) * M_PI;
     Oper oper(alpha, Re, Ma);
@@ -71,6 +73,8 @@ bool runCode(
     Param param;
     param.ncrit     = nCrit;
     param.ncrithyst = ncrithyst;
+    param.xft_xc[0] = xft_lower;  // lower surface (vsol.Is[0])
+    param.xft_xc[1] = xft_upper;  // upper surface (vsol.Is[1])
     Wake wake;
 
     build_gamma_codi(isol, foil, oper);

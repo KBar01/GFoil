@@ -159,6 +159,9 @@ struct Vsol {
     Real ue_sigma[(Ncoords+Nwake)*(Ncoords+Nwake-2)] = {0}; // d(ue)/d(source) matrix
     bool turb[Ncoords+Nwake] = {false};          // Flag (1 = turbulent, 0 = laminar)
     std::vector<std::vector<int>> Is; // Holds lower, upper, wake node indices
+    // Forced-transition state per surface (0=lower, 1=upper)
+    bool   forcet[2] = {false, false};
+    double xift[2]   = {0.0, 0.0};
 };
 
 //-------------------------------------------------------------------------------
@@ -205,6 +208,12 @@ struct Param {
     // Viscous parameters
     Real ncrit     = 9.0;
     Real ncrithyst = 0.2;   // hysteresis margin for transition-node damping
+    // Forced-transition state (plain bool/double — safe on CoDi tape)
+    bool   forcet    = false;
+    double xift      = 0.0;
+    // User-specified x/c forced transition per surface (index 0=lower, 1=upper)
+    // 1.0 means no forcing for that surface.
+    double xft_xc[2] = {1.0, 1.0};
     Real Cuq = 1.0;
     Real Dlr = 0.9;
     Real SlagK = 5.6;

@@ -487,35 +487,53 @@ void residual_transition(
 
     // dampt_Ut needed for Rxt_xt inside the Newton loop regardless of ComputeJacobian.
     Real dampt, dampt_Ut[4]={0};
-    Real Rxt, Rxt_xt, dxt;
+    Real Rxt, Rxt_xt = Real(-1.0), dxt;
     Real Ut[4]={0}, Ut_xt[4]={0};
     Real w1, w2;
     Real xt = x1 + 0.5 * dx;
 
-    for (int iNewton = 0; iNewton < nNewton; ++iNewton) {
-        w2 = (xt-x1)/dx; w1 = 1.0-w2;
+    if (!param.forcet) {
+        // === FREE TRANSITION: Newton solve for xt ===
+        for (int iNewton = 0; iNewton < nNewton; ++iNewton) {
+            w2 = (xt-x1)/dx; w1 = Real(1.0)-w2;
+            for (int i=0;i<4;++i) {
+                Ut[i]    = w1*U1[i] + w2*U2[i];
+                Ut_xt[i] = (U2[i]-U1[i])/dx;
+            }
+            Ut[2]    = ncrit;
+            Ut_xt[2] = Real(0.0);
+            dampt = get_damp(Ut[0],Ut[1],Ut[2],Ut[3],param,dampt_Ut);
+            dampt_Ut[2] = Real(0.0);
+            Rxt    = ncrit - sa1 - Real(0.5)*(damp1+dampt)*(xt-x1);
+            Rxt_xt = -Real(0.5)*(damp1+dampt);
+            for (int i=0;i<4;++i) Rxt_xt -= Real(0.5)*(xt-x1)*dampt_Ut[i]*Ut_xt[i];
+            dxt = -Rxt/Rxt_xt;
+            Real dmax = Real(0.2)*dx*(Real(1.1)-Real(iNewton)/Real(nNewton));
+            if (std::abs(dxt)>dmax) dxt *= dmax/std::abs(dxt);
+            if (std::abs(Rxt)<Real(1e-10)) break;
+            xt += dxt;
+        }
+    } else {
+        // === FORCED TRANSITION: xt prescribed ===
+        xt = static_cast<Real>(param.xift);
+        w2 = (xt-x1)/dx; w1 = Real(1.0)-w2;
         for (int i=0;i<4;++i) {
             Ut[i]    = w1*U1[i] + w2*U2[i];
             Ut_xt[i] = (U2[i]-U1[i])/dx;
         }
-        Ut[2]    = ncrit;
-        Ut_xt[2] = 0.0;
+        // Ut[2] keeps interpolated amp — NOT pinned to ncrit
+        // Ut_xt[2] not zeroed — amp sensitivity flows through cttr
         dampt = get_damp(Ut[0],Ut[1],Ut[2],Ut[3],param,dampt_Ut);
-        dampt_Ut[2] = 0.0;
-        Rxt    = ncrit - sa1 - 0.5*(damp1+dampt)*(xt-x1);
-        Rxt_xt = -0.5*(damp1+dampt);
-        for (int i=0;i<4;++i) Rxt_xt -= 0.5*(xt-x1)*dampt_Ut[i]*Ut_xt[i];
-        dxt = -Rxt/Rxt_xt;
-        Real dmax = 0.2*dx*(1.1-Real(iNewton)/nNewton);
-        if (std::abs(dxt)>dmax) dxt *= dmax/std::abs(dxt);
-        if (std::abs(Rxt)<1e-10) break;
-        xt += dxt;
+        // dampt_Ut[2] not zeroed for forced transition
     }
 
     // Utl/Utt state values — always needed for residual_station calls.
     Real Utl[4]={0}, Utt[4]={0};
     for (int i=0;i<4;++i) { Utl[i]=Ut[i]; Utt[i]=Ut[i]; }
-    Utl[2] = ncrit;
+    // Free transition: pin amp at ncrit. Forced: keep interpolated amp.
+    if (!param.forcet) {
+        Utl[2] = ncrit;
+    }
 
     // cttr_Ut declared always so get_cttr has a valid output arg;
     // its values feed Utt derivatives only inside the Jacobian block.
@@ -532,34 +550,47 @@ void residual_transition(
     residual_station<ComputeJacobian>(Utt,U2,xt,x2,aux1,aux2,false,true,false,
                                        param,Rt,Rt_U,Rt_x);
     for (int i=0;i<3;++i) R[i] = Rl[i]+Rt[i];
+    // Forced transition: drop the laminar amp equation (Rl[2]) but keep the
+    // turbulent lag equation (Rt[2]).  Using R[2] = 0 would create a singular
+    // Jacobian row; we need Rt[2] to constrain the ctau state at the transition node.
+    if (param.forcet) { R[2] = Rt[2]; }
 
     if constexpr (ComputeJacobian) {
-        // Post-Newton Jacobian of transition location xt.
-        Real Rxt_U[8]={0};
-        for (int i=0;i<4;++i) {
-            Rxt_U[i]   = -0.5*(xt-x1)*(damp1_U1[i]+dampt_Ut[i]*w1);
-            Rxt_U[i+4] = -0.5*(xt-x1)*(dampt_Ut[i]*w2);
-        }
-        Rxt_U[2] -= 1.0;
-
         Real Ut_x1[4]={0}, Ut_x2[4]={0};
         for (int i=0;i<4;++i) {
-            Ut_x1[i] = (U2[i]-U1[i])*(w2-1)/dx;
+            Ut_x1[i] = (U2[i]-U1[i])*(w2-Real(1.0))/dx;
             Ut_x2[i] = (U2[i]-U1[i])*(-w2)/dx;
-        }
-        Ut_x1[2]=0; Ut_x2[2]=0;
-
-        Real Rxt_x1 = 0.5*(damp1+dampt);
-        Real Rxt_x2 = 0.0;
-        for (int i=0;i<4;++i) {
-            Rxt_x1 -= 0.5*(xt-x1)*dampt_Ut[i]*Ut_x1[i];
-            Rxt_x2 -= 0.5*(xt-x1)*dampt_Ut[i]*Ut_x2[i];
         }
 
         Real xt_U[8]={0}, xt_U1[4]={0}, xt_U2[4]={0};
-        Real xt_x1 = -Rxt_x1/Rxt_xt;
-        Real xt_x2 = -Rxt_x2/Rxt_xt;
-        for (int i=0;i<8;++i) xt_U[i] = -Rxt_U[i]/Rxt_xt;
+        Real xt_x1, xt_x2;
+
+        if (!param.forcet) {
+            // Free: implicit differentiation of the Newton residual Rxt = 0
+            Real Rxt_U[8]={0};
+            for (int i=0;i<4;++i) {
+                Rxt_U[i]   = -Real(0.5)*(xt-x1)*(damp1_U1[i]+dampt_Ut[i]*w1);
+                Rxt_U[i+4] = -Real(0.5)*(xt-x1)*(dampt_Ut[i]*w2);
+            }
+            Rxt_U[2] -= Real(1.0);
+            Ut_x1[2] = Real(0.0); Ut_x2[2] = Real(0.0);
+
+            Real Rxt_x1 = Real(0.5)*(damp1+dampt);
+            Real Rxt_x2 = Real(0.0);
+            for (int i=0;i<4;++i) {
+                Rxt_x1 -= Real(0.5)*(xt-x1)*dampt_Ut[i]*Ut_x1[i];
+                Rxt_x2 -= Real(0.5)*(xt-x1)*dampt_Ut[i]*Ut_x2[i];
+            }
+            xt_x1 = -Rxt_x1/Rxt_xt;
+            xt_x2 = -Rxt_x2/Rxt_xt;
+            for (int i=0;i<8;++i) xt_U[i] = -Rxt_U[i]/Rxt_xt;
+        } else {
+            // Forced: fake constraint dxt/dU=0, dxt/dx1=w1, dxt/dx2=w2
+            // xt_U stays zero (initialised above)
+            xt_x1 = w1;
+            xt_x2 = w2;
+        }
+
         for (int i=0;i<4;++i) { xt_U1[i]=xt_U[i]; xt_U2[i]=xt_U[i+4]; }
         for (int i=0;i<4;++i) {
             Ut_x1[i] += Ut_xt[i]*xt_x1;
@@ -584,8 +615,12 @@ void residual_transition(
                 Utt_U1[i+4*j]=Ut_U1[i+4*j]; Utt_U2[i+4*j]=Ut_U2[i+4*j];
             }
         }
-        Utl_x1[2]=0; Utl_x2[2]=0;
-        for (int j=0;j<4;++j) { Utl_U1[2+4*j]=0.0; Utl_U2[2+4*j]=0.0; }
+        // Free: Utl amp is pinned to ncrit, so all Utl row-2 sensitivities are zero.
+        // Forced: Utl amp is interpolated, keep full sensitivity.
+        if (!param.forcet) {
+            Utl_x1[2]=Real(0.0); Utl_x2[2]=Real(0.0);
+            for (int j=0;j<4;++j) { Utl_U1[2+4*j]=Real(0.0); Utl_U2[2+4*j]=Real(0.0); }
+        }
 
         for (int j=0;j<4;++j) {
             Real sU1=0.0, sU2=0.0;
@@ -604,6 +639,16 @@ void residual_transition(
                 Rt_Utt[colMajorIndex(r,c,3)]  = Rt_U[colMajorIndex(r,c,3)];
                 Rt_U2b[colMajorIndex(r,c,3)]  = Rt_U[colMajorIndex(r,c+4,3)];
             }
+
+        // Forced transition: drop Rl's amp row so only Rt (turbulent lag) fills row 2.
+        if (param.forcet) {
+            for (int c = 0; c < 4; ++c) {
+                Rl_U1[colMajorIndex(2,c,3)]  = Real(0.0);
+                Rl_Utl[colMajorIndex(2,c,3)] = Real(0.0);
+            }
+            Rl_x[2] = Real(0.0);
+            Rl_x[5] = Real(0.0);
+        }
 
         // R_x (first pass).
         for (int i=0;i<3;++i) {

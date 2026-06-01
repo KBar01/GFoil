@@ -110,6 +110,9 @@ struct Vsol_t {
     Real ue_sigma[(Ncoords+Nwake)*(Ncoords+Nwake-2)] = {0};
     bool turb[Ncoords+Nwake] = {false};
     std::vector<std::vector<int>> Is;
+    // Forced-transition state (plain doubles/bools, safe on CoDi tape)
+    bool   forcet[2] = {false, false};
+    double xift[2]   = {0.0, 0.0};
 };
 
 template<typename Real>
@@ -126,6 +129,9 @@ struct Param_t {
     int  niglob = 50;
 
     Real ncrit = 9.0;
+    // Forced-transition state (plain bool/double — safe on CoDi tape)
+    bool   forcet = false;
+    double xift   = 0.0;
     Real Cuq   = 1.0;
     Real Dlr   = 0.9;
     Real SlagK = 5.6;

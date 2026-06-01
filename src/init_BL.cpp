@@ -202,8 +202,35 @@ void init_boundary_layer(const Oper&oper, const Foil&foil, Param&param, Isol&iso
         }
 
         
+        // Precompute forced-transition arc-length for this surface
+        bool local_forcet = false;
+        double local_xift = 0.0;
+        if (surf < 2 && param.xft_xc[surf] < 1.0 - 1e-9) {
+            double x_max = 0.0;
+            for (int k = 0; k < Ncoords; ++k)
+                x_max = std::max(x_max, foil.x[2*k].getValue());
+            double xft_abs = param.xft_xc[surf] * x_max;
+            for (int k = 1; k < N; ++k) {
+                double x_prev = foil.x[2 * indexList[k-1]].getValue();
+                double x_curr = foil.x[2 * indexList[k  ]].getValue();
+                if ((x_prev - xft_abs) * (x_curr - xft_abs) <= 0.0) {
+                    double xi_prev = isol.distFromStag[indexList[k-1]].getValue();
+                    double xi_curr = isol.distFromStag[indexList[k  ]].getValue();
+                    double frac = (x_curr == x_prev) ? 0.0 : (xft_abs - x_prev) / (x_curr - x_prev);
+                    local_xift   = xi_prev + (xi_curr - xi_prev) * frac;
+                    local_forcet = true;
+                    break;
+                }
+            }
+        }
+        // Set per-surface forced-transition state on param and vsol
+        param.forcet   = local_forcet;
+        param.xift     = local_xift;
+        vsol.forcet[surf < 2 ? surf : 1] = local_forcet;
+        vsol.xift[surf < 2 ? surf : 1]   = local_xift;
+
         bool turb = false, wake = false,simi=false;
-        
+
         int i0 = 0;
         if (surf < 2) {
             
@@ -314,6 +341,16 @@ void init_boundary_layer(const Oper&oper, const Foil&foil, Param&param, Isol&iso
                 Real R[3]={0}, R_U[24]={0}, R_x[6]={0};
                 
                 if (tran) {
+                    if (local_forcet) {
+                        // Forced transition: residual_transition would diverge when
+                        // amp << ncrit.  Directly initialize ctau from prevState instead.
+                        // R stays zero (not checked for convergence, init_BL just
+                        // sets the state directly after this block).
+                        Real ct_U[4]={0};
+                        Real ct = get_cttr(prevState[0],prevState[1],prevState[2],prevState[3],true,param,ct_U);
+                        currState[2] = ct;
+                        break; // skip Newton loop, use currState as-is
+                    }
                     residual_transition<true,Real>(prevState,currState,isol.distFromStag[prevNode],isol.distFromStag[currNode],0.0,0.0,param,R,R_U,R_x);
                 }
                 else {
@@ -429,9 +466,18 @@ void init_boundary_layer(const Oper&oper, const Foil&foil, Param&param, Isol&iso
                 }
             }
 
-            if (!turb && (!tran && currState[2] > param.ncrit)) {
-                tran = true;
-                continue; // amplification exceeds ncrit, redo node with tran=true
+            if (!turb && !tran) {
+                bool natural_tran = (currState[2] > param.ncrit);
+                bool forced_tran  = false;
+                if (local_forcet && local_xift > 0.0) {
+                    double xi_prev_d = isol.distFromStag[prevNode].getValue();
+                    double xi_curr_d = isol.distFromStag[currNode].getValue();
+                    forced_tran = (xi_prev_d <= local_xift && local_xift < xi_curr_d);
+                }
+                if (natural_tran || forced_tran) {
+                    tran = true;
+                    continue;
+                }
             }
 
             // Cap the last laminar node's amp to ncrit before storing.

@@ -135,6 +135,9 @@ py::dict run_AD_py(py::dict inp, py::dict jacobian) {
     int aWeighting          = inp.contains("aWeighting") ? inp["aWeighting"].cast<int>() : 0;
     double f_min            = inp.contains("f_min") ? inp["f_min"].cast<double>() : 200.0;
     double f_max            = inp.contains("f_max") ? inp["f_max"].cast<double>() : 20000.0;
+    double xft_xc_d[2];
+    xft_xc_d[0] = inp.contains("bottrans") ? inp["bottrans"].cast<double>() : 1.0;
+    xft_xc_d[1] = inp.contains("toptrans") ? inp["toptrans"].cast<double>() : 1.0;
 
     RealRev targetAlphaDeg_r = inp["alpha_degrees"].cast<double>();
     RealRev Re_r             = inp["Re"].cast<double>();
@@ -213,6 +216,7 @@ py::dict run_AD_py(py::dict inp, py::dict jacobian) {
 
     partialRpartialx<RealRev>(
         Ncrit_r, Ufac_r, TEfac_r, inXcoords_d, Re_r, Ma_r, rhoInf_r, currStag,
+        xft_xc_d,
         adlambda_CL, adlambda_CD, adlambda_OASPL,
         inYcoords_Rev, targetAlphaDeg_r, states_d, turb,
         dgdy_CL, dgdy_CD, dgdy_OASPL, dgdalpha_CL, dgdalpha_CD, dgdalpha_OASPL);

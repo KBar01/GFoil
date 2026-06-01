@@ -84,7 +84,9 @@ void build_glob_RV_AD(const Foil<Real>&foil, const Vsol<Real>&vsol, const Isolv<
     
     const Real* xi = isol.distFromStag;
     for (int si = 0; si < 3; ++si) {    // for each surface (upper/lower/wake)
-        
+        // Set forced-transition state for this surface
+        param.forcet = (si < 2) ? vsol.forcet[si] : false;
+        param.xift   = (si < 2) ? vsol.xift[si]   : 0.0;
 
         const std::vector<int>& Is = vsol.Is[si]; // list of surface node indices from stag point
         const int nSurfPoints = Is.size();
@@ -145,7 +147,13 @@ void build_glob_RV_AD(const Foil<Real>&foil, const Vsol<Real>&vsol, const Isolv<
             Real* Ucurr = &glob.U[colMajorIndex(0,Is[currI],4)];
 
             if (tran){
-                residual_transition<Real>(Uprev,Ucurr,xi[Is[prevI]],xi[Is[currI]],0,0,param,Ri);
+                // Only use forced formula when xift actually falls in this interval.
+                bool use_forced = param.forcet &&
+                    (param.xift >= xi[Is[prevI]].getValue()) &&
+                    (param.xift <  xi[Is[currI]].getValue());
+                Param<Real> temp_param = param;
+                if (!use_forced) temp_param.forcet = false;
+                residual_transition<Real>(Uprev,Ucurr,xi[Is[prevI]],xi[Is[currI]],Real(0.0),Real(0.0),temp_param,Ri);
             }
             else {
                 Real aux1=0,aux2=0;

@@ -287,7 +287,12 @@ int main(){
     double dgdalpha_CD = {0};
     double dgdalpha_OASPL = {0};
     
+    double xft_xc_main[2];
+    xft_xc_main[0] = j.contains("bottrans") ? j["bottrans"].get<double>() : 1.0;
+    xft_xc_main[1] = j.contains("toptrans") ? j["toptrans"].get<double>() : 1.0;
+
     partialRpartialx<RealRev>(Ncrit_r,Ufac_r,TEfac_r,inXcoords_d,Re_r,Ma_r,rhoInf_r,currStag,
+        xft_xc_main,
         adlambda_CL,adlambda_CD,adlambda_OASPL,
         inYcoords_Rev,targetAlphaDeg_r,states_d,turb,
         dgdy_CL,dgdy_CD,dgdy_OASPL,dgdalpha_CL,dgdalpha_CD,dgdalpha_OASPL
