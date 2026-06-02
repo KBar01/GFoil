@@ -49,6 +49,7 @@ py::dict run_forward_py(py::dict inp, py::object prev_jacobian = py::none()) {
     double f_max     = inp.contains("f_max")      ? inp["f_max"].cast<double>() : 20000.0;
     double xft_lower = inp.contains("bottrans")   ? inp["bottrans"].cast<double>() : 1.0;
     double xft_upper = inp.contains("toptrans")   ? inp["toptrans"].cast<double>() : 1.0;
+    double rtol      = inp.contains("rtol")       ? inp["rtol"].cast<double>() : 1e-6;
     std::string model = inp["model"].cast<std::string>();
 
     // ── observer arrays ───────────────────────────────────────────────────────
@@ -102,7 +103,8 @@ py::dict run_forward_py(py::dict inp, py::object prev_jacobian = py::none()) {
         f_min,
         f_max,
         xft_lower,
-        xft_upper);
+        xft_upper,
+        rtol);
 
     // ── pack result ───────────────────────────────────────────────────────────
     py::dict result;

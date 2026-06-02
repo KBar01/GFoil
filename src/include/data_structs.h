@@ -202,7 +202,7 @@ struct Post {
 // Parameters Struct
 struct Param {
 
-    Real rtol = 1e-10;           // Residual tolerance
+    Real rtol = 1e-6;            // RMS residual tolerance (XFOIL-style; see resid_rms)
     int niglob = 50;               // Max global iterations
 
     // Viscous parameters

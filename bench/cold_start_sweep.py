@@ -36,8 +36,12 @@ from GFoil.inputs import Aerofoil, Acoustics, OperatingConds        # noqa: E402
 from GFoil.gfoil import _build_input_dict, _call_forward            # noqa: E402
 
 RESULTS_DIR = Path(__file__).resolve().parent / "results"
-JSONL_PATH = RESULTS_DIR / "baseline.jsonl"
 SUBSET_PATH = RESULTS_DIR / "subset.json"
+
+
+def jsonl_path(tag):
+    return RESULTS_DIR / (f"baseline.jsonl" if tag == "baseline"
+                          else f"sweep_{tag}.jsonl")
 
 OBSERVER = np.array([[1.5, 0.0, 1.0]])   # single far-field observer
 
@@ -120,8 +124,12 @@ def case_id(c):
 # --------------------------------------------------------------------------- #
 # Execution                                                                    #
 # --------------------------------------------------------------------------- #
-def run_case(c):
-    """Cold-start solve (restart=0, no warm start).  Returns a result dict."""
+def run_case(c, rtol=None):
+    """Cold-start solve (restart=0, no warm start).  Returns a result dict.
+
+    rtol (if given) overrides the solver's RMS convergence tolerance via the
+    plumbed input["rtol"] knob, so tolerance can be swept without rebuilding.
+    """
     aero = Aerofoil(xcoords=np.asarray(c["xcoords"]).copy(),
                     ycoords=np.asarray(c["ycoords"]).copy())
     op = OperatingConds(alpha=c["alpha"], Re=c["Re"], nCrit=c["nCrit"],
@@ -129,6 +137,8 @@ def run_case(c):
                         transition=np.array(c["trans"], dtype=float))
     ac = Acoustics(observerXYZ=OBSERVER)
     inp = _build_input_dict(aero, op, ac, fromRestart=0)
+    if rtol is not None:
+        inp["rtol"] = float(rtol)
 
     t0 = time.perf_counter()
     err = ""
@@ -154,8 +164,9 @@ def run_case(c):
         note=c.get("note", ""))
 
 
-def run_sweep(limit=None, fresh=False):
+def run_sweep(limit=None, fresh=False, rtol=None, tag="baseline"):
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+    JSONL_PATH = jsonl_path(tag)
 
     catalog = build_catalog()
     subset = select_subset(catalog)
@@ -179,10 +190,11 @@ def run_sweep(limit=None, fresh=False):
     todo = [c for c in cases if case_id(c) not in done]
     print(f"Total cases: {len(cases)}  |  to run: {len(todo)}\n")
 
+    print(f"rtol={rtol if rtol is not None else 'solver default (1e-6)'}\n")
     t_start = time.perf_counter()
     with open(JSONL_PATH, "a") as fh:
         for i, c in enumerate(todo, 1):
-            res = run_case(c)
+            res = run_case(c, rtol=rtol)
             fh.write(json.dumps(res) + "\n")
             fh.flush()
             flag = "OK " if res["converged"] else "XX "
@@ -196,19 +208,20 @@ def run_sweep(limit=None, fresh=False):
 # --------------------------------------------------------------------------- #
 # Reporting                                                                    #
 # --------------------------------------------------------------------------- #
-def load_results():
-    if not JSONL_PATH.exists():
-        print(f"No results at {JSONL_PATH}. Run with --run first.")
+def load_results(tag="baseline"):
+    path = jsonl_path(tag)
+    if not path.exists():
+        print(f"No results at {path}. Run with --run first.")
         sys.exit(1)
-    return [json.loads(l) for l in JSONL_PATH.read_text().splitlines() if l.strip()]
+    return [json.loads(l) for l in path.read_text().splitlines() if l.strip()]
 
 
 def _pct(n, d):
     return f"{100.0 * n / d:5.1f}%" if d else "  n/a"
 
 
-def report():
-    rows = load_results()
+def report(tag="baseline"):
+    rows = load_results(tag)
     grid = [r for r in rows if not r["anchor"]]
     anchors = [r for r in rows if r["anchor"]]
 
@@ -288,14 +301,18 @@ def main():
     ap.add_argument("--report", action="store_true", help="print scoreboard")
     ap.add_argument("--fresh", action="store_true", help="discard prior results")
     ap.add_argument("--limit", type=int, default=None, help="cap number of cases")
+    ap.add_argument("--rtol", type=float, default=None,
+                    help="override RMS convergence tolerance (default: solver 1e-6)")
+    ap.add_argument("--tag", type=str, default="baseline",
+                    help="results-file tag (baseline -> baseline.jsonl, else sweep_<tag>.jsonl)")
     args = ap.parse_args()
 
     if not (args.run or args.report):
         ap.print_help()
         sys.exit(1)
     if args.run:
-        run_sweep(limit=args.limit, fresh=args.fresh)
-    report()
+        run_sweep(limit=args.limit, fresh=args.fresh, rtol=args.rtol, tag=args.tag)
+    report(tag=args.tag)
 
 
 if __name__ == "__main__":

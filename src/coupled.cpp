@@ -18,12 +18,17 @@
 using json = nlohmann::json;
 
 
-Real euc_norm(const Real* R, int size) {
+// Root-mean-square residual norm (XFOIL-style).  Dividing the sum of squares
+// by the entry count before the sqrt makes the convergence tolerance
+// independent of the system size (Rsize = 3*(Ncoords+Nwake) ~ 1500 entries),
+// so param.rtol is a per-equation RMS residual comparable to XFOIL's criterion
+// rather than the size-dependent raw Euclidean norm used previously.
+Real resid_rms(const Real* R, int size) {
     Real sum = 0.0;
     for (int i = 0; i < size; ++i) {
         sum += R[i] * R[i];
     }
-    return std::sqrt(sum);
+    return std::sqrt(sum / static_cast<Real>(size));
 }
 
 bool solve_coupled(const Oper& oper, const Foil& foil, const Wake& wake,
@@ -64,7 +69,7 @@ bool solve_coupled(const Oper& oper, const Foil& foil, const Wake& wake,
     for (int i = 0; i < 60; ++i) {
 
         build_glob_RV(foil, vsol, isol, glob, param);
-        Real residualNorm = euc_norm(glob.R, Rsize);
+        Real residualNorm = resid_rms(glob.R, Rsize);   // RMS, vs param.rtol
 
 
         if (residualNorm < param.rtol) {

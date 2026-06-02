@@ -47,7 +47,8 @@ bool runCode(
     double f_min,
     double f_max,
     double xft_lower,
-    double xft_upper)
+    double xft_upper,
+    double rtol)
 {
     Real alpha = (alphad / 180) * M_PI;
     Oper oper(alpha, Re, Ma);
@@ -71,6 +72,7 @@ bool runCode(
     Vsol& vsol = *vsolPtr;
     Glob& glob = *globPtr;
     Param param;
+    param.rtol      = rtol;       // RMS convergence tolerance (forward-only knob)
     param.ncrit     = nCrit;
     param.ncrithyst = ncrithyst;
     param.xft_xc[0] = xft_lower;  // lower surface (vsol.Is[0])

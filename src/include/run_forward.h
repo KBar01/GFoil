@@ -37,5 +37,6 @@ bool runCode(
     double f_min                         = 200.0,
     double f_max                         = 20000.0,
     double xft_lower                     = 1.0,
-    double xft_upper                     = 1.0
+    double xft_upper                     = 1.0,
+    double rtol                          = 1e-6   // RMS convergence tolerance
 );
