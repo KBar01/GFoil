@@ -196,7 +196,7 @@ void init_boundary_layer(const Oper&oper, const Foil&foil, Param&param, Isol&iso
         const std::vector<int> indexList = vsol.Is[surf] ;
         int N = indexList.size(); // How many nodes are on this surface
 
-        // Ensure edge velocities are not tiny fofr each surface
+        // Ensure edge velocities are not tiny for each surface
         Real uemax = 0.0;
         for (int i = 0; i < N; ++i){
             uemax = std::max(uemax, std::abs(ue[indexList[i]]));
@@ -301,7 +301,6 @@ void init_boundary_layer(const Oper&oper, const Foil&foil, Param&param, Isol&iso
             Real Uw[4]={0};
             wake_init(vsol,foil,glob,param,ue[indexList[0]],Uw);
 
-            //check_for_nans(ue,230,"ue vals");
 
             for (int j=0; j<3; ++j){ glob.U[colMajorIndex(j,indexList[0],4)] = Uw[j];}
             glob.U[colMajorIndex(3,indexList[0],4)] = ue[indexList[0]];
@@ -309,7 +308,6 @@ void init_boundary_layer(const Oper&oper, const Foil&foil, Param&param, Isol&iso
             wake = true;
             vsol.turb[indexList[0]] = true;
 
-            //check_for_nans(glob.U,920,"wake init section");
         }
 
         // Looping over rest of point on given surface, using prevbious node as intial guess
@@ -569,7 +567,6 @@ void init_boundary_layer_from_xfoil(const Oper&oper, const Foil&foil, const Para
     Real Uw[4]={0};
     wake_init(vsol,foil,glob,param,ue[indexList[0]],Uw);
 
-    //check_for_nans(ue,230,"ue vals");
 
     for (int j=0; j<3; ++j){ glob.U[colMajorIndex(j,indexList[0],4)] = Uw[j];}
     glob.U[colMajorIndex(3,indexList[0],4)] = ue[indexList[0]];
