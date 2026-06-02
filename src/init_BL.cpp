@@ -29,11 +29,9 @@ void thwaites_init(const Real&stagConstant, const Param&param,Real& momThickness
     dispThickness = 2.2*momThickness;
 }
 
-/*
-Thought on optimising: calcuolating residual currently involves the calculation of parameters
-on both nodes, however you only iteratively change the end node in the newton steps, the start
-node remains unchanged, so its parameters are fixed for that iteration, dont need to recompute.
-*/ 
+// NOTE (perf, not acted on): the inner station Newton recomputes both end-node
+// closures each step, but only the end node changes between steps — the start
+// node's quantities are fixed and could be cached. Left as-is for clarity.
 
 
 #ifndef USE_CODIPACK

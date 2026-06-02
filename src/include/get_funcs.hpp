@@ -30,6 +30,10 @@
 // ============================================================================
 
 
+// ===========================================================================
+//  Compressibility & thermodynamics  (Cp, Karman-Tsien speed, local Mach)
+// ===========================================================================
+
 // Pressure coefficient C_p = 1 - (u_e/V_inf)^2 at every node, with the
 // Karman-Tsien compressibility correction applied when Ma > 0. Writes into
 // post.cp[].
@@ -114,6 +118,10 @@ Real get_Mach2(const Real&edgeVel,const ParamT& param,Real*dMsqrd_dState){
     
     { return M2;}
 }
+
+// ===========================================================================
+//  Shape factors & integral thicknesses  (H, Hw, Hk, H**, delta, Re_theta)
+// ===========================================================================
 
 // H = delta*/theta. H_k: Fidkowski Eq.45, H**: Eq.46
 template<typename Real>
@@ -304,6 +312,10 @@ Real get_Ret(const Real th, const Real ds, const Real ue, const ParamT& param, R
     return Ret ;
 }
 
+// ===========================================================================
+//  Skin friction  (c_f and its momentum-residual form c_f*xi/theta)
+// ===========================================================================
+
 // c_f laminar: Fidkowski Eq.56. c_f turbulent: Eqs.57-60
 template<typename Real, typename ParamT>
 Real get_cf(const Real th, const Real ds, const Real sa, const Real ue,const bool turb,const bool wake, const ParamT& param, Real* cf_U)  // output: cf linearisation w.r.t. th, ds, sa, ue
@@ -427,6 +439,10 @@ Real get_cfxt(const Real th, const Real ds, const Real sa, const Real ue, const 
 }
 
 
+
+// ===========================================================================
+//  Energy shape factor & slip velocity  (H*, U_s, U_q equilibrium locus)
+// ===========================================================================
 
 // Kinetic-energy shape factor H* = theta*/theta (Fidkowski Eq.46), with
 // separate laminar and turbulent fits and Hk floored (1.05 surface, 1.00005
@@ -674,6 +690,10 @@ Real (&uq_U)[8])
 }
 
 
+
+// ===========================================================================
+//  Dissipation coefficient C_D  (component builders + total + residual form)
+// ===========================================================================
 
 // Turbulent wall contribution to the dissipation coefficient C_D,
 // cDi = 0.5*cf*Us*(2/Hs)*fac with a tanh blend `fac` near the wall-law shape
@@ -941,6 +961,10 @@ Real get_cDixt(const Real th,const Real ds,const Real sa,const Real ue,const boo
 }
 
 
+// ===========================================================================
+//  Discretisation upwinding
+// ===========================================================================
+
 // Upwinding fraction for the two-point (node1->node2) BL difference scheme,
 // biased by the local shape factors Hk1/Hk2 (more upwinding in strong APG / near
 // separation; C differs in the wake). Returns upw in [0,1]; writes d(upw)/d[U1,U2]
@@ -997,6 +1021,10 @@ Real get_upw(const Real th1,const Real ds1,const Real sa1,const Real ue1,
     return upw ;
 }
 
+
+// ===========================================================================
+//  Shear-stress closure & e^N transition  (c_tau,eq, amplification, c_tau,tr)
+// ===========================================================================
 
 // Equilibrium shear-stress coefficient c_{tau,eq} (Fidkowski Eqs.78-80):
 // sqrt( CC*Hs*(Hk-1)*Hkc^2 / ((1-Us)*H*Hk^2) ), with Hk floored and a wake
@@ -1205,6 +1233,10 @@ Real get_cttr(const Real th,const Real ds,const Real sa,const Real ue,const bool
 
     return cttr;
 }
+
+// ===========================================================================
+//  Inviscid edge velocity assembly
+// ===========================================================================
 
 // get_ueinv: u_e^inv = edgeVelSign * gamma on airfoil (Fidkowski Sec. V.B,
 // since gamma = tangential velocity), u_e^inv = uewi on wake (Eq.24)
