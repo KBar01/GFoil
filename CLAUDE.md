@@ -167,16 +167,34 @@ build artefacts only (main.cpp is a stub).
 
 Full write-ups with root cause analysis and rejected approaches are in CHANGELOG.md.
 
-- **Cold-start period-2 oscillation**: Boeing 737 Midspan α=−3.1°/−3.2° and others
-  near transition-sensitive points. Warm-start continuation handles them;
-  `failure_mode="transition_front_oscillation"` signals the sweep script.
+**Cold-start audit (June 2026).** A stratified 25-foil cold-start sweep
+(`bench/cold_start_sweep.py`, see `bench/results/REPORT.md`) re-measured these.
+On the current branch, **4 of the 5 single-point limitations below now converge
+cold** — the entries are retained for history but were already resolved by prior
+work. Only **NACA 0008-34 α=−2.6° still fails cold.** The audit also added an
+XFOIL-style RMS convergence criterion (Phase 1) and an `acoustic_nan`
+failure_mode (a converged aero solve whose noise model returns non-finite OASPL,
+common at low Re — formerly a silent blank failure). A residual line search and
+ctau equilibrium reseeding were tried and rejected as net-neutral/regressive
+(`bench/results/PHASE2.md`, `PHASE3.md`).
 
-- **NACA 0008-34 α=−2.6°**: genuine multi-node BL attractor (period-14 cycle).
-  Warm-start from adjacent alphas also fails. No fix found; documented as permanent.
+- **NACA 0008-34 α=−2.6°** *(still fails cold)*: genuine multi-node BL attractor
+  (period-14 cycle). Warm-start from adjacent alphas also fails. No fix found;
+  documented as permanent.
 
-- **NACA 0012, nCrit=5, α=±2.5°**: NaN-lock — BL Jacobian goes singular at iter 3
-  and stays frozen. Exits after 7 iterations with `failure_mode="nan_lock"`.
-  Warm-start from a neighbouring alpha converges.
+- **Cold-start period-2 oscillation** *(converges cold now)*: Boeing 737 Midspan
+  α=−3.1°/−3.2° and others near transition-sensitive points.
+  `failure_mode="transition_front_oscillation"` still signals the sweep script
+  for cases that do cycle.
 
-- **NACA 0012, nCrit=5, α=4.7°**: multi-node BL attractor; ctau limiter saturates;
-  residual plateaus at ~0.17. Warm-start from α=4.5° or α=5.0° converges.
+- **NACA 0012, nCrit=5, α=±2.5°** *(converges cold now, ~6 it)*: was NaN-lock —
+  BL Jacobian going singular at iter 3 and staying frozen (`failure_mode="nan_lock"`).
+
+- **NACA 0012, nCrit=5, α=4.7°** *(converges cold now, ~11 it)*: was a multi-node
+  BL attractor with ctau-limiter saturation; residual plateaued at ~0.17.
+
+### Forward convergence knob
+`solve_coupled` converges on an RMS residual (`resid_rms` in coupled.cpp) against
+`param.rtol` (default 1e-6, XFOIL-comparable). `rtol` is plumbed from
+`input["rtol"]` (forward-only; AD path unaffected) so it can be swept without
+rebuilding.
