@@ -3,16 +3,36 @@
 #include <cmath>
 // Callers must include real_type.h / real_type.hpp before this header.
 
+// ============================================================================
+//  get_funcs.hpp — integral boundary-layer closure relations
+//  ---------------------------------------------------------------------------
+//  The physics heart of the solver: the empirical/semi-empirical closures that
+//  the residual assembly (residuals_shared.hpp) and the BL march (init_BL.cpp)
+//  evaluate at every node — shape factors, skin friction, dissipation, the
+//  equilibrium shear-stress relations, the e^N amplification rate, and the
+//  compressibility corrections. These follow Drela & Giles (1987) and the
+//  Fidkowski (2021) formulation (equation numbers are cited per function).
+//
+//  Convention: each get_*() returns a quantity by value and writes its
+//  derivatives w.r.t. the local 4-state U = [th, ds, sa, ue] into a `_U`
+//  reference argument (length 4); a `_x` output is the derivative w.r.t. the
+//  streamwise arc-length ξ. See NOMENCLATURE.md for every symbol (th = θ,
+//  ds = δ*, ue = edge velocity, sa = amplification ñ / shear-stress c_τ,
+//  Hk = kinematic shape factor, Ret = Re_θ, etc.).
+//
+//  CoDiPack: these run inside the active AD tape. Per CLAUDE.md, do NOT
+//  re-order or re-express the Real arithmetic — it changes the recorded
+//  adjoint even when the forward value is identical.
+//
+//  NOTE (perf, not acted on): several closures recompute Hk / Ret / Mach2 that
+//  a caller has often already evaluated; passing them in would cut redundant
+//  work but is left as-is to keep the call sites self-contained.
+// ============================================================================
 
-/*
 
-For optimisation, a lot of functions involve re-calculating parametrs
-that are already found in earlier sections of the code. Can reduce 
-computation 
-
-*/
-
-
+// Pressure coefficient C_p = 1 - (u_e/V_inf)^2 at every node, with the
+// Karman-Tsien compressibility correction applied when Ma > 0. Writes into
+// post.cp[].
 template<typename Real, typename PostT, typename OperT, typename ParamT>
 void get_cp(PostT& post, const OperT& oper, const ParamT& param, const Real edgeVelocity[Ncoords+Nwake]) {
     constexpr int Nsys = Ncoords+Nwake;
@@ -56,9 +76,10 @@ Real get_uk(const Real& incompSpeed,const ParamT& param,Real&dCompSpeed_dIncompS
 template<typename Real, typename ParamT>
 Real get_Mach2(const Real&edgeVel,const ParamT& param,Real*dMsqrd_dState){
 
-    // Finding squared Mach number, doing compressible correction if needed
-    // Returns sqaured mach by value, and change wrt state U as reference.
-    // Initialise dMsqrd_sState as 4 zeros !!
+    // Local Mach number squared (incompressible -> 0). With compressibility on,
+    // applies the Karman-Tsien speed correction first (get_uk).
+    // Returns M^2 by value; writes d(M^2)/dU into dMsqrd_dState (length 4).
+    // dMsqrd_dState is fully overwritten here (initialised to 4 zeros below).
     
     Real M2 = 0.0;
     dMsqrd_dState[0] = 0;
@@ -108,6 +129,8 @@ Real get_H(const Real th, const Real ds, Real* H_U){
     return H;
 }
 
+// Wake-gap shape factor Hw = wgap/th (adds the trailing-edge gap into the wake
+// closure). Returns Hw; writes d(Hw)/dU into Hw_U (length 4).
 template<typename Real>
 Real get_Hw(const Real th, const Real wgap, Real* Hw_U){
     
@@ -182,7 +205,10 @@ Real get_Hss(const Real th, const Real ds, const Real ue, const ParamT& param, R
 }
 
 
-// Amplification rate dn/dxi: Fidkowski Eqs.69-76
+// Boundary-layer thickness delta = th*(3.15 + 1.72/(Hk-1)) + ds, capped at
+// 12*th (Drela). Returns delta; writes d(delta)/dU into de_U (length 4).
+// (NOTE: the previous "amplification rate" comment here was wrong — that is
+//  get_damp; this returns the BL thickness.)
 template<typename Real, typename ParamT>
 Real get_de(const Real th, const Real ds, const Real ue, const ParamT& param,Real* de_U){
 
@@ -217,6 +243,10 @@ Real get_de(const Real th, const Real ds, const Real ue, const ParamT& param,Rea
 }
 
 
+// Momentum-thickness Reynolds number Re_theta = rho*th*u_e/mu. Incompressible:
+// rho0*th*ue/mu0. Compressible: applies the Karman-Tsien speed, a Sutherland
+// viscosity ratio, and the isentropic density. Returns Re_theta; writes
+// d(Re_theta)/dU into Ret_U (length 4).
 template<typename Real, typename ParamT>
 Real get_Ret(const Real th, const Real ds, const Real ue, const ParamT& param, Real* Ret_U){
 
@@ -374,6 +404,9 @@ Real get_cf(const Real th, const Real ds, const Real sa, const Real ue,const boo
 }
 
 
+// Skin-friction term as it enters the momentum-equation residual: cfxt =
+// C_f * dist / th (dist = arc-length xi). Returns cfxt; writes d(cfxt)/dU into
+// cfxt_U (length 4) and d(cfxt)/dxi into cfxt_x.
 template<typename Real, typename ParamT>
 Real get_cfxt(const Real th, const Real ds, const Real sa, const Real ue, const Real dist, const bool turb,const bool wake, const ParamT& param, Real*cfxt_U,Real& cfxt_x){
 
@@ -395,6 +428,9 @@ Real get_cfxt(const Real th, const Real ds, const Real sa, const Real ue, const 
 
 
 
+// Kinetic-energy shape factor H* = theta*/theta (Fidkowski Eq.46), with
+// separate laminar and turbulent fits and Hk floored (1.05 surface, 1.00005
+// wake). Returns Hs; writes d(Hs)/dU into Hs_U (length 4).
 template<typename Real, typename ParamT>
 Real get_Hs(
     const Real th, const Real ds, const Real sa, const Real ue,
@@ -523,6 +559,9 @@ Real get_Hs(
 
 
 
+// Normalised slip velocity U_s = 0.5*Hs*(1 - (1/GB)*(Hk-1)/H) (Drela), clamped
+// below 1 on the airfoil surface. Feeds the lag equation and the dissipation.
+// Returns Us; writes d(Us)/dU into Us_U (length 4).
 template<typename Real, typename ParamT>
 Real get_Us(const Real th, const Real ds, const Real sa, const Real ue, const ParamT& param,
     const bool turb, const bool wake, Real* Us_U) {
@@ -636,6 +675,10 @@ Real (&uq_U)[8])
 
 
 
+// Turbulent wall contribution to the dissipation coefficient C_D,
+// cDi = 0.5*cf*Us*(2/Hs)*fac with a tanh blend `fac` near the wall-law shape
+// factor Hmin (zero in the wake). Returns the contribution; writes its
+// d/dU into cDi_U (length 4).
 template<typename Real, typename ParamT>
 Real get_cDi_turbwall(
     const Real th, const Real ds, const Real sa, const Real ue,const bool turb, const bool wake,
@@ -696,6 +739,8 @@ Real get_cDi_turbwall(
     return cDi;
 }
 
+// Laminar dissipation coefficient C_D (Hk-fit / Re_theta). One of the additive
+// components combined by get_cDi. Returns C_D,lam; writes d/dU into cDi_U.
 template<typename Real, typename ParamT>
 Real get_cDi_lam(const Real th,const Real ds,const Real sa,const Real ue,const ParamT& param,Real (&cDi_U)[4]) {
 
@@ -724,11 +769,12 @@ Real get_cDi_lam(const Real th,const Real ds,const Real sa,const Real ue,const P
     return num * invRet;
 }
 
+// Laminar-wake dissipation component, scaled on Hs*Re_theta. Used by get_cDi in
+// the wake. Returns the contribution; writes d/dU into cDi_U.
 template<typename Real, typename ParamT>
 Real get_cDi_lamwake(const Real th,const Real ds,const Real sa,const Real ue, const bool turb, const bool wake, const ParamT& param,Real (&cDi_U)[4]) {
 
 
-    //turb = false;
     Real Hk_U[4]={0}, Hs_U[4]={0}, Ret_U[4]={0};
     Real Hk = get_Hk(th,ds,ue,param,Hk_U);
     Real Hs = get_Hs(th,ds,sa,ue,param,false,wake,Hs_U);
@@ -753,6 +799,9 @@ Real get_cDi_lamwake(const Real th,const Real ds,const Real sa,const Real ue, co
 }
 
 
+// Outer-layer (turbulent) dissipation component, driven by the shear-stress
+// state ct = sa^2 and the slip velocity Us; zero when laminar. Returns the
+// contribution; writes d/dU into cDi_U.
 template<typename Real, typename ParamT>
 Real get_cDi_outer(const Real th, const Real ds,const Real sa,const Real ue, const bool turb,const bool wake,const ParamT& param, Real (&cDi_U)[4]) {
     
@@ -777,6 +826,8 @@ Real get_cDi_outer(const Real th, const Real ds,const Real sa,const Real ue, con
 }
 
 
+// Laminar-stress dissipation component (the (0.995 - Us)^2 / (Hs*Re_theta)
+// term). Combined by get_cDi. Returns the contribution; writes d/dU into cDi_U.
 template<typename Real, typename ParamT>
 Real get_cDi_lamstress(const Real th,const Real ds,const Real sa,const Real ue,const bool turb,const bool wake, const ParamT& param, Real (&cDi_U)[4]) {
     
@@ -802,7 +853,10 @@ Real get_cDi_lamstress(const Real th,const Real ds,const Real sa,const Real ue,c
 
 
 
-// c_D laminar: Fidkowski Eq.61. c_D turbulent: Eqs.62-67
+// Total dissipation coefficient C_D (c_D laminar: Fidkowski Eq.61; turbulent:
+// Eqs.62-67). Turbulent: sums the turbwall/lamwake + outer + lamstress
+// components, takes max with the pure-laminar value, and doubles in the wake.
+// Laminar: just get_cDi_lam. Returns C_D; writes d/dU into cDi_U (length 4).
 template<typename Real, typename ParamT>
 Real get_cDi(const Real th,const Real ds,const Real sa,const Real ue,const bool turb,const bool wake, const ParamT& param,
     Real (&cDi_U)[4])
@@ -864,6 +918,9 @@ Real get_cDi(const Real th,const Real ds,const Real sa,const Real ue,const bool 
 }
 
 
+// Dissipation term as it enters the shape-parameter residual: cDixt =
+// C_D * dist / th (dist = arc-length xi). Returns cDixt; writes d/dU into
+// cDixt_U (length 4) and d/dxi into cDixt_x.
 template<typename Real, typename ParamT>
 Real get_cDixt(const Real th,const Real ds,const Real sa,const Real ue,const bool turb,const bool wake, const Real dist, const ParamT& param,
     Real (&cDixt_U)[4],Real& cDixt_x)
@@ -884,6 +941,10 @@ Real get_cDixt(const Real th,const Real ds,const Real sa,const Real ue,const boo
 }
 
 
+// Upwinding fraction for the two-point (node1->node2) BL difference scheme,
+// biased by the local shape factors Hk1/Hk2 (more upwinding in strong APG / near
+// separation; C differs in the wake). Returns upw in [0,1]; writes d(upw)/d[U1,U2]
+// into upw_U (length 8: first 4 = node1, last 4 = node2).
 template<typename Real, typename ParamT>
 Real get_upw(const Real th1,const Real ds1,const Real sa1,const Real ue1,
     const Real th2,const Real ds2,const Real sa2,const Real ue2, const bool wake, const ParamT& param,
@@ -937,6 +998,10 @@ Real get_upw(const Real th1,const Real ds1,const Real sa1,const Real ue1,
 }
 
 
+// Equilibrium shear-stress coefficient c_{tau,eq} (Fidkowski Eqs.78-80):
+// sqrt( CC*Hs*(Hk-1)*Hkc^2 / ((1-Us)*H*Hk^2) ), with Hk floored and a wake
+// branch. The lag equation drives c_tau (=sa^2) toward this. Returns c_{tau,eq};
+// writes d/dU into cteq_U (length 4).
 template<typename Real, typename ParamT>
 Real get_cteq(const Real th,const Real ds,const Real sa,const Real ue,const bool turb,const bool wake, const ParamT& param,Real (&cteq_U)[4])
 {
@@ -999,11 +1064,16 @@ Real get_cteq(const Real th,const Real ds,const Real sa,const Real ue,const bool
 }
 
 
+// Envelope amplification rate dn~/dxi for the e^N transition model (Drela):
+// builds the critical-Re_theta curve from Hk and ramps the spatial growth rate
+// once Re_theta exceeds it; an extra term near n~ = ncrit sharpens the onset.
+// This is the laminar growth of the amplification state sa. Returns dn~/dxi;
+// writes d/dU into damp_U (length 4).
 template<typename Real, typename ParamT>
 Real get_damp(const Real th,const Real ds,const Real sa,const Real ue, const ParamT& param, Real (&damp_U)[4]) {
-    
-    
-    
+
+
+
     Real Hk_U[4]={0}, Ret_U[4]={0};
     Real Hk = get_Hk(th,ds,ue,param,Hk_U);
     Real Ret = get_Ret(th,ds,ue,param,Ret_U);
@@ -1106,6 +1176,10 @@ Real get_damp(const Real th,const Real ds,const Real sa,const Real ue, const Par
     damp += ed;
     return damp;
 }
+// Shear-stress coefficient c_tau seeded at a newly-turbulent node:
+// CtauC*exp(-CtauE/(Hk-1)) * c_{tau,eq} (the XFOIL transition-initialisation
+// factor). Used by update_transition when the transition front advances.
+// Returns c_tau,tr; writes d/dU into cttr_U (length 4).
 template<typename Real, typename ParamT>
 Real get_cttr(const Real th,const Real ds,const Real sa,const Real ue,const bool turb,const ParamT& param,Real (&cttr_U)[4]){
 
