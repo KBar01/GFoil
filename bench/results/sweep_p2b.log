@@ -1,0 +1,308 @@
+Total cases: 1381  |  to run: 1381
+
+rtol=solver default (1e-6)
+
+  [   1/1381] OK ANCHOR|NACA 0012 (golden)|a=+2.50|Re=2e+06|nc=5|tr=1.00      it=  6    103ms 
+  [   2/1381] OK ANCHOR|NACA 0012 (golden)|a=-2.50|Re=2e+06|nc=5|tr=1.00      it=  6     94ms 
+  [   3/1381] OK ANCHOR|NACA 0012 (golden)|a=+4.70|Re=2e+06|nc=5|tr=1.00      it= 11    149ms 
+  [   4/1381] XX ANCHOR|NACA 0008-34|a=-2.60|Re=2e+06|nc=9|tr=1.00            it=100    706ms transition_front_oscillation
+  [   5/1381] OK ANCHOR|BOEING 737 MIDSPAN|a=-3.10|Re=2e+06|nc=9|tr=1.00      it= 39    489ms 
+  [   6/1381] OK ANCHOR|BOEING 737 MIDSPAN|a=-3.20|Re=2e+06|nc=9|tr=1.00      it= 33    366ms 
+  [  12/1381] XX G|AG10|a=-6.00|Re=1e+06|nc=12|tr=1.00                        it=100    805ms no_convergence
+  [  22/1381] XX G|AG10|a=-3.00|Re=5e+06|nc=5|tr=1.00                         it=100    662ms nan_lock
+  [  25/1381] OK G|AG10|a=+0.00|Re=2e+05|nc=5|tr=1.00                         it=  5     73ms 
+  [  26/1381] XX G|AG10|a=+0.00|Re=2e+05|nc=9|tr=1.00                         it=  5     67ms 
+  [  27/1381] XX G|AG10|a=+0.00|Re=2e+05|nc=12|tr=1.00                        it=  5     62ms 
+  [  35/1381] XX G|AG10|a=+3.00|Re=2e+05|nc=9|tr=1.00                         it=100    398ms nan_lock
+  [  41/1381] XX G|AG10|a=+3.00|Re=5e+06|nc=9|tr=1.00                         it=100    711ms transition_front_oscillation
+  [  47/1381] XX G|AG10|a=+6.00|Re=1e+06|nc=9|tr=1.00                         it=100    677ms transition_front_oscillation
+  [  50/1381] OK G|AG10|a=+6.00|Re=5e+06|nc=9|tr=1.00                         it= 58    670ms 
+  [  65/1381] XX G|AG11|a=-6.00|Re=1e+06|nc=5|tr=1.00                         it=100    688ms no_convergence
+  [  70/1381] XX G|AG11|a=-6.00|Re=5e+06|nc=12|tr=1.00                        it=100     55ms nan_lock
+  [  75/1381] OK G|AG11|a=-3.00|Re=1e+06|nc=9|tr=1.00                         it= 14    165ms 
+  [  82/1381] XX G|AG11|a=+0.00|Re=2e+05|nc=12|tr=1.00                        it= 23    256ms 
+  [  85/1381] XX G|AG11|a=+0.00|Re=1e+06|nc=12|tr=1.00                        it=100    683ms transition_front_oscillation
+  [  86/1381] XX G|AG11|a=+0.00|Re=5e+06|nc=5|tr=1.00                         it=100    224ms nan_lock
+  [ 100/1381] OK G|AG11|a=+6.00|Re=2e+05|nc=12|tr=1.00                        it= 11    139ms 
+  [ 110/1381] XX G|AG11|a=+10.00|Re=1e+06|nc=5|tr=1.00                        it=100    493ms nan_lock
+  [ 111/1381] XX G|AG11|a=+10.00|Re=1e+06|nc=9|tr=1.00                        it=100    622ms transition_front_oscillation
+  [ 114/1381] XX G|AG11|a=+10.00|Re=5e+06|nc=9|tr=1.00                        it=100    661ms transition_front_oscillation
+  [ 115/1381] XX G|AG11|a=+10.00|Re=5e+06|nc=12|tr=1.00                       it=100    612ms transition_front_oscillation
+  [ 116/1381] XX FT|AG11|a=+3.00|Re=1e+06|nc=9|tr=0.30                        it=100    645ms transition_front_oscillation
+  [ 125/1381] OK G|SD7037-092-88|a=-6.00|Re=5e+06|nc=12|tr=1.00               it= 17    200ms 
+  [ 134/1381] XX G|SD7037-092-88|a=-3.00|Re=5e+06|nc=12|tr=1.00               it=100    609ms transition_front_oscillation
+  [ 150/1381] OK G|SD7037-092-88|a=+3.00|Re=5e+06|nc=5|tr=1.00                it=  6     88ms 
+  [ 155/1381] XX G|SD7037-092-88|a=+6.00|Re=2e+05|nc=12|tr=1.00               it=100    682ms no_convergence
+  [ 159/1381] XX G|SD7037-092-88|a=+6.00|Re=5e+06|nc=5|tr=1.00                it=100    587ms transition_front_oscillation
+  [ 163/1381] XX G|SD7037-092-88|a=+10.00|Re=2e+05|nc=9|tr=1.00               it=100    677ms no_convergence
+  [ 168/1381] XX G|SD7037-092-88|a=+10.00|Re=5e+06|nc=5|tr=1.00               it=100    625ms transition_front_oscillation
+  [ 175/1381] OK G|SD7003-085-88|a=-6.00|Re=1e+06|nc=5|tr=1.00                it=  5     91ms 
+  [ 180/1381] XX G|SD7003-085-88|a=-6.00|Re=5e+06|nc=12|tr=1.00               it=100    659ms transition_front_oscillation
+  [ 192/1381] XX G|SD7003-085-88|a=+0.00|Re=2e+05|nc=12|tr=1.00               it= 25    251ms 
+  [ 196/1381] XX G|SD7003-085-88|a=+0.00|Re=5e+06|nc=5|tr=1.00                it=100    609ms transition_front_oscillation
+  [ 200/1381] OK G|SD7003-085-88|a=+3.00|Re=2e+05|nc=9|tr=1.00                it= 32    314ms 
+  [ 201/1381] XX G|SD7003-085-88|a=+3.00|Re=2e+05|nc=12|tr=1.00               it=100    146ms nan_lock
+  [ 220/1381] XX G|SD7003-085-88|a=+10.00|Re=1e+06|nc=5|tr=1.00               it=100    623ms no_convergence
+  [ 222/1381] XX G|SD7003-085-88|a=+10.00|Re=1e+06|nc=12|tr=1.00              it=100    763ms diverged
+  [ 224/1381] XX G|SD7003-085-88|a=+10.00|Re=5e+06|nc=9|tr=1.00               it=100    511ms nan_lock
+  [ 225/1381] OK G|SD7003-085-88|a=+10.00|Re=5e+06|nc=12|tr=1.00              it= 28    314ms 
+  [ 247/1381] XX G|AG03 (flat aft bottom)|a=+0.00|Re=2e+05|nc=12|tr=1.00      it=  7     82ms 
+  [ 250/1381] OK G|AG03 (flat aft bottom)|a=+0.00|Re=1e+06|nc=12|tr=1.00      it= 20    235ms 
+  [ 251/1381] XX G|AG03 (flat aft bottom)|a=+0.00|Re=5e+06|nc=5|tr=1.00       it=100    647ms transition_front_oscillation
+  [ 260/1381] XX G|AG03 (flat aft bottom)|a=+3.00|Re=5e+06|nc=5|tr=1.00       it=100    211ms nan_lock
+  [ 275/1381] OK G|AG03 (flat aft bottom)|a=+10.00|Re=1e+06|nc=5|tr=1.00      it=  7    115ms 
+  [ 300/1381] OK G|NACA 0012 AIRFOILS|a=+0.00|Re=2e+05|nc=5|tr=1.00           it= 15    174ms 
+  [ 325/1381] OK G|NACA 0012 AIRFOILS|a=+6.00|Re=5e+06|nc=9|tr=1.00           it= 46    509ms 
+  [ 333/1381] XX G|NACA 0012 AIRFOILS|a=+10.00|Re=5e+06|nc=5|tr=1.00          it=100    986ms no_convergence
+  [ 342/1381] XX G|NACA 0015|a=-6.00|Re=1e+06|nc=12|tr=1.00                   it=100    982ms no_convergence
+  [ 344/1381] XX G|NACA 0015|a=-6.00|Re=5e+06|nc=9|tr=1.00                    it=100    729ms no_convergence
+  [ 350/1381] OK G|NACA 0015|a=-3.00|Re=1e+06|nc=9|tr=1.00                    it= 21    270ms 
+  [ 363/1381] XX G|NACA 0015|a=+0.00|Re=5e+06|nc=12|tr=1.00                   it=100    743ms no_convergence
+  [ 375/1381] OK G|NACA 0015|a=+6.00|Re=2e+05|nc=12|tr=1.00                   it= 14    164ms 
+  [ 378/1381] XX G|NACA 0015|a=+6.00|Re=1e+06|nc=12|tr=1.00                   it=100    741ms no_convergence
+  [ 380/1381] XX G|NACA 0015|a=+6.00|Re=5e+06|nc=9|tr=1.00                    it=100    647ms no_convergence
+  [ 389/1381] XX G|NACA 0015|a=+10.00|Re=5e+06|nc=9|tr=1.00                   it=100    636ms no_convergence
+  [ 390/1381] XX G|NACA 0015|a=+10.00|Re=5e+06|nc=12|tr=1.00                  it=100    668ms transition_front_oscillation
+  [ 392/1381] XX G|NACA 0018|a=-6.00|Re=2e+05|nc=5|tr=1.00                    it= 29    312ms 
+  [ 399/1381] XX G|NACA 0018|a=-6.00|Re=5e+06|nc=9|tr=1.00                    it=100    644ms transition_front_oscillation
+  [ 400/1381] XX G|NACA 0018|a=-6.00|Re=5e+06|nc=12|tr=1.00                   it=100    683ms no_convergence
+  [ 403/1381] XX G|NACA 0018|a=-3.00|Re=2e+05|nc=12|tr=1.00                   it= 10    128ms 
+  [ 421/1381] XX G|NACA 0018|a=+3.00|Re=2e+05|nc=12|tr=1.00                   it= 10    134ms 
+  [ 425/1381] OK G|NACA 0018|a=+3.00|Re=5e+06|nc=5|tr=1.00                    it=  9    122ms 
+  [ 428/1381] XX G|NACA 0018|a=+6.00|Re=2e+05|nc=5|tr=1.00                    it= 29    312ms 
+  [ 429/1381] XX G|NACA 0018|a=+6.00|Re=2e+05|nc=9|tr=1.00                    it=100    656ms diverged
+  [ 435/1381] XX G|NACA 0018|a=+6.00|Re=5e+06|nc=9|tr=1.00                    it=100    652ms transition_front_oscillation
+  [ 440/1381] XX G|NACA 0018|a=+10.00|Re=1e+06|nc=5|tr=1.00                   it=100    651ms no_convergence
+  [ 441/1381] XX G|NACA 0018|a=+10.00|Re=1e+06|nc=9|tr=1.00                   it=100    686ms no_convergence
+  [ 442/1381] XX G|NACA 0018|a=+10.00|Re=1e+06|nc=12|tr=1.00                  it=100    679ms transition_front_oscillation
+  [ 443/1381] XX G|NACA 0018|a=+10.00|Re=5e+06|nc=5|tr=1.00                   it=100    658ms transition_front_oscillation
+  [ 445/1381] XX G|NACA 0018|a=+10.00|Re=5e+06|nc=12|tr=1.00                  it=100    664ms transition_front_oscillation
+  [ 450/1381] OK G|NACA 0008-34|a=-6.00|Re=1e+06|nc=5|tr=1.00                 it=  9    125ms 
+  [ 464/1381] XX G|NACA 0008-34|a=-3.00|Re=5e+06|nc=12|tr=1.00                it=100    694ms no_convergence
+  [ 466/1381] XX G|NACA 0008-34|a=+0.00|Re=2e+05|nc=9|tr=1.00                 it=100    598ms diverged
+  [ 467/1381] XX G|NACA 0008-34|a=+0.00|Re=2e+05|nc=12|tr=1.00                it=100    582ms diverged
+  [ 475/1381] OK G|NACA 0008-34|a=+3.00|Re=2e+05|nc=9|tr=1.00                 it=  7    104ms 
+  [ 482/1381] XX G|NACA 0008-34|a=+3.00|Re=5e+06|nc=12|tr=1.00                it=100    683ms no_convergence
+  [ 495/1381] XX G|NACA 0008-34|a=+10.00|Re=1e+06|nc=5|tr=1.00                it=100    748ms diverged
+  [ 497/1381] XX G|NACA 0008-34|a=+10.00|Re=1e+06|nc=12|tr=1.00               it=100    808ms no_convergence
+  [ 500/1381] OK G|NACA 0008-34|a=+10.00|Re=5e+06|nc=12|tr=1.00               it= 15    215ms 
+  [ 508/1381] XX G|NACA 0008|a=-6.00|Re=5e+06|nc=5|tr=1.00                    it=100    785ms no_convergence
+  [ 521/1381] XX G|NACA 0008|a=+0.00|Re=2e+05|nc=9|tr=1.00                    it=  7     87ms 
+  [ 522/1381] XX G|NACA 0008|a=+0.00|Re=2e+05|nc=12|tr=1.00                   it=  7     86ms 
+  [ 525/1381] OK G|NACA 0008|a=+0.00|Re=1e+06|nc=12|tr=1.00                   it=  9    115ms 
+  [ 526/1381] XX G|NACA 0008|a=+0.00|Re=5e+06|nc=5|tr=1.00                    it=100    465ms nan_lock
+  [ 544/1381] XX G|NACA 0008|a=+6.00|Re=5e+06|nc=5|tr=1.00                    it=100    724ms no_convergence
+  [ 546/1381] XX G|NACA 0008|a=+6.00|Re=5e+06|nc=12|tr=1.00                   it=100    663ms no_convergence
+  [ 549/1381] XX G|NACA 0008|a=+10.00|Re=2e+05|nc=12|tr=1.00                  it=100    655ms transition_front_oscillation
+  [ 550/1381] OK G|NACA 0008|a=+10.00|Re=1e+06|nc=5|tr=1.00                   it=  7    102ms 
+  [ 553/1381] XX G|NACA 0008|a=+10.00|Re=5e+06|nc=5|tr=1.00                   it=100    772ms diverged
+  [ 560/1381] XX G|CLARK Y AIRFOIL|a=-6.00|Re=1e+06|nc=5|tr=1.00              it=100    594ms transition_front_oscillation
+  [ 563/1381] XX G|CLARK Y AIRFOIL|a=-6.00|Re=5e+06|nc=5|tr=1.00              it=100    635ms transition_front_oscillation
+  [ 564/1381] XX G|CLARK Y AIRFOIL|a=-6.00|Re=5e+06|nc=9|tr=1.00              it=100    651ms transition_front_oscillation
+  [ 568/1381] XX G|CLARK Y AIRFOIL|a=-3.00|Re=2e+05|nc=12|tr=1.00             it= 12    137ms 
+  [ 575/1381] OK G|CLARK Y AIRFOIL|a=+0.00|Re=2e+05|nc=5|tr=1.00              it=  7    107ms 
+  [ 577/1381] XX G|CLARK Y AIRFOIL|a=+0.00|Re=2e+05|nc=12|tr=1.00             it=100    649ms no_convergence
+  [ 585/1381] XX G|CLARK Y AIRFOIL|a=+3.00|Re=2e+05|nc=9|tr=1.00              it=100    603ms no_convergence
+  [ 586/1381] XX G|CLARK Y AIRFOIL|a=+3.00|Re=2e+05|nc=12|tr=1.00             it=100    580ms no_convergence
+  [ 590/1381] XX G|CLARK Y AIRFOIL|a=+3.00|Re=5e+06|nc=5|tr=1.00              it=100    635ms transition_front_oscillation
+  [ 600/1381] OK G|CLARK Y AIRFOIL|a=+6.00|Re=5e+06|nc=9|tr=1.00              it= 24    260ms 
+  [ 603/1381] XX G|CLARK Y AIRFOIL|a=+10.00|Re=2e+05|nc=9|tr=1.00             it=100    659ms no_convergence
+  [ 604/1381] XX G|CLARK Y AIRFOIL|a=+10.00|Re=2e+05|nc=12|tr=1.00            it=100    658ms diverged
+  [ 605/1381] XX G|CLARK Y AIRFOIL|a=+10.00|Re=1e+06|nc=5|tr=1.00             it=100    646ms no_convergence
+  [ 607/1381] XX G|CLARK Y AIRFOIL|a=+10.00|Re=1e+06|nc=12|tr=1.00            it=100    592ms transition_front_oscillation
+  [ 608/1381] XX G|CLARK Y AIRFOIL|a=+10.00|Re=5e+06|nc=5|tr=1.00             it=100    736ms diverged
+  [ 615/1381] XX G|NACA 2415|a=-6.00|Re=1e+06|nc=5|tr=1.00                    it=100    647ms transition_front_oscillation
+  [ 623/1381] XX G|NACA 2415|a=-3.00|Re=2e+05|nc=12|tr=1.00                   it= 10    131ms 
+  [ 625/1381] OK G|NACA 2415|a=-3.00|Re=1e+06|nc=9|tr=1.00                    it= 29    365ms 
+  [ 630/1381] XX G|NACA 2415|a=+0.00|Re=2e+05|nc=5|tr=1.00                    it=100    670ms transition_front_oscillation
+  [ 649/1381] XX G|NACA 2415|a=+6.00|Re=2e+05|nc=9|tr=1.00                    it=100    691ms transition_front_oscillation
+  [ 650/1381] OK G|NACA 2415|a=+6.00|Re=2e+05|nc=12|tr=1.00                   it= 12    161ms 
+  [ 657/1381] XX G|NACA 2415|a=+10.00|Re=2e+05|nc=5|tr=1.00                   it=100    700ms diverged
+  [ 659/1381] XX G|NACA 2415|a=+10.00|Re=2e+05|nc=12|tr=1.00                  it= 50    603ms 
+  [ 660/1381] XX G|NACA 2415|a=+10.00|Re=1e+06|nc=5|tr=1.00                   it=100    673ms no_convergence
+  [ 662/1381] XX G|NACA 2415|a=+10.00|Re=1e+06|nc=12|tr=1.00                  it=100    704ms diverged
+  [ 664/1381] XX G|NACA 2415|a=+10.00|Re=5e+06|nc=9|tr=1.00                   it=100    655ms no_convergence
+  [ 665/1381] XX G|NACA 2415|a=+10.00|Re=5e+06|nc=12|tr=1.00                  it=100    670ms diverged
+  [ 675/1381] OK G|USA-35B AIRFOIL|a=-6.00|Re=5e+06|nc=12|tr=1.00             it= 59    707ms 
+  [ 684/1381] XX G|USA-35B AIRFOIL|a=-3.00|Re=5e+06|nc=12|tr=1.00             it=100    753ms no_convergence
+  [ 687/1381] XX G|USA-35B AIRFOIL|a=+0.00|Re=2e+05|nc=12|tr=1.00             it=100    672ms transition_front_oscillation
+  [ 700/1381] OK G|USA-35B AIRFOIL|a=+3.00|Re=5e+06|nc=5|tr=1.00              it= 16    216ms 
+  [ 704/1381] XX G|USA-35B AIRFOIL|a=+6.00|Re=2e+05|nc=9|tr=1.00              it=100    613ms transition_front_oscillation
+  [ 716/1381] XX G|USA-35B AIRFOIL|a=+10.00|Re=1e+06|nc=9|tr=1.00             it=100    661ms no_convergence
+  [ 717/1381] XX G|USA-35B AIRFOIL|a=+10.00|Re=1e+06|nc=12|tr=1.00            it=100    739ms no_convergence
+  [ 719/1381] XX G|USA-35B AIRFOIL|a=+10.00|Re=5e+06|nc=9|tr=1.00             it=100    662ms transition_front_oscillation
+  [ 720/1381] XX G|USA-35B AIRFOIL|a=+10.00|Re=5e+06|nc=12|tr=1.00            it=100    713ms no_convergence
+  [ 725/1381] OK G|MH 110  10.01%|a=-6.00|Re=1e+06|nc=5|tr=1.00               it=  6    103ms 
+  [ 733/1381] XX G|MH 110  10.01%|a=-3.00|Re=2e+05|nc=12|tr=1.00              it=100    805ms no_convergence
+  [ 738/1381] XX G|MH 110  10.01%|a=-3.00|Re=5e+06|nc=9|tr=1.00               it=100    800ms no_convergence
+  [ 746/1381] XX G|MH 110  10.01%|a=+0.00|Re=5e+06|nc=5|tr=1.00               it=100    572ms nan_lock
+  [ 750/1381] OK G|MH 110  10.01%|a=+3.00|Re=2e+05|nc=9|tr=1.00               it=  7    111ms 
+  [ 775/1381] OK G|MH 110  10.01%|a=+10.00|Re=5e+06|nc=12|tr=1.00             it=  9    123ms 
+  [ 785/1381] XX G|BOEING 737 OUTBOARD AIRFOIL|a=-6.00|Re=5e+06|nc=12|tr=1.00 it=100    796ms transition_front_oscillation
+  [ 800/1381] OK G|BOEING 737 OUTBOARD AIRFOIL|a=+0.00|Re=1e+06|nc=12|tr=1.00 it= 11    138ms 
+  [ 801/1381] XX G|BOEING 737 OUTBOARD AIRFOIL|a=+0.00|Re=5e+06|nc=5|tr=1.00  it=100    679ms transition_front_oscillation
+  [ 814/1381] XX G|BOEING 737 OUTBOARD AIRFOIL|a=+6.00|Re=2e+05|nc=9|tr=1.00  it=100    675ms no_convergence
+  [ 818/1381] XX G|BOEING 737 OUTBOARD AIRFOIL|a=+6.00|Re=1e+06|nc=12|tr=1.00 it=100    620ms no_convergence
+  [ 819/1381] XX G|BOEING 737 OUTBOARD AIRFOIL|a=+6.00|Re=5e+06|nc=5|tr=1.00  it=100    652ms transition_front_oscillation
+  [ 821/1381] XX G|BOEING 737 OUTBOARD AIRFOIL|a=+6.00|Re=5e+06|nc=12|tr=1.00 it=100    596ms no_convergence
+  [ 825/1381] OK G|BOEING 737 OUTBOARD AIRFOIL|a=+10.00|Re=1e+06|nc=5|tr=1.00 it=  6     89ms 
+  [ 837/1381] XX G|EPPLER 1098 AIRFOIL|a=-6.00|Re=1e+06|nc=12|tr=1.00         it=100    677ms transition_front_oscillation
+  [ 838/1381] XX G|EPPLER 1098 AIRFOIL|a=-6.00|Re=5e+06|nc=5|tr=1.00          it=100    727ms transition_front_oscillation
+  [ 840/1381] XX G|EPPLER 1098 AIRFOIL|a=-6.00|Re=5e+06|nc=12|tr=1.00         it=100    745ms no_convergence
+  [ 850/1381] OK G|EPPLER 1098 AIRFOIL|a=+0.00|Re=2e+05|nc=5|tr=1.00          it=  5     94ms 
+  [ 852/1381] XX G|EPPLER 1098 AIRFOIL|a=+0.00|Re=2e+05|nc=12|tr=1.00         it= 33    390ms 
+  [ 856/1381] XX G|EPPLER 1098 AIRFOIL|a=+0.00|Re=5e+06|nc=5|tr=1.00          it=100    764ms transition_front_oscillation
+  [ 858/1381] XX G|EPPLER 1098 AIRFOIL|a=+0.00|Re=5e+06|nc=12|tr=1.00         it=100    751ms no_convergence
+  [ 860/1381] XX G|EPPLER 1098 AIRFOIL|a=+3.00|Re=2e+05|nc=9|tr=1.00          it=100    194ms nan_lock
+  [ 867/1381] XX G|EPPLER 1098 AIRFOIL|a=+3.00|Re=5e+06|nc=12|tr=1.00         it=100    771ms diverged
+  [ 870/1381] XX G|EPPLER 1098 AIRFOIL|a=+6.00|Re=2e+05|nc=12|tr=1.00         it=100    717ms no_convergence
+  [ 871/1381] XX G|EPPLER 1098 AIRFOIL|a=+6.00|Re=1e+06|nc=5|tr=1.00          it=100    669ms no_convergence
+  [ 874/1381] XX G|EPPLER 1098 AIRFOIL|a=+6.00|Re=5e+06|nc=5|tr=1.00          it=100    252ms nan_lock
+  [ 875/1381] OK G|EPPLER 1098 AIRFOIL|a=+6.00|Re=5e+06|nc=9|tr=1.00          it= 25    301ms 
+  [ 878/1381] XX G|EPPLER 1098 AIRFOIL|a=+10.00|Re=2e+05|nc=9|tr=1.00         it=100    754ms no_convergence
+  [ 879/1381] XX G|EPPLER 1098 AIRFOIL|a=+10.00|Re=2e+05|nc=12|tr=1.00        it=100    857ms no_convergence
+  [ 881/1381] XX G|EPPLER 1098 AIRFOIL|a=+10.00|Re=1e+06|nc=9|tr=1.00         it=100    763ms transition_front_oscillation
+  [ 882/1381] XX G|EPPLER 1098 AIRFOIL|a=+10.00|Re=1e+06|nc=12|tr=1.00        it=100    805ms no_convergence
+  [ 884/1381] XX G|EPPLER 1098 AIRFOIL|a=+10.00|Re=5e+06|nc=9|tr=1.00         it=100    704ms transition_front_oscillation
+  [ 885/1381] XX G|EPPLER 1098 AIRFOIL|a=+10.00|Re=5e+06|nc=12|tr=1.00        it=100    764ms no_convergence
+  [ 900/1381] OK G|EPPLER 1200 AIRFOIL|a=-3.00|Re=1e+06|nc=9|tr=1.00          it=  8    118ms 
+  [ 904/1381] XX G|EPPLER 1200 AIRFOIL|a=-3.00|Re=5e+06|nc=12|tr=1.00         it=100    787ms nan_lock
+  [ 907/1381] XX G|EPPLER 1200 AIRFOIL|a=+0.00|Re=2e+05|nc=12|tr=1.00         it=100    631ms transition_front_oscillation
+  [ 920/1381] XX G|EPPLER 1200 AIRFOIL|a=+3.00|Re=5e+06|nc=5|tr=1.00          it=100    666ms transition_front_oscillation
+  [ 924/1381] XX G|EPPLER 1200 AIRFOIL|a=+6.00|Re=2e+05|nc=9|tr=1.00          it=100    713ms no_convergence
+  [ 925/1381] OK G|EPPLER 1200 AIRFOIL|a=+6.00|Re=2e+05|nc=12|tr=1.00         it= 11    134ms 
+  [ 936/1381] XX G|EPPLER 1200 AIRFOIL|a=+10.00|Re=1e+06|nc=9|tr=1.00         it=100    646ms transition_front_oscillation
+  [ 937/1381] XX G|EPPLER 1200 AIRFOIL|a=+10.00|Re=1e+06|nc=12|tr=1.00        it=100    801ms diverged
+  [ 938/1381] XX G|EPPLER 1200 AIRFOIL|a=+10.00|Re=5e+06|nc=5|tr=1.00         it=100    695ms no_convergence
+  [ 939/1381] XX G|EPPLER 1200 AIRFOIL|a=+10.00|Re=5e+06|nc=9|tr=1.00         it=100    669ms transition_front_oscillation
+  [ 940/1381] XX G|EPPLER 1200 AIRFOIL|a=+10.00|Re=5e+06|nc=12|tr=1.00        it=100    696ms no_convergence
+  [ 942/1381] XX G|SELIG 3002-099-83|a=-6.00|Re=2e+05|nc=5|tr=1.00            it= 12    150ms 
+  [ 950/1381] OK G|SELIG 3002-099-83|a=-6.00|Re=5e+06|nc=12|tr=1.00           it= 15    193ms 
+  [ 952/1381] XX G|SELIG 3002-099-83|a=-3.00|Re=2e+05|nc=9|tr=1.00            it=  6     83ms 
+  [ 959/1381] XX G|SELIG 3002-099-83|a=-3.00|Re=5e+06|nc=12|tr=1.00           it=100    717ms transition_front_oscillation
+  [ 967/1381] XX G|SELIG 3002-099-83|a=+0.00|Re=5e+06|nc=9|tr=1.00            it=100    262ms nan_lock
+  [ 975/1381] OK G|SELIG 3002-099-83|a=+3.00|Re=5e+06|nc=5|tr=1.00            it=  5     88ms 
+  [ 984/1381] XX G|SELIG 3002-099-83|a=+6.00|Re=5e+06|nc=5|tr=1.00            it=100    708ms transition_front_oscillation
+  [ 992/1381] XX G|SELIG 3002-099-83|a=+10.00|Re=1e+06|nc=12|tr=1.00          it=100    816ms no_convergence
+  [ 993/1381] XX G|SELIG 3002-099-83|a=+10.00|Re=5e+06|nc=5|tr=1.00           it=100    749ms no_convergence
+  [1000/1381] OK G|S2027|a=-6.00|Re=1e+06|nc=5|tr=1.00                        it= 23    302ms 
+  [1003/1381] XX G|S2027|a=-6.00|Re=5e+06|nc=5|tr=1.00                        it=100    745ms transition_front_oscillation
+  [1012/1381] XX G|S2027|a=-3.00|Re=5e+06|nc=5|tr=1.00                        it=100    728ms transition_front_oscillation
+  [1025/1381] OK G|S2027|a=+3.00|Re=2e+05|nc=9|tr=1.00                        it= 18    231ms 
+  [1042/1381] XX G|S2027|a=+10.00|Re=2e+05|nc=5|tr=1.00                       it= 39    430ms 
+  [1043/1381] XX G|S2027|a=+10.00|Re=2e+05|nc=9|tr=1.00                       it=100    690ms diverged
+  [1044/1381] XX G|S2027|a=+10.00|Re=2e+05|nc=12|tr=1.00                      it=100    713ms no_convergence
+  [1045/1381] XX G|S2027|a=+10.00|Re=1e+06|nc=5|tr=1.00                       it=100    684ms diverged
+  [1046/1381] XX G|S2027|a=+10.00|Re=1e+06|nc=9|tr=1.00                       it=100    738ms no_convergence
+  [1047/1381] XX G|S2027|a=+10.00|Re=1e+06|nc=12|tr=1.00                      it=100    631ms transition_front_oscillation
+  [1049/1381] XX G|S2027|a=+10.00|Re=5e+06|nc=9|tr=1.00                       it=100    620ms nan_lock
+  [1050/1381] XX G|S2027|a=+10.00|Re=5e+06|nc=12|tr=1.00                      it=100    655ms no_convergence
+  [1055/1381] XX G|S2046|a=-6.00|Re=1e+06|nc=5|tr=1.00                        it=100    592ms transition_front_oscillation
+  [1075/1381] OK G|S2046|a=+0.00|Re=1e+06|nc=12|tr=1.00                       it= 16    178ms 
+  [1095/1381] XX G|S2046|a=+6.00|Re=5e+06|nc=9|tr=1.00                        it=100    407ms nan_lock
+  [1096/1381] XX G|S2046|a=+6.00|Re=5e+06|nc=12|tr=1.00                       it=100    703ms transition_front_oscillation
+  [1100/1381] OK G|S2046|a=+10.00|Re=1e+06|nc=5|tr=1.00                       it=  7     98ms 
+  [1103/1381] XX G|S2046|a=+10.00|Re=5e+06|nc=5|tr=1.00                       it=100    622ms transition_front_oscillation
+  [1105/1381] XX G|S2046|a=+10.00|Re=5e+06|nc=12|tr=1.00                      it=100    592ms no_convergence
+  [1109/1381] XX G|NACA 63(2)-615|a=-6.00|Re=2e+05|nc=12|tr=1.00              it= 12    142ms 
+  [1123/1381] XX G|NACA 63(2)-615|a=-3.00|Re=5e+06|nc=9|tr=1.00               it=100    734ms no_convergence
+  [1125/1381] OK G|NACA 63(2)-615|a=+0.00|Re=2e+05|nc=5|tr=1.00               it= 23    288ms 
+  [1133/1381] XX G|NACA 63(2)-615|a=+0.00|Re=5e+06|nc=12|tr=1.00              it=100    676ms transition_front_oscillation
+  [1147/1381] XX G|NACA 63(2)-615|a=+6.00|Re=1e+06|nc=9|tr=1.00               it=100    661ms transition_front_oscillation
+  [1149/1381] XX G|NACA 63(2)-615|a=+6.00|Re=5e+06|nc=5|tr=1.00               it=100    682ms no_convergence
+  [1150/1381] XX G|NACA 63(2)-615|a=+6.00|Re=5e+06|nc=9|tr=1.00               it=100    747ms diverged
+  [1151/1381] XX G|NACA 63(2)-615|a=+6.00|Re=5e+06|nc=12|tr=1.00              it=100    646ms no_convergence
+  [1155/1381] XX G|NACA 63(2)-615|a=+10.00|Re=1e+06|nc=5|tr=1.00              it=100    681ms no_convergence
+  [1156/1381] XX G|NACA 63(2)-615|a=+10.00|Re=1e+06|nc=9|tr=1.00              it=100    597ms transition_front_oscillation
+  [1159/1381] XX G|NACA 63(2)-615|a=+10.00|Re=5e+06|nc=9|tr=1.00              it=100    640ms no_convergence
+  [1169/1381] XX G|NACA 63(2)A-015|a=-6.00|Re=5e+06|nc=9|tr=1.00              it=100    740ms transition_front_oscillation
+  [1173/1381] XX G|NACA 63(2)A-015|a=-3.00|Re=2e+05|nc=12|tr=1.00             it=100    761ms no_convergence
+  [1174/1381] XX G|NACA 63(2)A-015|a=-3.00|Re=1e+06|nc=5|tr=1.00              it=100    720ms transition_front_oscillation
+  [1175/1381] OK G|NACA 63(2)A-015|a=-3.00|Re=1e+06|nc=9|tr=1.00              it= 10    140ms 
+  [1188/1381] XX G|NACA 63(2)A-015|a=+0.00|Re=5e+06|nc=12|tr=1.00             it=100    729ms no_convergence
+  [1200/1381] OK G|NACA 63(2)A-015|a=+6.00|Re=2e+05|nc=12|tr=1.00             it= 12    160ms 
+  [1212/1381] XX G|NACA 63(2)A-015|a=+10.00|Re=1e+06|nc=12|tr=1.00            it=100    775ms diverged
+  [1213/1381] XX G|NACA 63(2)A-015|a=+10.00|Re=5e+06|nc=5|tr=1.00             it=100    807ms no_convergence
+  [1214/1381] XX G|NACA 63(2)A-015|a=+10.00|Re=5e+06|nc=9|tr=1.00             it=100    679ms no_convergence
+  [1215/1381] XX G|NACA 63(2)A-015|a=+10.00|Re=5e+06|nc=12|tr=1.00            it=100    709ms no_convergence
+  [1225/1381] OK G|NACA 64(1)-112|a=-6.00|Re=5e+06|nc=12|tr=1.00              it= 34    487ms 
+  [1228/1381] XX G|NACA 64(1)-112|a=-3.00|Re=2e+05|nc=12|tr=1.00              it= 51    633ms 
+  [1233/1381] XX G|NACA 64(1)-112|a=-3.00|Re=5e+06|nc=9|tr=1.00               it=100    707ms transition_front_oscillation
+  [1234/1381] XX G|NACA 64(1)-112|a=-3.00|Re=5e+06|nc=12|tr=1.00              it=100    760ms no_convergence
+  [1247/1381] XX G|NACA 64(1)-112|a=+3.00|Re=1e+06|nc=5|tr=1.00               it=100    692ms transition_front_oscillation
+  [1250/1381] XX G|NACA 64(1)-112|a=+3.00|Re=5e+06|nc=5|tr=1.00               it=100    143ms nan_lock
+  [1252/1381] XX G|NACA 64(1)-112|a=+3.00|Re=5e+06|nc=12|tr=1.00              it=100    650ms transition_front_oscillation
+  [1269/1381] XX G|NACA 64(1)-112|a=+10.00|Re=5e+06|nc=9|tr=1.00              it=100    789ms diverged
+  [1275/1381] OK G|NACA 64(1)-212|a=-6.00|Re=1e+06|nc=5|tr=1.00               it=  6    109ms 
+  [1278/1381] XX G|NACA 64(1)-212|a=-6.00|Re=5e+06|nc=5|tr=1.00               it=100    697ms transition_front_oscillation
+  [1283/1381] XX G|NACA 64(1)-212|a=-3.00|Re=2e+05|nc=12|tr=1.00              it= 52    650ms 
+  [1286/1381] XX G|NACA 64(1)-212|a=-3.00|Re=1e+06|nc=12|tr=1.00              it=100    689ms transition_front_oscillation
+  [1289/1381] XX G|NACA 64(1)-212|a=-3.00|Re=5e+06|nc=12|tr=1.00              it=100    729ms diverged
+  [1300/1381] OK G|NACA 64(1)-212|a=+3.00|Re=2e+05|nc=9|tr=1.00               it= 10    148ms 
+  [1302/1381] XX G|NACA 64(1)-212|a=+3.00|Re=1e+06|nc=5|tr=1.00               it=100    721ms transition_front_oscillation
+  [1306/1381] XX G|NACA 64(1)-212|a=+3.00|Re=5e+06|nc=9|tr=1.00               it=100    628ms transition_front_oscillation
+  [1313/1381] XX G|NACA 64(1)-212|a=+6.00|Re=1e+06|nc=12|tr=1.00              it=100    712ms transition_front_oscillation
+  [1325/1381] OK G|NACA 64(1)-212|a=+10.00|Re=5e+06|nc=12|tr=1.00             it= 26    294ms 
+  [1338/1381] XX G|NACA 65(1)-212|a=-3.00|Re=2e+05|nc=12|tr=1.00              it= 50    603ms 
+  [1348/1381] XX G|NACA 65(1)-212|a=+0.00|Re=1e+06|nc=5|tr=1.00               it=100    655ms transition_front_oscillation
+  [1350/1381] OK G|NACA 65(1)-212|a=+0.00|Re=1e+06|nc=12|tr=1.00              it= 15    193ms 
+  [1356/1381] XX G|NACA 65(1)-212|a=+3.00|Re=2e+05|nc=12|tr=1.00              it=100    775ms transition_front_oscillation
+  [1362/1381] XX G|NACA 65(1)-212|a=+3.00|Re=5e+06|nc=12|tr=1.00              it=100    674ms no_convergence
+  [1375/1381] OK G|NACA 65(1)-212|a=+10.00|Re=1e+06|nc=5|tr=1.00              it= 11    143ms 
+  [1378/1381] XX G|NACA 65(1)-212|a=+10.00|Re=5e+06|nc=5|tr=1.00              it=100    738ms no_convergence
+  [1380/1381] XX G|NACA 65(1)-212|a=+10.00|Re=5e+06|nc=12|tr=1.00             it=100    698ms transition_front_oscillation
+
+Sweep wall-time: 387.8s
+==============================================================================
+GFoil COLD-START CONVERGENCE SCOREBOARD
+==============================================================================
+
+Grid cases: 1375   cold-converged: 1183  ( 86.0%)
+
+Failure-mode breakdown (non-converged grid cases):
+  no_convergence                       67  (  4.9%)
+  transition_front_oscillation         67  (  4.9%)
+  (blank)                              22  (  1.6%)
+  diverged                             19  (  1.4%)
+  nan_lock                             17  (  1.2%)
+
+By geometry class:
+  thin_low_re         243/275   88.4%
+  thick_symmetric     240/275   87.3%
+  cambered_gp         236/275   85.8%
+  high_camber         227/275   82.5%
+  reflexed_6series    237/275   86.2%
+
+By alpha:
+  alpha= -6.0   201/225   89.3%
+  alpha= -3.0   202/225   89.8%
+  alpha= +0.0   197/225   87.6%
+  alpha= +3.0   206/225   91.6%
+  alpha= +6.0   197/225   87.6%
+  alpha=+10.0   156/225   69.3%
+
+By Re:
+  Re=   2e+05   398/450   88.4%
+  Re=   1e+06   405/450   90.0%
+  Re=   5e+06   356/450   79.1%
+
+By nCrit:
+  nCrit=   5   393/450   87.3%
+  nCrit=   9   400/450   88.9%
+  nCrit=  12   366/450   81.3%
+
+Forced-transition cases: 24/25  96.0%
+
+Converged Newton iters: mean=17.9 median=13 max=59
+Converged wall-time:    mean=224ms median=164ms total=383.6s
+
+------------------------------------------------------------------------------
+DOCUMENTED FAILURE ANCHORS (cold-start):
+------------------------------------------------------------------------------
+  NACA 0012 (golden)     a=+2.50 nc=5  CONVERGED                        it=  6  (nan_lock / ctau-saturation (CLAUDE.md))
+  NACA 0012 (golden)     a=-2.50 nc=5  CONVERGED                        it=  6  (nan_lock / ctau-saturation (CLAUDE.md))
+  NACA 0012 (golden)     a=+4.70 nc=5  CONVERGED                        it= 11  (nan_lock / ctau-saturation (CLAUDE.md))
+  NACA 0008-34           a=-2.60 nc=9  FAILED [transition_front_oscillation] it=100  (multi-node BL attractor, period-14 (permanent))
+  BOEING 737 MIDSPAN     a=-3.10 nc=9  CONVERGED                        it= 39  (cold-start period-2 oscillation)
+  BOEING 737 MIDSPAN     a=-3.20 nc=9  CONVERGED                        it= 33  (cold-start period-2 oscillation)
+
