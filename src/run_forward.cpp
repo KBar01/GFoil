@@ -120,12 +120,19 @@ bool runCode(
                                    obsX, obsY, obsZ, nObs, S, kinViscInf, rhoInf, model,
                                    f_min, f_max, aWeighting, alpha);
 
-    if (std::isnan(OASPL) || std::isinf(OASPL))
-        converged = false;
+    // The aerodynamic solve can converge while the downstream acoustic model
+    // (Amiet/WPS) yields a non-finite OASPL — common at low Re where the BL
+    // edge quantities feeding the noise model degenerate.  Distinguish this
+    // from a genuine convergence failure instead of reporting a silent blank
+    // failure_mode that masquerades as non-convergence.  (Noise code untouched.)
+    const bool aero_converged = converged;
+    const bool acoustic_nan   = (std::isnan(OASPL) || std::isinf(OASPL));
+    if (acoustic_nan) converged = false;
 
     if (fwdOut != nullptr) {
         fwdOut->converged          = converged;
-        fwdOut->failure_mode       = converged ? "" : failure_mode;
+        fwdOut->failure_mode       = converged ? ""
+            : (aero_converged && acoustic_nan ? "acoustic_nan" : failure_mode);
         fwdOut->newton_iterations  = glob.convergenceIteration;
         if (converged) {
             fwdOut->CL    = post.cl.getValue();
