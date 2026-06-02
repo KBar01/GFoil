@@ -97,12 +97,15 @@ py::dict run_AD_py(py::dict inp, py::dict jacobian) {
     int currStag[2] = {stag_py[0], stag_py[1]};
 
     // Rows↔cols swap preserved from srcAD/main.cpp read path
-    static double dRdU_vals[119700];
-    static int    dRdU_rows[119700];
-    static int    dRdU_cols[119700];
+    static double dRdU_vals[RV_MAX_NNZ];
+    static int    dRdU_rows[RV_MAX_NNZ];
+    static int    dRdU_cols[RV_MAX_NNZ];
     for (int i = 0; i < RVnz; ++i) {
         dRdU_vals[i] = RVvals_py[i];
-        dRdU_rows[i] = RVcols_py[i];   // intentional swap (mirrors restart.json read)
+        // Deliberate transpose: the adjoint solve requires A^T λ = b, so we
+        // swap rows↔cols when loading the Jacobian to obtain its transpose
+        // without an extra copy step.
+        dRdU_rows[i] = RVcols_py[i];
         dRdU_cols[i] = RVrows_py[i];
     }
 

@@ -37,48 +37,49 @@ def do_build(build_dir: Path) -> None:
     print("Build complete.\n")
 
 
-def run_binary(exe: Path, label: str, output_file: Path) -> None:
-    """Run exe with cwd=REPO_ROOT.
-
-    Success is determined by whether output_file is written/updated, not by
-    the exit code.  GFoil binaries exit 1 even on a successful run (convergence
-    indicator); a true failure leaves output_file absent or stale.
-    """
-    print(f"  Running {label} ...")
-    # Record mtime before run so we can detect whether the file was (re)written.
-    mtime_before = output_file.stat().st_mtime if output_file.exists() else None
-
-    r = subprocess.run([str(exe)], cwd=REPO_ROOT, capture_output=True, text=True)
-
-    # Check output file was created/updated — the reliable success indicator.
-    if not output_file.exists():
-        print(f"\nERROR: {label} did not produce {output_file.name} "
-              f"(exit code {r.returncode})")
-        if r.stderr:
-            print(r.stderr)
-        sys.exit(1)
-
-    mtime_after = output_file.stat().st_mtime
-    if mtime_before is not None and mtime_after == mtime_before:
-        print(f"\nERROR: {label} exited with code {r.returncode} and did not "
-              f"update {output_file.name}")
-        if r.stderr:
-            print(r.stderr)
-        sys.exit(1)
-
-
 def run_solvers(build_dir: Path) -> None:
-    # Place canonical input.json at repo root where the binaries expect it.
+    """Run forward and AD solvers via the pybind11 module and write output files."""
     if not TEST_INPUT.exists():
         print(f"ERROR: test input not found: {TEST_INPUT}")
         sys.exit(1)
-    shutil.copy(TEST_INPUT, REPO_ROOT / "input.json")
 
-    # Forward solver must run first — it writes restart.json needed by the AD solver.
-    run_binary(build_dir / "GFoil_fwd_codi", "GFoil_fwd_codi",
-               REPO_ROOT / "out.json")
-    run_binary(build_dir / "GFoil_AD",       "GFoil_AD",
-               REPO_ROOT / "ad_gradients.json")
+    # Make the GFoil package importable from the repo root.
+    if str(REPO_ROOT) not in sys.path:
+        sys.path.insert(0, str(REPO_ROOT))
+
+    try:
+        import importlib
+        import GFoil.gfoil_cpp as cpp
+        importlib.reload(cpp)
+    except ImportError as e:
+        print(f"ERROR: could not import GFoil.gfoil_cpp — is the module built?\n{e}")
+        sys.exit(1)
+
+    inp = json.loads(TEST_INPUT.read_text())
+
+    # ── forward solve ─────────────────────────────────────────────────────────
+    print("  Running forward solver (pybind11) ...")
+    fwd = cpp.run_forward(inp)
+    if not fwd.get("conv", 0):
+        print(f"ERROR: forward solver did not converge (failure_mode={fwd.get('failure_mode', '')})")
+        sys.exit(1)
+
+    out = {"CL": fwd["CL"], "CD": fwd["CD"], "CM": fwd["CM"], "OASPL": fwd["OASPL"]}
+    (REPO_ROOT / "out.json").write_text(json.dumps(out, indent=2))
+
+    # ── AD solve ──────────────────────────────────────────────────────────────
+    print("  Running AD solver (pybind11) ...")
+    g = cpp.run_AD(inp, fwd["jacobian"])
+
+    ad = {
+        "d cl / d alpha":    g["dCL_dalpha"],
+        "d cd / d alpha":    g["dCD_dalpha"],
+        "d OASPL / d alpha": g["dOASPL_dalpha"],
+        "d cl / d ycoords":  g["dCL_dy"],
+        "d cd / d ycoords":  g["dCD_dy"],
+        "d OASPL / d ycoords": g["dOASPL_dy"],
+    }
+    (REPO_ROOT / "ad_gradients.json").write_text(json.dumps(ad, indent=2))
 
 
 def load_outputs():

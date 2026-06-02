@@ -1,4 +1,5 @@
 #pragma once
+#include <cstdint>
 #ifdef USE_CODIPACK
 #include <codi.hpp>
 #include <Eigen/Sparse>
@@ -136,15 +137,50 @@ void solve_sys_sparse(Glob &glob) {
   Eigen::SparseMatrix<double> A(Nsize, Nsize);
   A.setFromTriplets(triplets.begin(), triplets.end());
 
+  // ---- FNV-1a hash of (nnz, rows, cols) for analyzePattern-once cache ----
+  constexpr uint64_t FNV_BASIS = 14695981039346656037ULL;
+  constexpr uint64_t FNV_PRIME = 1099511628211ULL;
+  uint64_t pattern_hash = FNV_BASIS;
+  {
+    auto mix = [&](int v) {
+      const auto* p = reinterpret_cast<const unsigned char*>(&v);
+      for (int b = 0; b < 4; ++b) { pattern_hash ^= p[b]; pattern_hash *= FNV_PRIME; }
+    };
+    mix(nnz);
+    for (int k = 0; k < nnz; ++k) { mix(glob.R_V_rows[k]); mix(glob.R_V_cols[k]); }
+  }
+
+  // ---- analyzePattern-once cache ----------------------------------------
+  // All cache state is plain int/bool/uint64_t — no Real, no tape interaction.
+  // The hash comparison handles both stag-point-move structural changes and
+  // restarts from independent solve_coupled calls: a stale cache from a prior
+  // solve is safe because a changed pattern triggers re-analyze, and an
+  // unchanged pattern means the cached symbolic factorisation is still valid.
+  // Do NOT filter zero values from the triplets — explicit structural zeros keep
+  // the pattern constant, and filtering would cause spurious re-analyzes.
+  static bool     have_pattern = false;
+  static uint64_t cached_hash  = 0;
+  static int      cached_nnz   = -1;
+  static Eigen::SparseLU<Eigen::SparseMatrix<double>> lu;
+
+  const bool pattern_changed = !have_pattern
+                             || (nnz          != cached_nnz)
+                             || (pattern_hash != cached_hash);
+  if (pattern_changed) {
+    lu.analyzePattern(A);
+    cached_hash  = pattern_hash;
+    cached_nnz   = nnz;
+    have_pattern = true;
+  }
+
   // ---- Build passive rhs b ----
   Eigen::VectorXd b(Nsize);
   for (int i = 0; i < Nsize; ++i) {
     b[i] = (glob.R[i]).getValue();
   }
 
-  // ---- Primal sparse solve: A x = b ----
-  Eigen::SparseLU<Eigen::SparseMatrix<double>> lu;
-  lu.compute(A);
+  // ---- Primal factorize: numerical phase (always called) ----
+  lu.factorize(A);
 
   if (lu.info() != Eigen::Success) {
     for (int i = 0; i < Nsize; ++i)

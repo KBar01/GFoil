@@ -23,4 +23,8 @@ inline int colMajorIndex(int row, int col, int num_rows) {
 #define Nsound 250
 #define NblPoints 250
 
+// Upper bound on Jacobian non-zeros: empirically ~14% of RVdimension² (≈130 entries
+// per row of the 920×920 BL Jacobian). Observed peak NNZ is well below this limit.
+static constexpr int RV_MAX_NNZ = 119700;
+
 #endif

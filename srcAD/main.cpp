@@ -59,10 +59,6 @@ void solve_sys(int* R_V_cols, int* R_V_rows, double* RV_vals, const int RVlatest
         rhs3(i) = dOASPLdStates[i];
     }
 
-    //Eigen::Map<const Vec> rhs1(dCLdStates);
-    //Eigen::Map<const Vec> rhs2(dCDdStates);
-    //Eigen::Map<const Vec> rhs3(dOASPLdStates);
-
     VectorD sol1(RVdimension);
     VectorD sol2(RVdimension);
     VectorD sol3(RVdimension);
@@ -88,49 +84,6 @@ void solve_sys(int* R_V_cols, int* R_V_rows, double* RV_vals, const int RVlatest
         adlambdaOASPL[i] = sol3(i);
 
     }
-}
-
-void solve_sys_single(int* R_V_cols, int* R_V_rows, double* RV_vals, const int RVlatest,
-    double (&dCLdStates)[RVdimension],
-    double (&adlambdaCL)[RVdimension]) 
-    {
-    
-    constexpr int Nsize = 4 * (Ncoords + Nwake);
-
-    // === 1. Build triplets from glob arrays ===
-    std::vector<Eigen::Triplet<double>> triplets;
-    triplets.reserve(RVlatest);
-    for (int k = 0; k < RVlatest; ++k) {
-        int row = R_V_rows[k];
-        int col = R_V_cols[k];
-        double val = RV_vals[k];
-        if (val != 0.0) {
-            triplets.emplace_back(row, col, val);
-        }
-    }
-
-    // === 2. Fill sparse matrix from triplets ===
-    Eigen::SparseMatrix<double> A_sparse(Nsize, Nsize);
-    A_sparse.setFromTriplets(triplets.begin(), triplets.end());
-    
-    Eigen::Map<const Eigen::Matrix<double, RVdimension, 1, Eigen::ColMajor>>
-    rhs_eigen(dCLdStates, Nsize, 1);
-
-    // Use SparseLU solver
-    Eigen::SparseLU<Eigen::SparseMatrix<double>> sparse_solver;
-    sparse_solver.compute(A_sparse);
-
-    if(sparse_solver.info() != Eigen::Success) {
-        std::cerr << "Sparse solver failed during factorization!\n";
-        return; // or handle the error appropriately
-    }
-    
-    Eigen::Matrix<double, RVdimension, 1> x = sparse_solver.solve(rhs_eigen);
-
-    // Map the solution to output vector
-    Eigen::Map<Eigen::Matrix<double, RVdimension, 1, Eigen::ColMajor>>
-        x_eigen(adlambdaCL, Nsize, 1);
-    x_eigen = x;
 }
 
 int main(){
@@ -230,14 +183,17 @@ int main(){
     
     int currStag[2] = {jr["stag"][0], jr["stag"][1]} ;
 
-    static double dRdU_vals[119700] = {0};
- 
-    static int dRdU_rows[119700] = {0};
-    static int dRdU_cols[119700] = {0};  
-    int latetsEntry = jr["RVnz"] ;
+    static double dRdU_vals[RV_MAX_NNZ] = {0};
 
-    for (int i=0;i<latetsEntry;++i){
+    static int dRdU_rows[RV_MAX_NNZ] = {0};
+    static int dRdU_cols[RV_MAX_NNZ] = {0};  
+    int latestEntry = jr["RVnz"] ;
 
+    for (int i=0;i<latestEntry;++i){
+
+        // Deliberate transpose: the adjoint solve requires A^T λ = b, so we
+        // swap rows↔cols when loading the Jacobian (stored as dR/dU row-major)
+        // to obtain its transpose without an extra copy step.
         dRdU_rows[i] = jr["RVcols"][i].get<int>() ;
         dRdU_cols[i] = jr["RVrows"][i].get<int>() ;
         dRdU_vals[i] = jr["RVvals"][i] ;
@@ -275,7 +231,7 @@ int main(){
     d_CD_d_States[RVdimension-3] = Cdddisp.getValue();
     d_CD_d_States[RVdimension-1] = Cddue.getValue();
    
-    solve_sys(dRdU_cols,dRdU_rows,dRdU_vals,latetsEntry,
+    solve_sys(dRdU_cols,dRdU_rows,dRdU_vals,latestEntry,
         d_CL_d_States,d_CD_d_States,d_OASPL_d_States,
         adlambda_CL,adlambda_CD,adlambda_OASPL
     );

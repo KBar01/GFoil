@@ -83,7 +83,7 @@ double partialOutputspartialInputs(
         inCoords[colMajorIndex(1,i,2)] = inYcoords[i];
     }
     make_panels(inCoords,flattenedCoords,Ufac,TEfac); // does spline to redist nodes over aerofoil for fixed number of 200 nodes
-    
+
     Foil foil(flattenedCoords);
 
     Param<Real> param;
@@ -96,10 +96,10 @@ double partialOutputspartialInputs(
         glob.U[i] = states[i] ;
     }
 
-    
+
     Post<Real> post;
     calc_force(oper,geom,param,foil,glob,post);
-    
+
     const Real Uinf = (Re*kinViscInf)/(chordScaling) ;
 
     Real topsurf[7],botsurf[7];
@@ -121,16 +121,15 @@ double partialOutputspartialInputs(
     for (int i=0;i<jacobianHeight;++i){outputs[i].gradient()[i] = 1.0 ;}
     tape.evaluate();
 
-
-    for (int i = 0; i < Nin; ++i) {   
+    for (int i = 0; i < Nin; ++i) {
         jacobianCL_y[i] = (inYcoords[i].getGradient()[0]);
         jacobianOASPL_y[i] = (inYcoords[i].getGradient()[1]);
     }
-    
+
     jacobianCL_alf = (alphad.getGradient()[0]);
     jacobianOASPL_alf = (alphad.getGradient()[1]);
-    
-    for (int i = 0; i < RVdimension; ++i) {   
+
+    for (int i = 0; i < RVdimension; ++i) {
         jacobianCL_states[i] = (states[i].getGradient()[0]);
         jacobianOASPL_states[i] = (states[i].getGradient()[1]);
     }
@@ -189,7 +188,7 @@ void partialRpartialx(
     }
 
     make_panels(inCoords,flattenedCoords,Ufac,TEfac); // does spline to redist nodes over aerofoil for fixed number of 200 nodes
-   
+
 
     Foil<Real> foil(flattenedCoords);
     Isolc<Real> isolc;
@@ -198,7 +197,7 @@ void partialRpartialx(
     Param<Real> param;
     param.ncrit = nCrit;
     Wake<Real> wake;
-  
+
     Glob<Real> glob;
     for (int i=0;i<RVdimension;++i){glob.U[i] = states[i];}
     for (int i=0;i<(Ncoords+Nwake);++i){vsol.turb[i] = turb[i];}
@@ -242,7 +241,7 @@ void partialRpartialx(
     stagpoint_move_AD(isol_final,glob,foil,wake,vsol,currStag);
     build_glob_RV_AD(foil,vsol,isol_final,glob,param);
     finishdRdU_AD(foil,isolc,isol_final,glob,vsol,oper);
-    
+
     Real hCL = 0.0;
     Real hCD = 0.0;
     Real hOASPL = 0.0;

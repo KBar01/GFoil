@@ -173,9 +173,9 @@ struct Glob {
     Real dU[4*(Ncoords+Nwake)] = {0}; // Primary state update                   // Converged flag
     Real R[4*(Ncoords+Nwake)] = {0.0};                 // Residuals
     
-    Real R_V_vals[119700] = {0.0}; // Global Jacobian vals (using 20% density)
-    int R_V_rows[119700] = {0}; // Global Jacobian vals (using 20% density)
-    int R_V_cols[119700] = {0}; // Global Jacobian vals (using 20% density)
+    Real R_V_vals[RV_MAX_NNZ] = {0.0}; // Global Jacobian values
+    int R_V_rows[RV_MAX_NNZ] = {0};   // Global Jacobian row indices
+    int R_V_cols[RV_MAX_NNZ] = {0};   // Global Jacobian column indices
     int R_V_latest = 0 ;
 
     int convergenceIteration = 100 ;

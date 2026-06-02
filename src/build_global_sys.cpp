@@ -1,5 +1,6 @@
 #include <iostream>
 #include <cmath>
+#include <cassert>
 #include <Eigen/Dense>
 #include "real_type.h"
 #include "panel_funcs.hpp"
@@ -76,22 +77,11 @@ void equate_block_inplace_sparse(
             int globalRow = startEntryRow + i;
             Real val = src[i];
 
-            // accumulate if we’ve already inserted this (row,col)
-            //bool found = false;
-            //for (int k = glob.R_V_latest - 1; k >= 0; --k){
-            //    if (glob.R_V_rows[k] == globalRow && glob.R_V_cols[k] == globalCol){
-            //        glob.R_V_vals[k] += val;
-            //        found = true;
-            //        break;
-            //    }
-            //}
-
-            //if (!found){
+            assert(glob.R_V_latest < RV_MAX_NNZ);
             glob.R_V_rows[glob.R_V_latest] = globalRow;
             glob.R_V_cols[glob.R_V_latest] = globalCol;
             glob.R_V_vals[glob.R_V_latest] = val;
             glob.R_V_latest += 1;
-            //}
         }
     }
 }
@@ -133,7 +123,7 @@ inline void addColumnValues(
         }
 
         if (!found){
-            // add new
+            assert(glob.R_V_latest < RV_MAX_NNZ);
             glob.R_V_rows[glob.R_V_latest] = row;
             glob.R_V_cols[glob.R_V_latest] = colIndex;
             glob.R_V_vals[glob.R_V_latest] = val;

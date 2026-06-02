@@ -1,4 +1,5 @@
 
+# src/Faddeeva.cpp is a vendored third-party library (MIT licence, Steven G. Johnson, MIT 2012).
 
 cmake_minimum_required(VERSION 3.14)
 project(GFoil)
@@ -78,7 +79,7 @@ endif()
 
 set(COMMON_INCLUDES_AD ${PROJECT_SOURCE_DIR}/srcAD/include)
 set(NOISE_INCLUDES_AD ${PROJECT_SOURCE_DIR}/srcAD/noise_includes)
-add_executable(GFoil_AD srcAD/main.cpp src/error_package.cpp)
+add_executable(GFoil_AD srcAD/main.cpp src/Faddeeva.cpp)
 target_link_libraries(GFoil_AD PRIVATE Eigen3::Eigen CoDiPack nlohmann_json::nlohmann_json)
 target_include_directories(GFoil_AD PRIVATE
  ${COMMON_INCLUDES_AD}
@@ -122,7 +123,7 @@ pybind11_add_module(gfoil_cpp NO_EXTRAS
     src/gfoil_fwd_bindings.cpp
     src/gfoil_ad_bindings.cpp
     ${SOURCES}
-    src/error_package.cpp
+    src/Faddeeva.cpp
 )
 # NO_EXTRAS disables hidden visibility; restore it so the module loads correctly
 set_target_properties(gfoil_cpp PROPERTIES CXX_VISIBILITY_PRESET hidden)
