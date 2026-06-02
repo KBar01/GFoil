@@ -1,6 +1,8 @@
 #pragma once
 
 #include <cmath>
+#include <cstdlib>
+#include <iostream>
 
 // Goody (2004) "Empirical Spectral Model of Surface Pressure Fluctuations"
 // AIAA Journal Vol. 42 No. 9 — outer-layer scaling with Reynolds-number correction
@@ -145,6 +147,37 @@ void calc_WPS_Rozenburg(Real theta,
     Real FS   = deltaS/Ue ;
 
     Real C3prime = 8.8*std::pow(Rt, -0.57);
+
+    // GFOIL_DEBUG diagnostic (output only; .getValue() not fed back into Real
+    // math — same exception as the WriteJSON blocks). Identifies which WPS
+    // intermediate first goes non-finite at degenerate (low-Re) TE BL states.
+    if (std::getenv("GFOIL_DEBUG")) {
+        auto nf = [](double v){ return !std::isfinite(v); };
+        const char* first = "none";
+        if      (nf(Delta.getValue()))   first = "Delta";
+        else if (nf(beta_c.getValue()))  first = "beta_c";
+        else if (nf(u_t.getValue()))     first = "u_t";
+        else if (nf(Rt.getValue()))      first = "Rt";
+        else if (nf(SS.getValue()))      first = "SS";
+        else if (nf(a.getValue()))       first = "a";
+        else if (nf(F1.getValue()))      first = "F1";
+        else if (nf(C3prime.getValue())) first = "C3prime";
+        std::cerr << "[WPS roz] theta=" << theta.getValue()
+                  << " dS="    << deltaS.getValue()
+                  << " delta=" << delta.getValue()
+                  << " tauW="  << tauWall.getValue()
+                  << " tauMax="<< tauMax.getValue()
+                  << " Ue="    << Ue.getValue()
+                  << " dpdx="  << dpdx.getValue()
+                  << " | Delta=" << Delta.getValue()
+                  << " beta_c="  << beta_c.getValue()
+                  << " u_t="     << u_t.getValue()
+                  << " Rt="      << Rt.getValue()
+                  << " SS="      << SS.getValue()
+                  << " a="       << a.getValue()
+                  << " C3p="     << C3prime.getValue()
+                  << " FIRST_NONFINITE=" << first << "\n";
+    }
 
     for (int n=0;n<Nsound;++n){
         Real omegaBar= omega[n]*FS ;
