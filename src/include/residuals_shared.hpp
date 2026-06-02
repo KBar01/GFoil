@@ -63,8 +63,8 @@ void residual_station(
     const Real* U2,
     const Real x1,
     const Real x2,
-    const Real aux1,
-    const Real aux2,
+    const Real wgap1,
+    const Real wgap2,
     const bool wake,
     const bool turb,
     const bool simi,
@@ -76,7 +76,7 @@ void residual_station(
 
     // Extract elements of BL States
     Real th1 = U1[0],th2 = U2[0];
-    Real ds1 = U1[1]-aux1,ds2 = U2[1]-aux2;
+    Real ds1 = U1[1]-wgap1,ds2 = U2[1]-wgap2;
     Real sa1 = U1[2],sa2 = U2[2] ;
     Real ue1 = U1[3],ue2 = U2[3];
 
@@ -143,7 +143,7 @@ void residual_station(
 
     // wake shape parameter
     Real Hw1_U1[4]={0}, Hw2_U2[4]={0};
-    Real Hw1 = get_Hw(th1,aux1,Hw1_U1), Hw2 = get_Hw(th2,aux2,Hw2_U2);
+    Real Hw1 = get_Hw(th1,wgap1,Hw1_U1), Hw2 = get_Hw(th2,wgap2,Hw2_U2);
     Real Hw_U[8]={0};
     Real Hw = upwind_half(Hw1,Hw1_U1,Hw2,Hw2_U2,Hw_U);
 
@@ -364,13 +364,13 @@ template<typename Real, typename ParamT>
 void residual_station(
     const Real* U1, const Real* U2,
     const Real x1, const Real x2,
-    const Real aux1, const Real aux2,
+    const Real wgap1, const Real wgap2,
     const bool wake, const bool turb, const bool simi,
     const ParamT& param,
     Real (&R)[3])
 {
     Real _dummy_U[24]={0}, _dummy_x[6]={0};
-    residual_station<false>(U1, U2, x1, x2, aux1, aux2, wake, turb, simi,
+    residual_station<false>(U1, U2, x1, x2, wgap1, wgap2, wake, turb, simi,
                             param, R, _dummy_U, _dummy_x);
 }
 
@@ -472,8 +472,8 @@ void residual_transition(
     const Real* U2,
     const Real x1,
     const Real x2,
-    const Real aux1,
-    const Real aux2,
+    const Real wgap1,
+    const Real wgap2,
     const ParamT& param,
     Real (&R)[3],
     Real (&R_U)[24],
@@ -553,10 +553,10 @@ void residual_transition(
     // residual_station calls: pass ComputeJacobian through so the inner
     // Jacobian assembly is also compiled out when ComputeJacobian=false.
     Real Rl[3]={0}, Rl_U[24]={0}, Rl_x[6]={0};
-    residual_station<ComputeJacobian>(U1,Utl,x1,xt,aux1,aux2,false,false,false,
+    residual_station<ComputeJacobian>(U1,Utl,x1,xt,wgap1,wgap2,false,false,false,
                                        param,Rl,Rl_U,Rl_x);
     Real Rt[3]={0}, Rt_U[24]={0}, Rt_x[6]={0};
-    residual_station<ComputeJacobian>(Utt,U2,xt,x2,aux1,aux2,false,true,false,
+    residual_station<ComputeJacobian>(Utt,U2,xt,x2,wgap1,wgap2,false,true,false,
                                        param,Rt,Rt_U,Rt_x);
     for (int i=0;i<3;++i) R[i] = Rl[i]+Rt[i];
     // Forced transition: drop the laminar amp equation (Rl[2]) but keep the
@@ -704,10 +704,10 @@ template<typename Real, typename ParamT>
 void residual_transition(
     const Real* U1, const Real* U2,
     const Real x1, const Real x2,
-    const Real aux1, const Real aux2,
+    const Real wgap1, const Real wgap2,
     const ParamT& param,
     Real (&R)[3])
 {
     Real _dummy_U[24]={0}, _dummy_x[6]={0};
-    residual_transition<false>(U1,U2,x1,x2,aux1,aux2,param,R,_dummy_U,_dummy_x);
+    residual_transition<false>(U1,U2,x1,x2,wgap1,wgap2,param,R,_dummy_U,_dummy_x);
 }

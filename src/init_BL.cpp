@@ -364,9 +364,9 @@ void init_boundary_layer(const Oper&oper, const Foil&foil, Param&param, Isol&iso
                 }
                 else {
     
-                    Real aux1=0,aux2=0;
-                    if (wake){aux1=vsol.wgap[prevNode-Ncoords];aux2 = vsol.wgap[currNode-Ncoords] ;}
-                    residual_station(prevState,currState,isol.distFromStag[prevNode],isol.distFromStag[currNode],aux1,aux2,wake,turb,false,param,R,R_U,R_x);
+                    Real wgap1=0,wgap2=0;
+                    if (wake){wgap1=vsol.wgap[prevNode-Ncoords];wgap2 = vsol.wgap[currNode-Ncoords] ;}
+                    residual_station(prevState,currState,isol.distFromStag[prevNode],isol.distFromStag[currNode],wgap1,wgap2,wake,turb,false,param,R,R_U,R_x);
                 }
 
                 if (norm2_3D(R) < 1e-10) break;
@@ -622,9 +622,9 @@ void init_boundary_layer_from_xfoil(const Oper&oper, const Foil&foil, const Para
             } 
             else {
 
-                Real aux1=0,aux2=0;
-                if (wake){aux1=vsol.wgap[prevNode-Ncoords];aux2 = vsol.wgap[currNode-Ncoords] ;}
-                residual_station(prevState,currState,isol.distFromStag[prevNode],isol.distFromStag[currNode],aux1,aux2,wake,turb,false,param,R,R_U,R_x);
+                Real wgap1=0,wgap2=0;
+                if (wake){wgap1=vsol.wgap[prevNode-Ncoords];wgap2 = vsol.wgap[currNode-Ncoords] ;}
+                residual_station(prevState,currState,isol.distFromStag[prevNode],isol.distFromStag[currNode],wgap1,wgap2,wake,turb,false,param,R,R_U,R_x);
             }
 
             if (norm2_3D(R) < 1e-10) break;

@@ -156,9 +156,9 @@ void build_glob_RV_AD(const Foil<Real>&foil, const Vsol<Real>&vsol, const Isolv<
                 residual_transition<Real>(Uprev,Ucurr,xi[Is[prevI]],xi[Is[currI]],Real(0.0),Real(0.0),temp_param,Ri);
             }
             else {
-                Real aux1=0,aux2=0;
-                if (wake){aux1=vsol.wgap[Is[prevI]-Ncoords];aux2 = vsol.wgap[Is[currI]-Ncoords] ;}
-                residual_station(Uprev,Ucurr,xi[Is[prevI]],xi[Is[currI]],aux1,aux2,wake,turb,false,param,Ri);
+                Real wgap1=0,wgap2=0;
+                if (wake){wgap1=vsol.wgap[Is[prevI]-Ncoords];wgap2 = vsol.wgap[Is[currI]-Ncoords] ;}
+                residual_station(Uprev,Ucurr,xi[Is[prevI]],xi[Is[currI]],wgap1,wgap2,wake,turb,false,param,Ri);
             }
             
             // update residuals
