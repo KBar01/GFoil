@@ -15,6 +15,14 @@ All template<typename Real>. Dispatch via string key in calc_WPS():
 - `"kam"` — Kamruzzaman
 - `"tno"` — TNO
 
+`calc_WPS` floors its physical inputs before dispatch (deltaStar≥1.05·theta,
+delta≥deltaStar, tauWall≥max(Cf_min·q, theta·|dpdx|/beta_max) with Cf_min=1e-4,
+beta_max=50) to keep degenerate low-Re / near-separated TE BL states inside the
+empirical models' validity (otherwise beta_c→O(100s) overflows the Rozenberg
+amplitude). Floors never bind for attached TE BLs (Re≥1e6, golden bit-identical).
+`calc_OASPL` floors a zero acoustic source (fully-laminar TE) to a finite −300 dB
+instead of log10(0)=−inf. See `bench/results/PHASE_A.md`.
+
 ### newAmiet.hpp — key functions
 - `errFunc<Real>`             — erf via Faddeeva; CoDi derivatives via
                                 StatementPushHelper. CoDi types ONLY.
@@ -182,10 +190,13 @@ ctau equilibrium reseeding were tried and rejected as net-neutral/regressive
   (period-14 cycle). Warm-start from adjacent alphas also fails. No fix found;
   documented as permanent.
 
-- **Cold-start period-2 oscillation** *(converges cold now)*: Boeing 737 Midspan
-  α=−3.1°/−3.2° and others near transition-sensitive points.
-  `failure_mode="transition_front_oscillation"` still signals the sweep script
-  for cases that do cycle.
+- **Cold-start period-2 oscillation** *(documented points converge cold; class
+  not eliminated)*: Boeing 737 Midspan α=−3.1°/−3.2°. Verified at the **documented
+  condition** (Re=2e6, nCrit=5): both converge cold (35/34 it), as do they at
+  nCrit=9. But the transition-sensitivity persists — the neighbour α=−3.0° still
+  cold-fails with `transition_front_oscillation`. So the specific documented
+  points are no longer stuck, but "others near transition-sensitive points" still
+  cycle; `failure_mode="transition_front_oscillation"` signals them.
 
 - **NACA 0012, nCrit=5, α=±2.5°** *(converges cold now, ~6 it)*: was NaN-lock —
   BL Jacobian going singular at iter 3 and staying frozen (`failure_mode="nan_lock"`).
