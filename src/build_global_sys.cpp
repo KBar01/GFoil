@@ -1,3 +1,10 @@
+// build_global_sys.cpp — assemble the global residual and Jacobian.
+//
+// build_glob_RV() walks every surface/wake node interval, evaluates the
+// two-point BL station residuals (residual_station) and the stagnation closure,
+// and packs them into glob.R[0..3*Nsys) with the sparse Jacobian triplets in
+// glob.R_V_*. solve_glob.cpp then adds the ue-coupling rows and solves. Active
+// CoDi tape region. Forward TU.
 #include <iostream>
 #include <cmath>
 #include <cassert>

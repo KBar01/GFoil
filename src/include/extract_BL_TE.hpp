@@ -1,5 +1,12 @@
 #pragma once
 
+// extract_BL_TE.hpp — sample the trailing-edge BL state for the acoustic model.
+//
+// interpolate_at_95_both_surfaces() interpolates the converged boundary-layer
+// quantities to the acoustic sampling station near the trailing edge and packs
+// the two 7-slot vectors [theta, deltaStar, tauMax, Ue, dpdx, tauWall, delta]
+// (upper/lower) that feed calc_OASPL -> calc_WPS. Bridges the aero solve and the
+// acoustics (sound.hpp). Symbols: see NOMENCLATURE.md.
 #include <cmath>
 // Callers must include real_type.h / real_type.hpp, and the shared
 // get_funcs.hpp (for get_cf, get_uk) before including this header.

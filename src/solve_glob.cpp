@@ -1,3 +1,9 @@
+// solve_glob.cpp — finish the global system and solve the Newton step.
+//
+// solve_glob() appends the inviscid/viscous edge-velocity coupling residual rows
+// (ue = ue_inv + mass-influence) and their Jacobian columns to the system built
+// by build_glob_RV, then (when doSolve) calls solve_sys -> solve_sys_sparse
+// (sparselinsolve.hpp) to produce glob.dU. Forward TU; active CoDi tape region.
 #include <iostream>
 #include <cmath>
 #include <Eigen/Dense>

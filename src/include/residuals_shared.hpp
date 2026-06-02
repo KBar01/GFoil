@@ -1,5 +1,14 @@
 #pragma once
 
+// residuals_shared.hpp — per-station integral-BL residual kernels.
+//
+// The two-point (node1->node2) discretised residuals of the integral BL
+// equations -- momentum (theta), shape-parameter / kinetic-energy (H*), and the
+// amplification/lag equation -- assembled by build_global_sys.cpp at every
+// interval, with their Jacobian blocks w.r.t. the two end states. Duck-typed
+// templates shared by the forward (codi) and AD builds. Runs inside the active
+// CoDi tape: do NOT re-order/re-express the Real arithmetic (see CLAUDE.md).
+// Symbols: see NOMENCLATURE.md.
 #include <cmath>
 // Requires:
 //   - get_funcs.h (fwd) or get_funcs.hpp (AD) — for get_H, get_damp, etc.

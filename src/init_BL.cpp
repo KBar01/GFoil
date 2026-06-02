@@ -1,3 +1,10 @@
+// init_BL.cpp — cold-start boundary-layer initialisation.
+//
+// init_boundary_layer() seeds the stagnation node (Thwaites-style) and marches
+// node-by-node along each surface and the wake, running a small inner Newton at
+// each station to set a self-consistent initial [th, ds, sa, ue] before the
+// global coupled solve takes over. Only used on a cold start (no warm-start
+// state). Forward TU; active CoDi tape region.
 #include <iostream>
 #include <cmath>
 #include <cstdlib>

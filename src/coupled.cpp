@@ -1,3 +1,13 @@
+// coupled.cpp — the coupled viscous-inviscid Newton solve.
+//
+// solve_coupled() is the outer Newton loop: at each iteration it assembles the
+// global residual + Jacobian (build_glob_RV), tests RMS convergence (resid_rms
+// vs param.rtol), solves for the update (solve_glob), applies it with physical
+// under-relaxation (update_state), then relocates the stagnation point and
+// marches the transition front (update_transition). It also carries the
+// plain-double oscillation/ctau-freeze and nan_lock detection logic (kept off
+// the CoDi tape — see CLAUDE.md). On convergence it stores the state + Jacobian
+// for the adjoint pass; on failure it sets failure_mode. Forward TU only.
 #include <iostream>
 #include <cmath>
 #include <Eigen/Dense>
