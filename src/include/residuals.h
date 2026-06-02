@@ -21,4 +21,4 @@ inline void residual_station(
     ::residual_station<true>(U1, U2, x1, x2, wgap1, wgap2,
                              wake, turb, simi, param, R, R_U, R_x);
 }
-// residual_station_forced removed: forced transition deleted.
+
