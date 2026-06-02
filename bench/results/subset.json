@@ -1,0 +1,177 @@
+[
+  {
+    "name": "AG10",
+    "class": "thin_low_re",
+    "t_max": 0.04668710533663363,
+    "camber_max": 0.01659614100306858,
+    "reflex": false
+  },
+  {
+    "name": "AG11",
+    "class": "thin_low_re",
+    "t_max": 0.057537769415556425,
+    "camber_max": 0.022752080327598997,
+    "reflex": false
+  },
+  {
+    "name": "SD7037-092-88",
+    "class": "thin_low_re",
+    "t_max": 0.092172891604809,
+    "camber_max": 0.029538193522331016,
+    "reflex": false
+  },
+  {
+    "name": "SD7003-085-88",
+    "class": "thin_low_re",
+    "t_max": 0.08512329134040747,
+    "camber_max": 0.014648396532900504,
+    "reflex": false
+  },
+  {
+    "name": "AG03 (flat aft bottom)",
+    "class": "thin_low_re",
+    "t_max": 0.06207218773807455,
+    "camber_max": 0.01989765502251493,
+    "reflex": false
+  },
+  {
+    "name": "NACA 0012 AIRFOILS",
+    "class": "thick_symmetric",
+    "t_max": 0.11926442433966689,
+    "camber_max": 1.8057357900613802e-09,
+    "reflex": false
+  },
+  {
+    "name": "NACA 0015",
+    "class": "thick_symmetric",
+    "t_max": 0.14912341392518433,
+    "camber_max": -5.961282682764857e-12,
+    "reflex": false
+  },
+  {
+    "name": "NACA 0018",
+    "class": "thick_symmetric",
+    "t_max": 0.1789560211301406,
+    "camber_max": 1.9273262634282584e-09,
+    "reflex": false
+  },
+  {
+    "name": "NACA 0008-34",
+    "class": "thick_symmetric",
+    "t_max": 0.07940581467919285,
+    "camber_max": 4.2331280473116573e-10,
+    "reflex": false
+  },
+  {
+    "name": "NACA 0008",
+    "class": "thick_symmetric",
+    "t_max": 0.07953449503974663,
+    "camber_max": 1.867368837685235e-10,
+    "reflex": false
+  },
+  {
+    "name": "CLARK Y AIRFOIL",
+    "class": "cambered_gp",
+    "t_max": 0.1167350950296159,
+    "camber_max": 0.03459176155340174,
+    "reflex": false
+  },
+  {
+    "name": "NACA 2415",
+    "class": "cambered_gp",
+    "t_max": 0.149130566923027,
+    "camber_max": 0.018699612149812504,
+    "reflex": false
+  },
+  {
+    "name": "USA-35B AIRFOIL",
+    "class": "cambered_gp",
+    "t_max": 0.11531134195054123,
+    "camber_max": 0.040413037292781055,
+    "reflex": false
+  },
+  {
+    "name": "MH 110  10.01%",
+    "class": "cambered_gp",
+    "t_max": 0.10010405540792686,
+    "camber_max": 0.011188774729709385,
+    "reflex": false
+  },
+  {
+    "name": "BOEING 737 OUTBOARD AIRFOIL",
+    "class": "cambered_gp",
+    "t_max": 0.10738701670949746,
+    "camber_max": 0.015495177228292944,
+    "reflex": false
+  },
+  {
+    "name": "EPPLER 1098 AIRFOIL",
+    "class": "high_camber",
+    "t_max": 0.18987179933416937,
+    "camber_max": 0.03695184853763098,
+    "reflex": false
+  },
+  {
+    "name": "EPPLER 1200 AIRFOIL",
+    "class": "high_camber",
+    "t_max": 0.16964255282095198,
+    "camber_max": 0.03358585906780514,
+    "reflex": false
+  },
+  {
+    "name": "SELIG 3002-099-83",
+    "class": "high_camber",
+    "t_max": 0.09951382729569203,
+    "camber_max": 0.02886181177069099,
+    "reflex": false
+  },
+  {
+    "name": "S2027",
+    "class": "high_camber",
+    "t_max": 0.14525774584406437,
+    "camber_max": 0.02679882553013394,
+    "reflex": false
+  },
+  {
+    "name": "S2046",
+    "class": "high_camber",
+    "t_max": 0.09028365270862053,
+    "camber_max": 0.025563073903616677,
+    "reflex": false
+  },
+  {
+    "name": "NACA 63(2)-615",
+    "class": "reflexed_6series",
+    "t_max": 0.14996170364084488,
+    "camber_max": 0.031276134495598996,
+    "reflex": false
+  },
+  {
+    "name": "NACA 63(2)A-015",
+    "class": "reflexed_6series",
+    "t_max": 0.14992639915905895,
+    "camber_max": 0.01621305495047139,
+    "reflex": false
+  },
+  {
+    "name": "NACA 64(1)-112",
+    "class": "reflexed_6series",
+    "t_max": 0.11993107121261301,
+    "camber_max": 0.005328915586003003,
+    "reflex": false
+  },
+  {
+    "name": "NACA 64(1)-212",
+    "class": "reflexed_6series",
+    "t_max": 0.11993509657660512,
+    "camber_max": 0.010644091467886637,
+    "reflex": false
+  },
+  {
+    "name": "NACA 65(1)-212",
+    "class": "reflexed_6series",
+    "t_max": 0.11994114113012794,
+    "camber_max": 0.01068847775361104,
+    "reflex": false
+  }
+]
