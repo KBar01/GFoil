@@ -162,7 +162,7 @@ python3 tests/regression_test.py --build --test
 ```
 
 Golden files: `tests/golden/fwd_scalars.json`, `ad_scalars.json`, `ad_gradients.json`
-Test input:   `tests/input.json` (NACA 0012, alpha=2°, ncrit=5, ncrithyst=0)
+Test input:   `tests/input.json` (NACA 0012, alpha=2°, ncrit=5)
 Tolerance: 1e-8 relative.
 
 The test drives the pybind11 module (`GFoil.gfoil_cpp`) directly — no standalone

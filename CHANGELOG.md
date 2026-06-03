@@ -6,6 +6,57 @@ chronological record.
 
 ---
 
+## API & verbose-output changes (June 2026)
+
+**`ncrithyst` transition-hysteresis logic removed entirely.**
+- Decision evidence: the convergence study in `bench/ncrithyst_study/` (seed=0,
+  80 aerofoils, 90,720 bare-Newton solves) showed `ncrithyst` does nothing
+  meaningful. Convergence is flat within noise at any physically-safe value
+  (78.05% at 0 → 78.38% at 0.2). The apparent gains at large values
+  (up to 90.5% at 3.0) are an **over-damping artifact** — they pin the
+  transition front forward and systematically change the converged solution
+  (drag rises monotonically, no plateau), i.e. they buy a convergence number by
+  altering the answer, not by stabilising the physics. It was an anti-chatter
+  no-op, never a convergence mechanism. See `bench/ncrithyst_study/findings.md`.
+- The single hysteresis branch in `update_transition.cpp` (the free-transition
+  `else if` arm that pinned `ilam = ilam0` on a spurious single-node retreat,
+  with its `amp_first_turb` local) is deleted. Single-node retreats now proceed,
+  which is behaviourally **identical to the study's `ncrithyst = 0` ("off")
+  column** — the well-characterised intended post-removal behaviour.
+- Removed all plumbing: `Param::ncrithyst` (data_structs.h), the `Real ncrithyst`
+  parameter + `param.ncrithyst` assignment in `runCode` (run_forward.cpp), the
+  `ncrithyst` default in the `runCode` declaration (run_forward.h), the dict read
+  and call argument in `gfoil_fwd_bindings.cpp`, the `OperatingConds.ncrithyst`
+  field (inputs.py) + `_build_input_dict` entry (gfoil.py), and the dead
+  `"ncrithyst"` keys in `tests/input.json` / `input_test.json`. The transient
+  `GFOIL_NCRITHYST` constant introduced during the earlier API-removal step is
+  also gone.
+- AD/adjoint path: `ncrithyst` never appeared in the reverse-mode build
+  (`ADfuncs.hpp`, `gfoil_ad_bindings.cpp`); `update_transition.cpp` is a
+  forward-only TU. Forward and adjoint transition logic stay consistent and
+  `dOASPL/dy`, `dOASPL/dalpha` are unchanged.
+- Regression: deleting the branch equals `ncrithyst = 0`, the value the golden
+  was generated with, so forward + AD baselines are expected bit-identical.
+
+**Verbose output: per-observer OASPL and TE-local observer coordinates.**
+- Two new `VerboseResult` / `ForwardResult` fields, populated only when
+  `verbose=True`:
+  - `OASPL_perObs` — shape `(nObs,)`, per-observer OASPL [dB re 20µPa].
+  - `obsXYZ_TElocal` — shape `(nObs, 3)`, observer coords in the TE-local
+    chord-aligned Amiet frame (origin at the trailing edge) [m].
+- `OASPL_perObs` integrates the raw linear-power far-field PSD `ff[]`
+  (Pa²/(rad/s)) over the linear-spaced ω widths exactly as `calc_OASPL`
+  (sound.hpp), including the optional A-weighting and the `1e-30` floor branch.
+  Verified: the power-average of `OASPL_perObs` reproduces the published scalar
+  `OASPL` to machine precision for both single- and multi-observer cases.
+
+**Acoustic frequency spacing (no change).**
+- The acoustic frequency array is, and remains, **log-spaced** (log10-linear
+  between `f_min` and `f_max`); see the verbose rebuild in run_forward.cpp and
+  the log-spaced grid in calc_OASPL. No code change — recorded here for clarity.
+
+---
+
 ## Audit History (May 2026)
 
 **newAmiet.hpp** (921 → 402 lines):

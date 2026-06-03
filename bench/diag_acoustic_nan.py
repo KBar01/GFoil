@@ -43,8 +43,7 @@ def foil_path(name):
 def run(case, rtol=None, debug=True):
     x, z = load_coords(foil_path(case["foil"]))
     aero = Aerofoil(xcoords=x.copy(), ycoords=z.copy())
-    op = OperatingConds(alpha=case["alpha"], Re=case["Re"], nCrit=case["nCrit"],
-                        ncrithyst=0.0)
+    op = OperatingConds(alpha=case["alpha"], Re=case["Re"], nCrit=case["nCrit"])
     ac = Acoustics(observerXYZ=OBSERVER)
     inp = _build_input_dict(aero, op, ac, fromRestart=0)
     if rtol is not None:

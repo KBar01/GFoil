@@ -133,7 +133,6 @@ def run_case(c, rtol=None):
     aero = Aerofoil(xcoords=np.asarray(c["xcoords"]).copy(),
                     ycoords=np.asarray(c["ycoords"]).copy())
     op = OperatingConds(alpha=c["alpha"], Re=c["Re"], nCrit=c["nCrit"],
-                        ncrithyst=0.0,
                         transition=np.array(c["trans"], dtype=float))
     ac = Acoustics(observerXYZ=OBSERVER)
     inp = _build_input_dict(aero, op, ac, fromRestart=0)

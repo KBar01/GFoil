@@ -3,9 +3,9 @@
 // march_amplification() integrates the amplification factor n~ along a surface
 // (e^N envelope) and returns the last laminar node, honouring forced transition.
 // update_transition() then moves the transition front per surface (with a
-// per-iteration advance cap and free-transition hysteresis), seeds newly
-// turbulent nodes' ctau, restores turbulent amps, and applies the ctau-freeze
-// anti-oscillation logic. Forward TU; .getValue() here is forward-only and safe.
+// per-iteration advance cap), seeds newly turbulent nodes' ctau, restores
+// turbulent amps, and applies the ctau-freeze anti-oscillation logic.
+// Forward TU; .getValue() here is forward-only and safe.
 #include <iostream>
 #include <cmath>
 #include <Eigen/Dense>
@@ -151,7 +151,6 @@ void update_transition(Glob &glob, Vsol &vsol, Isol &isol, Param &param,
         // Apply jump cap for advance direction on both natural and forced transition.
         // The cap prevents large ctau-state discontinuities that cause NaN in the Jacobian.
         // For forced transition, use a larger cap so the target is reached quickly.
-        // For forced transition, hysteresis is skipped (location is geometrically fixed).
         if (ilam < ilam0) {
             int max_advance;
             if (was_forced_break) {
@@ -161,13 +160,6 @@ void update_transition(Glob &glob, Vsol &vsol, Isol &isol, Param &param,
                 max_advance = (newtonIter < 5) ? 1 : 3;
             }
             ilam = std::max(ilam, ilam0 - max_advance);
-        } else if (!was_forced_break && ilam > ilam0 &&
-                   (ilam - ilam0 == 1) && (ilam0 + 1 < nSurfPoints)) {
-            // Hysteresis: suppress spurious 1-node retreat for free transition only.
-            Real amp_first_turb = glob.U[colMajorIndex(2, Is[ilam0+1], 4)];
-            if (amp_first_turb >= param.ncrit - param.ncrithyst) {
-                ilam = ilam0;
-            }
         }
 
         if (ilam == ilam0) {

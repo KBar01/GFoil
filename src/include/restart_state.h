@@ -45,5 +45,11 @@ struct ForwardResult {
     int nObs = 0;
     std::vector<double> FF_spectra;   // flat row-major (nObs, Nsound)
 
+    // Per-observer integrated noise and observer geometry (verbose only).
+    std::vector<double> OASPL_perObs;    // length nObs; OASPL per observer [dB re 20uPa]
+    std::vector<double> obsXYZ_TElocal;  // flat row-major (nObs, 3): x_loc, y_loc, z_loc
+                                         // in the TE-local chord-aligned Amiet frame
+                                         // (origin at the trailing edge) [m]
+
     int newton_iterations = 0;        // converging Newton iteration (param.niglob if not converged)
 };

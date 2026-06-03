@@ -74,7 +74,6 @@ coordinate ξ.
 | `sa` (laminar) | envelope amplification factor ñ; transition where ñ reaches `ncrit` |
 | `damp` | amplification rate dñ/dξ along the surface (`get_damp`; e^N envelope, Drela) |
 | `ncrit` | critical amplification factor (transition threshold) |
-| `ncrithyst` | hysteresis margin damping transition-node oscillation |
 | `ilam` | index of the last laminar node on a surface (transition front) |
 
 ## Discretisation / solve

@@ -207,7 +207,6 @@ struct Param {
 
     // Viscous parameters
     Real ncrit     = 9.0;
-    Real ncrithyst = 0.2;   // hysteresis margin for transition-node damping
     // Forced-transition state (plain bool/double — safe on CoDi tape)
     bool   forcet    = false;
     double xift      = 0.0;

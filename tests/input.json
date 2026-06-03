@@ -624,7 +624,6 @@
   "S": 2.0,
   "returnData": 1,
   "ncrit": 5.0,
-  "ncrithyst": 0.0,
   "Ufac": 1.0,
   "TEfac": 0.09,
   "toptrans": 1.0,

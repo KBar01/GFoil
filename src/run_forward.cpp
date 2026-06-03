@@ -42,7 +42,6 @@ bool runCode(
     ForwardResult* fwdOut,
     const RestartState* warmStart,
     int aWeighting,
-    Real ncrithyst,
     bool verbose,
     double f_min,
     double f_max,
@@ -74,7 +73,6 @@ bool runCode(
     Param param;
     param.rtol      = rtol;       // RMS convergence tolerance (forward-only knob)
     param.ncrit     = nCrit;
-    param.ncrithyst = ncrithyst;
     param.xft_xc[0] = xft_lower;  // lower surface (vsol.Is[0])
     param.xft_xc[1] = xft_upper;  // upper surface (vsol.Is[1])
     Wake wake;
@@ -229,6 +227,8 @@ bool runCode(
                     fwdOut->WPS_lower.resize(NS, 0.0);
                     fwdOut->nObs = nObs;
                     fwdOut->FF_spectra.resize(nObs * NS, 0.0);
+                    fwdOut->OASPL_perObs.resize(nObs, 0.0);
+                    fwdOut->obsXYZ_TElocal.resize(nObs * 3, 0.0);
 
                     Real omArr[Nsound];
                     Real Freq_arr[Nsound];
@@ -289,6 +289,12 @@ bool runCode(
                         Real x_loc = obsX[iObs] * cos_a - obsZ[iObs] * sin_a - te_offset;
                         Real y_loc = obsY[iObs];
                         Real z_loc = obsX[iObs] * sin_a + obsZ[iObs] * cos_a;
+
+                        // Observer coords in the TE-local chord-aligned Amiet frame.
+                        fwdOut->obsXYZ_TElocal[iObs * 3 + 0] = x_loc.getValue();
+                        fwdOut->obsXYZ_TElocal[iObs * 3 + 1] = y_loc.getValue();
+                        fwdOut->obsXYZ_TElocal[iObs * 3 + 2] = z_loc.getValue();
+
                         TE_noise_outer<Real>(Uinf / 340.0, Uinf,
                                              x_loc, y_loc, z_loc,
                                              chordScaling / 2.0, chordScaling,
@@ -299,6 +305,32 @@ bool runCode(
                             double ff_hz = ff[i].getValue() * two_pi;
                             fwdOut->FF_spectra[iObs * NS + i] = (ff_hz > 0.0) ? 10.0 * std::log10(ff_hz / pref2) : -200.0;
                         }
+
+                        // Per-observer OASPL: integrate the RAW linear-power ff[]
+                        // (Pa^2/(rad/s)) over the linear-spaced omega widths, exactly
+                        // as calc_OASPL does (sound.hpp). A-weight ff[] first if set.
+                        Real ffI[Nsound];
+                        for (int i = 0; i < NS; ++i) {
+                            ffI[i] = ff[i];
+                            if (aWeighting) {
+                                Real f2 = Freq_arr[i] * Freq_arr[i];
+                                Real RA = (static_cast<Real>(12194.0 * 12194.0) * f2 * f2)
+                                        / ( (f2 + static_cast<Real>(20.6  * 20.6))
+                                          * std::sqrt((f2 + static_cast<Real>(107.7 * 107.7))
+                                                     * (f2 + static_cast<Real>(737.9 * 737.9)))
+                                          * (f2 + static_cast<Real>(12194.0 * 12194.0)) );
+                                ffI[i] *= RA * RA;
+                            }
+                        }
+                        Real integral = 0.0;
+                        for (int i = 0; i < NS - 1; ++i) {
+                            Real df = Freq_arr[i + 1] - Freq_arr[i];
+                            integral += 0.5 * (ffI[i] + ffI[i + 1]) * 2.0 * M_PI * df;
+                        }
+                        double ratio = (integral / pref2).getValue();
+                        fwdOut->OASPL_perObs[iObs] = (ratio > 1e-30)
+                            ? 10.0 * std::log10(ratio)
+                            : 10.0 * std::log10(1e-30);   // matches calc_OASPL floor
                     }
                 }
             } // end verbose block

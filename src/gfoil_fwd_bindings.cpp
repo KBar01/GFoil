@@ -43,7 +43,6 @@ py::dict run_forward_py(py::dict inp, py::object prev_jacobian = py::none()) {
     Real TEfac       = inp["TEfac"].cast<double>();
     int  doRestart   = inp["restart"].cast<int>();
     int  aWeighting  = inp.contains("aWeighting") ? inp["aWeighting"].cast<int>() : 0;
-    Real ncrithyst   = inp.contains("ncrithyst")  ? Real(inp["ncrithyst"].cast<double>()) : Real(0.2);
     bool verbose     = inp.contains("verbose")    ? inp["verbose"].cast<bool>() : false;
     double f_min     = inp.contains("f_min")      ? inp["f_min"].cast<double>() : 200.0;
     double f_max     = inp.contains("f_max")      ? inp["f_max"].cast<double>() : 20000.0;
@@ -98,7 +97,6 @@ py::dict run_forward_py(py::dict inp, py::object prev_jacobian = py::none()) {
         &rst, &fwd,
         warmStartPtr,
         aWeighting,
-        ncrithyst,
         verbose,
         f_min,
         f_max,
@@ -148,6 +146,8 @@ py::dict run_forward_py(py::dict inp, py::object prev_jacobian = py::none()) {
             result["WPS_lower"]   = fwd.WPS_lower;
             result["FF_spectra"]  = fwd.FF_spectra;
             result["nObs"]        = fwd.nObs;
+            result["OASPL_perObs"]   = fwd.OASPL_perObs;
+            result["obsXYZ_TElocal"] = fwd.obsXYZ_TElocal;
         }
     }
     return result;

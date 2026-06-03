@@ -28,7 +28,6 @@ def _build_input_dict(aerofoil: Aerofoil,
         "Z":             acoustics.observerXYZ[:, 2].tolist(),
         "S":             float(aerofoil.span),
         "ncrit":         float(operating.nCrit),
-        "ncrithyst":     float(operating.ncrithyst),
         "Ufac":          float(aerofoil.panelUniformity),
         "TEfac":         float(aerofoil.panelTEspacing),
         "toptrans":      float(operating.transition[0]),
@@ -84,6 +83,8 @@ def _call_forward(inp: dict, prev_result: "FwdResult" = None) -> "FwdResult":
                 WPS_upper  = np.array(r["WPS_upper"]),
                 WPS_lower  = np.array(r["WPS_lower"]),
                 FF_spectra = np.array(r["FF_spectra"]).reshape(nObs, NS),
+                OASPL_perObs   = np.array(r["OASPL_perObs"]),
+                obsXYZ_TElocal = np.array(r["obsXYZ_TElocal"]).reshape(nObs, 3),
             )
         except (KeyError, TypeError, ValueError) as e:
             raise RuntimeError(

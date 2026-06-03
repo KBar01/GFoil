@@ -1,8 +1,119 @@
 
 import numpy as np
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields, is_dataclass
 from typing import Optional
 
+
+# --------------------------------------------------------------------------- #
+# Result-object presentation / dict-access mixin                              #
+# --------------------------------------------------------------------------- #
+def _short_descr(v) -> str:
+    """One-line descriptor of a field value for the compact repr.
+
+    Arrays/lists are summarised by shape/length (never dumped); scalars show
+    their value; nested result dataclasses show "<ClassName> (set)".
+    """
+    if v is None:
+        return "None"
+    if isinstance(v, np.ndarray):
+        return f"ndarray shape={tuple(v.shape)} dtype={v.dtype}"
+    if isinstance(v, bool):                 # before int (bool is a subclass)
+        return str(v)
+    if isinstance(v, list):
+        return f"list len={len(v)}"
+    if isinstance(v, tuple):
+        return f"tuple len={len(v)}"
+    if is_dataclass(v) and not isinstance(v, type):
+        return f"{type(v).__name__} (set)"
+    if isinstance(v, (float, np.floating)):
+        return f"{float(v):.5g}"            # repr only — stored value untouched
+    if isinstance(v, str):
+        return f'"{v}"'
+    return str(v)
+
+
+class _ResultMixin:
+    """Read-only dict-style access + compact repr for result dataclasses.
+
+    Mixed into dataclasses declared with ``@dataclass(repr=False)`` so this
+    ``__repr__`` is used instead of the verbose auto-generated one. Adds
+    ``result["CL"]`` access alongside attribute access ``result.CL`` (read
+    only — no ``__setitem__``), plus ``keys()``, ``in``, and ``to_dict()``.
+
+    Field names and types are untouched, so direct attribute access (which the
+    grad_run AD-upload path relies on) is unaffected.
+    """
+
+    # Subclasses may set _REPR_GROUPS = [(label_or_None, [field_name, ...]), ...]
+    # to group the repr. Any field not listed is appended under an "other" group
+    # so the repr stays complete if fields are added later.
+    _REPR_GROUPS = None
+
+    def _field_names(self):
+        return [f.name for f in fields(self)]
+
+    def _repr_layout(self):
+        names = self._field_names()
+        if self._REPR_GROUPS is None:
+            return [(None, names)]
+        listed = [n for _, grp in self._REPR_GROUPS for n in grp]
+        missing = [n for n in names if n not in listed]
+        layout = [(lbl, [n for n in grp if n in names])
+                  for lbl, grp in self._REPR_GROUPS]
+        if missing:
+            layout.append(("other", missing))
+        return layout
+
+    def summary(self) -> str:
+        """Return the compact multi-line summary string (same as repr).
+
+        Handy for logging: ``logger.info(result.summary())``.
+        """
+        names = self._field_names()
+        width = max((len(n) for n in names), default=0)
+        lines = [type(self).__name__]
+        for label, group in self._repr_layout():
+            if label:
+                lines.append(f"  -- {label} --")
+            for n in group:
+                lines.append(f"  {n:<{width}}  {_short_descr(getattr(self, n))}")
+        return "\n".join(lines)
+
+    def __repr__(self) -> str:
+        return self.summary()
+
+    __str__ = __repr__
+
+    # ---- read-only dict-style access --------------------------------------- #
+    def __getitem__(self, key):
+        if key in self._field_names():
+            return getattr(self, key)
+        raise KeyError(
+            f"{key!r} is not a field of {type(self).__name__}. "
+            f"Valid keys: {self._field_names()}"
+        )
+
+    def keys(self):
+        """Field names, in declaration order (enables ``dict(result)``)."""
+        return self._field_names()
+
+    def __contains__(self, key) -> bool:
+        return key in self._field_names()
+
+    def to_dict(self) -> dict:
+        """Plain ``{field_name: value}`` mapping.
+
+        Shallow for arrays/lists (returned by reference, not copied). Nested
+        result dataclasses (e.g. ``verbose_data``) are recursed into, so they
+        become nested dicts rather than dataclass instances.
+        """
+        out = {}
+        for f in fields(self):
+            v = getattr(self, f.name)
+            if is_dataclass(v) and not isinstance(v, type) and hasattr(v, "to_dict"):
+                v = v.to_dict()
+            out[f.name] = v
+        return out
 
 
 def _as_1d_float_array(a, name: str) -> np.ndarray:
@@ -108,7 +219,6 @@ class OperatingConds:
     Ma: Optional[float] = 0.0
     nu: Optional[float] = 0.000015
     nCrit:     Optional[float] = 9.0
-    ncrithyst: float           = 0.2
     transition: np.ndarray = field(default_factory=lambda: np.array([1.0, 1.0], dtype=float))
 
     def __post_init__(self):
@@ -119,8 +229,8 @@ class OperatingConds:
         self.transition = self.transition.reshape(2,)
 
 
-@dataclass
-class VerboseResult:
+@dataclass(repr=False)
+class VerboseResult(_ResultMixin):
     """
     Rich per-node and acoustic data returned when fwd_run(verbose=True).
 
@@ -157,10 +267,27 @@ class VerboseResult:
     WPS_lower: np.ndarray  # lower surface WPS [dB/Hz re 20µPa] shape (Nsound,)
     FF_spectra: np.ndarray # far-field PSD     [dB/Hz re 20µPa] shape (nObs, Nsound)
 
+    # Per-observer integrated noise and observer geometry
+    OASPL_perObs:   np.ndarray  # OASPL per observer [dB re 20µPa]            shape (nObs,)
+    obsXYZ_TElocal: np.ndarray  # observer coords in TE-local Amiet frame [m] shape (nObs, 3)
+                                # (chord-aligned, origin at the trailing edge)
 
-@dataclass
-class FwdResult:
+
+@dataclass(repr=False)
+class FwdResult(_ResultMixin):
     """Returned by fwd_run. Pass to grad_run to get gradients."""
+
+    # repr grouping: headline scalars, then the bulky Jacobian-state arrays
+    # (shape-only), the design point, and the optional verbose payload.
+    _REPR_GROUPS = [
+        (None, ["converged", "CL", "CD", "CM", "OASPL",
+                "failure_mode", "newton_iterations"]),
+        ("jacobian state", ["states", "turb", "stag",
+                            "RVvals", "RVrows", "RVcols", "RVnz"]),
+        ("design point", ["ycoords", "alpha"]),
+        (None, ["verbose_data"]),
+    ]
+
     converged: bool
     CL:    float = 0.0
     CD:    float = 0.0
@@ -187,8 +314,8 @@ class FwdResult:
     failure_mode: str = ""
 
 
-@dataclass
-class GradResult:
+@dataclass(repr=False)
+class GradResult(_ResultMixin):
     """Returned by grad_run."""
     converged: bool
     dCL_dy:        Optional[np.ndarray] = None
