@@ -220,6 +220,12 @@ class OperatingConds:
     nu: Optional[float] = 0.000015
     nCrit:     Optional[float] = 9.0
     transition: np.ndarray = field(default_factory=lambda: np.array([1.0, 1.0], dtype=float))
+    rtol: Optional[float] = 1e-6   # forward-solve RMS residual tolerance.
+                                   # Default matches XFOIL-style convergence.
+                                   # Tighten to <=1e-10 for AD-vs-FD gradient
+                                   # verification (central FD amplifies converged-
+                                   # state noise by 1/(2h); see
+                                   # bench/results/FREE_TRANS_VERIFY.md).
 
     def __post_init__(self):
         self.transition = _as_float_array(self.transition, "OperatingConds.transition").astype(float)
@@ -227,6 +233,10 @@ class OperatingConds:
         if self.transition.size != 2:
             raise ValueError(f"transition must have length 2, got shape {self.transition.shape}")
         self.transition = self.transition.reshape(2,)
+
+        self.rtol = float(self.rtol)
+        if not (0.0 < self.rtol < 1.0):
+            raise ValueError(f"rtol must be a positive float in (0, 1), got {self.rtol}")
 
 
 @dataclass(repr=False)

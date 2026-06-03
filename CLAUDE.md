@@ -217,4 +217,7 @@ ctau equilibrium reseeding were tried and rejected as net-neutral/regressive
 `solve_coupled` converges on an RMS residual (`resid_rms` in coupled.cpp) against
 `param.rtol` (default 1e-6, XFOIL-comparable). `rtol` is plumbed from
 `input["rtol"]` (forward-only; AD path unaffected) so it can be swept without
-rebuilding.
+rebuilding. It is now exposed on `OperatingConds(rtol=...)` (default 1e-6); tighten
+to ≤1e-10 for AD-vs-FD gradient checks — central FD amplifies converged-state noise
+by 1/(2h), so a loose forward solve manufactures spurious FD-vs-AD error (see
+`bench/results/FREE_TRANS_VERIFY.md`).
