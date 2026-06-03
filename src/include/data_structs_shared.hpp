@@ -110,9 +110,13 @@ struct Vsol_t {
     Real ue_sigma[(Ncoords+Nwake)*(Ncoords+Nwake-2)] = {0};
     bool turb[Ncoords+Nwake] = {false};
     std::vector<std::vector<int>> Is;
-    // Forced-transition state (plain doubles/bools, safe on CoDi tape)
+    // Forced-transition state. forcet (which interval is forced) is a passive
+    // branch flag; xift (the arc-length position of the forcing station) is a
+    // CONTINUOUS function of geometry, so it must be a taped Real — otherwise
+    // d(xift)/d(geometry) is severed and the adjoint loses dR/dxift * dxift/dy
+    // for forced-transition cases (see bench/results/GRAD_VERIFY.md).
     bool   forcet[2] = {false, false};
-    double xift[2]   = {0.0, 0.0};
+    Real   xift[2]   = {Real(0.0), Real(0.0)};
 };
 
 template<typename Real>
@@ -129,9 +133,10 @@ struct Param_t {
     int  niglob = 50;
 
     Real ncrit = 9.0;
-    // Forced-transition state (plain bool/double — safe on CoDi tape)
+    // Forced-transition state. xift is a taped Real (continuous in geometry);
+    // forcet is a passive branch flag. See Vsol_t and bench/results/GRAD_VERIFY.md.
     bool   forcet = false;
-    double xift   = 0.0;
+    Real   xift   = 0.0;
     Real Cuq   = 1.0;
     Real Dlr   = 0.9;
     Real SlagK = 5.6;

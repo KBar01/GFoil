@@ -209,25 +209,47 @@ void partialRpartialx(
     identify_surfaces(isol_pre,vsol);
     set_wake_gap(foil,isol_pre,vsol);
     calc_ue_m<Real>(foil,wake,isolc,vsol);
+
+    Isolv<Real> isol_final;
+    stagpoint_move_AD(isol_final,glob,foil,wake,vsol,currStag);
+
     // Compute vsol.forcet[si] and vsol.xift[si] from xft_xc and foil geometry.
-    // Must run after identify_surfaces has populated vsol.Is.
+    // Must run after identify_surfaces (populates vsol.Is) AND after
+    // stagpoint_move_AD, so that xift is measured against isol_FINAL.distFromStag
+    // — the SAME arc-length array build_glob_RV_AD uses for the residual station
+    // coordinates. This matches the forward solver order (coupled.cpp:
+    // stagpoint_move -> update_transition -> build_glob_RV) and is essential for
+    // correctness: the residual depends on the transition position RELATIVE to
+    // its stations (xt - x1), so a stag-point shift (e.g. from changing alpha)
+    // must cancel between xift and the stations. Using isol_pre here would leave
+    // a spurious dxift/dalpha that breaks that cancellation.
+    //
+    // The PANEL BRACKET containing the x/c forcing station is an integer/branch
+    // selection — kept passive via .getValue() comparisons. The interpolation
+    // that locates xift WITHIN that bracket is continuous in the (taped) node
+    // coordinates foil.x and arc-lengths distFromStag, so it is computed in Real
+    // arithmetic. This restores d(xift)/d(geometry) on the tape, which the
+    // adjoint needs as dR/dxift * dxift/dy (see bench/results/GRAD_VERIFY.md).
     for (int si = 0; si < 2; ++si) {
         vsol.forcet[si] = false;
-        vsol.xift[si]   = 0.0;
+        vsol.xift[si]   = Real(0.0);
         if (xft_xc[si] < 1.0 - 1e-9 && si < (int)vsol.Is.size()) {
             const std::vector<int>& Is_si = vsol.Is[si];
             int nSP = (int)Is_si.size();
-            double x_max = 0.0;
-            for (int k = 0; k < Ncoords; ++k)
-                x_max = std::max(x_max, foil.x[2*k].getValue());
-            double xft_abs = xft_xc[si] * x_max;
+            // x_max is the (taped) max node abscissa — the chord scale moves with
+            // the geometry, so keep the value taped while selecting the index passively.
+            Real x_max = foil.x[0];
+            for (int k = 1; k < Ncoords; ++k)
+                if (foil.x[2*k].getValue() > x_max.getValue()) x_max = foil.x[2*k];
+            Real xft_abs = xft_xc[si] * x_max;
             for (int k = 1; k < nSP; ++k) {
-                double x_prev = foil.x[2 * Is_si[k-1]].getValue();
-                double x_curr = foil.x[2 * Is_si[k  ]].getValue();
-                if ((x_prev - xft_abs) * (x_curr - xft_abs) <= 0.0) {
-                    double xi_prev = isol_pre.distFromStag[Is_si[k-1]].getValue();
-                    double xi_curr = isol_pre.distFromStag[Is_si[k  ]].getValue();
-                    double frac = (x_curr == x_prev) ? 0.0 :
+                Real x_prev = foil.x[2 * Is_si[k-1]];
+                Real x_curr = foil.x[2 * Is_si[k  ]];
+                if ((x_prev.getValue() - xft_abs.getValue()) *
+                    (x_curr.getValue() - xft_abs.getValue()) <= 0.0) {
+                    Real xi_prev = isol_final.distFromStag[Is_si[k-1]];
+                    Real xi_curr = isol_final.distFromStag[Is_si[k  ]];
+                    Real frac = (x_curr.getValue() == x_prev.getValue()) ? Real(0.0) :
                                   (xft_abs - x_prev) / (x_curr - x_prev);
                     vsol.xift[si]   = xi_prev + (xi_curr - xi_prev) * frac;
                     vsol.forcet[si] = true;
@@ -237,8 +259,6 @@ void partialRpartialx(
         }
     }
 
-    Isolv<Real> isol_final;
-    stagpoint_move_AD(isol_final,glob,foil,wake,vsol,currStag);
     build_glob_RV_AD(foil,vsol,isol_final,glob,param);
     finishdRdU_AD(foil,isolc,isol_final,glob,vsol,oper);
 

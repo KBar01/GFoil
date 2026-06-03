@@ -86,7 +86,7 @@ void build_glob_RV_AD(const Foil<Real>&foil, const Vsol<Real>&vsol, const Isolv<
     for (int si = 0; si < 3; ++si) {    // for each surface (upper/lower/wake)
         // Set forced-transition state for this surface
         param.forcet = (si < 2) ? vsol.forcet[si] : false;
-        param.xift   = (si < 2) ? vsol.xift[si]   : 0.0;
+        param.xift   = (si < 2) ? vsol.xift[si]   : Real(0.0);
 
         const std::vector<int>& Is = vsol.Is[si]; // list of surface node indices from stag point
         const int nSurfPoints = Is.size();

@@ -129,6 +129,15 @@ adding `ncrithyst` to `Param_t<Real>` shifted gradient arrays by ~6×10⁻⁷).
 Rule: fields needed only by the forward solver belong in the non-template
 `Param` struct in `data_structs.h`, not in `Param_t`.
 
+Exception: `Param_t::xift` / `Vsol_t::xift` ARE `Real` (taped) — deliberately, so
+the forced-transition station carries `d(xift)/d(geometry)` into the adjoint (see
+the forced-transition adjoint fix in CHANGELOG.md and `bench/results/GRAD_VERIFY.md`).
+This is safe because the default `Real xift = 0.0` is a passive constant until it is
+assigned from a taped quantity (`isol_final.distFromStag`) in forced-transition
+cases only; the free-transition golden is bit-identical. Do NOT revert these to
+`double` — that re-detaches the forced-transition gradient. The matching forward
+structs in `data_structs.h` stay `double` (value-only, no tape).
+
 ---
 
 ## Shared solver template headers

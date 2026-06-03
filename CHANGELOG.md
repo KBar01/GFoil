@@ -6,6 +6,54 @@ chronological record.
 
 ---
 
+## Forced-transition adjoint fix — `xift` taped (June 2026)
+
+**Bug.** For *forced* transition (`OperatingConds.transition != [1,1]`), the
+reverse-mode gradients of CL, CD and OASPL wrt the SVD shape modes disagreed
+badly with central finite differences (CD worst: up to ~975% relative error;
+CL up to ~9%; OASPL up to ~9%). Free transition was fine.
+
+**Root cause (H1).** The forced-transition arc-length station `xift` is a
+continuous function of geometry (via `foil.x` and `distFromStag`), and the BL
+residual depends on it (`residuals_shared.hpp`: `xt = param.xift`, weighting the
+transition-station interpolation). But `Vsol_t::xift`/`Param_t::xift` were stored
+as `double` and `ADfuncs.hpp::partialRpartialx` computed the whole interpolation
+with `.getValue()`, so `d(xift)/dy ≡ 0` on the tape. The adjoint term
+`−λᵀ ∂R/∂x` was missing `∂R/∂xift · ∂xift/∂x` entirely (absent from both AD
+passes). The error was a **flat, step-size-independent floor** — the signature of
+a missing constant term — and was largest at the higher (lower-energy) SVD modes
+because the missing *absolute* term divided by a smaller gradient. Full diagnosis,
+experiments and before/after plots: `bench/results/GRAD_VERIFY.md`.
+
+**Fix.** `Vsol_t::xift` and `Param_t::xift` are now taped `Real`
+(`data_structs_shared.hpp`; forward `data_structs.h` stays `double` — value-only).
+In `partialRpartialx` the `xift` interpolation is computed in `Real` arithmetic,
+moved to **after** `stagpoint_move_AD` so it is measured against
+`isol_final.distFromStag` — the *same* arc-length array the residual stations use.
+This matches the forward order (`coupled.cpp`:
+`stagpoint_move → update_transition → build_glob_RV`) and is essential: the
+residual depends on the transition position *relative* to its stations, so an
+α-driven stagnation-point shift must cancel between `xift` and the stations. An
+intermediate version that used `isol_pre.distFromStag` (inviscid stag) fixed the
+geometry modes but **broke `dOASPL/dα`** (0.000% → 3.4%) by leaving a spurious
+`dxift/dα`; using `isol_final` restores α to 0.000%. The integer panel-bracket
+selection stays passive (`.getValue()` comparisons — legitimately
+non-differentiable); only the continuous in-bracket interpolation is taped.
+
+**H2/H3 ruled out for the verification case.** After the H1 fix the OASPL gradient
+matches FD to 0.000% for every mode, so no `calc_WPS`/acoustic-floor/`Radiation`
+clip is binding and kinking the spectrum here (H2). The α row is 0.000% before and
+after, so the radiation-geometry α dependence in `calc_OASPL` (pass 1) is complete
+(H3).
+
+**Regression.** `tests/input.json` uses free transition, so the golden is
+**bit-identical** before and after this change (10/10, rel_err 0.000e+00); the fix
+only affects forced-transition cases. The CLAUDE.md guardrail about a `Real` field
+in `Param_t<Real>` did not materialise — `Real xift = 0.0` is a passive constant
+until assigned from a taped quantity in forced cases.
+
+---
+
 ## API & verbose-output changes (June 2026)
 
 **`ncrithyst` transition-hysteresis logic removed entirely.**
