@@ -139,7 +139,7 @@ class Aerofoil:
     xcoords: np.ndarray
     ycoords: np.ndarray
     chord: Optional[float] = 1.0
-    span: Optional[float] = 2.0
+    span: Optional[float] = 3.0
     panelUniformity: Optional[float] = 1.0
     panelTEspacing: Optional[float] = 0.09
 
@@ -187,8 +187,8 @@ class Acoustics:
     TE-local chord-aligned Amiet frame accounting for angle of attack.
     """
     observerXYZ: np.ndarray
-    TESampleLoc: Optional[float] = 0.97
-    model: Optional[str] = "roz"
+    TESampleLoc: Optional[float] = 0.98
+    model: Optional[str] = "kam"
     aWeighting: bool = False
     f_min: float = 200.0   # lower acoustic frequency bound [Hz]
     f_max: float = 20000.0 # upper acoustic frequency bound [Hz]
@@ -220,12 +220,7 @@ class OperatingConds:
     nu: Optional[float] = 0.000015
     nCrit:     Optional[float] = 9.0
     transition: np.ndarray = field(default_factory=lambda: np.array([1.0, 1.0], dtype=float))
-    rtol: Optional[float] = 1e-6   # forward-solve RMS residual tolerance.
-                                   # Default matches XFOIL-style convergence.
-                                   # Tighten to <=1e-10 for AD-vs-FD gradient
-                                   # verification (central FD amplifies converged-
-                                   # state noise by 1/(2h); see
-                                   # bench/results/FREE_TRANS_VERIFY.md).
+    rtol: Optional[float] = 1e-9   # forward-solve RMS residual tolerance
 
     def __post_init__(self):
         self.transition = _as_float_array(self.transition, "OperatingConds.transition").astype(float)
