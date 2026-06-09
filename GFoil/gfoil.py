@@ -13,6 +13,14 @@ def _build_input_dict(aerofoil: Aerofoil,
                       verbose: bool = False) -> dict:
     force = 1 if (operating.transition[0] != 1.0 or operating.transition[1] != 1.0) else 0
     alpha = alphaDeg if alphaDeg is not None else float(operating.alpha)
+    # TESampleLoc is either a scalar x/c (single-point sample) or a length-2
+    # [x_lo, x_hi] window (BL-averaged). Pass both endpoints; the C++ side treats
+    # sampleTE_hi <= sampleTE as the scalar (degenerate-window) path.
+    te = acoustics.TESampleLoc
+    if isinstance(te, (list, tuple, np.ndarray)) and len(te) == 2:
+        te_lo, te_hi = float(te[0]), float(te[1])
+    else:
+        te_lo = te_hi = float(te)
     return {
         "xcoords":       aerofoil.xcoords.tolist(),
         "ycoords":       aerofoil.ycoords.tolist(),
@@ -22,7 +30,8 @@ def _build_input_dict(aerofoil: Aerofoil,
         "rho":           float(operating.rho),
         "nu":            float(operating.nu),
         "restart":       fromRestart,
-        "sampleTE":      float(acoustics.TESampleLoc),
+        "sampleTE":      te_lo,
+        "sampleTE_hi":   te_hi,
         "X":             acoustics.observerXYZ[:, 0].tolist(),
         "Y":             acoustics.observerXYZ[:, 1].tolist(),
         "Z":             acoustics.observerXYZ[:, 2].tolist(),

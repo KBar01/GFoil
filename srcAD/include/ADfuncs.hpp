@@ -35,7 +35,7 @@ double partialOutputspartialInputs(
     const Real nCrit, const Real Ufac, const Real TEfac, const Real chordScaling, 
     const double (&inXcoords)[Nin], const Real Re, const Real Ma, const Real rhoInf, 
     const Real kinViscInf,
-    const std::string model, const Real sampleTE,
+    const std::string model, const Real sampleTE, const Real sampleTE_hi,
     const Real* obsX, const Real* obsY, const Real* obsZ, int nObs,
     const Real S,
     
@@ -108,7 +108,7 @@ double partialOutputspartialInputs(
         xcoords[i] = flattenedCoords[colMajorIndex(0,i,2)];
     }
 
-    interpolate_at_95_both_surfaces(xcoords,glob.U,post.cp,oper,turb,param,topsurf,botsurf,Uinf,sampleTE,chordScaling);
+    interpolate_at_95_both_surfaces(xcoords,glob.U,post.cp,oper,turb,param,topsurf,botsurf,Uinf,sampleTE,sampleTE_hi,chordScaling);
     Real OASPL = calc_OASPL<Real>(botsurf,topsurf,chordScaling,Uinf,obsX,obsY,obsZ,nObs,S,kinViscInf,rhoInf,model,f_min,f_max,aWeighting,alpha);
 
     Real outputs[2] = {post.cl,OASPL} ;

@@ -23,6 +23,7 @@ bool runCode(
     Real kinViscInf,
     const std::string model,
     const Real sampleTE,
+    const Real sampleTE_hi,
     const Real* obsX,
     const Real* obsY,
     const Real* obsZ,

@@ -6,6 +6,155 @@ chronological record.
 
 ---
 
+## Trailing-edge (`x/c == 1.0`) sampling removed (June 2026)
+
+With explicit `[x_lo, x_hi]` windows now available (see *Windowed Amiet TE sample*
+below), the legacy `x_target == 1.0` special case in `interpolate_BL_single` — a
+hardcoded average over six stations across 0.96–0.985 — is no longer needed and was
+removed. `interpolate_BL_single` now always performs the normal single-point
+interpolation, which cannot sample the trailing-edge node itself: at `x/c == 1.0`
+`find_interp_position` has no node bracket to return (the TE is the boundary), which
+is exactly why the averaging hack existed. So sampling at the TE is now **rejected**
+rather than silently special-cased:
+
+- Python (`inputs.py`): a scalar `TESampleLoc` must satisfy `0 <= x < 1` (was
+  `0 <= x <= 1`); the message points to using a window for TE-region sampling.
+- C++ (`extract_BL_TE.hpp` dispatcher): the existing window guard was broadened to
+  reject `x_lo >= 1.0 || x_hi >= 1.0` *before* the scalar branch, so both a scalar
+  1.0 and a window touching 1.0 throw `std::invalid_argument` (→ Python
+  `ValueError`). This covers the standalone/JSON path that bypasses Python.
+
+This **supersedes the earlier Bug-2 `chordScale` fix** (below): that fix corrected
+the 1.0 branch, which now no longer exists. Bug 1 (the `get_nodes` shadowing fix)
+stands — it is on the normal single-point path.
+
+**Verification** (NACA 0012, α=2°, nCrit=5; baseline = the same pre-window `HEAD`
+worktree): scalar `0.98` forward (CL/CD/CM/OASPL) and all four gradient arrays
+remain **bit-identical** to `HEAD` (the 0.98 path always took the normal branch, so
+deleting the 1.0 branch is a no-op for it); scalar `1.0` cleanly rejected at both
+the Python and C++ layers; window `[0.95, 0.99]` unchanged (OASPL bit-matches the
+pre-removal windowed build at 63.36701855 @ rtol 1e-11; `dOASPL_dalpha` AD-vs-FD
+relerr 5.3e-7, `dOASPL_dy` ~5e-5). No completed optimisation run is affected (all
+use 0.98).
+
+---
+
+## Two latent `extract_BL_TE.hpp` bugs fixed (June 2026)
+
+Surfaced during the windowed-Amiet review. Both were **dormant on every completed
+run** (all use `TEsample = 0.98`; windows use `x_hi = 0.99`), so the windowed-Amiet
+byte-identical scalar verification and gradient gate remain valid — but both were
+live landmines for other operating points / chords.
+
+**Bug 1 — variable shadowing in `get_nodes` (bottom surface).** The bottom branch
+declared `int botNnodes = botStart;`, a *local* that shadowed the `int& botNnodes`
+output reference, so the computed node count was written to a throwaway and the
+out-param kept its earlier value (4). Fixed by removing the `int` (assign the
+reference, matching the top-surface branch). *Dormant on the 0.98/TE paths because
+the bottom stencil there has ≥4 available nodes, so both the buggy value (4) and the
+corrected value (clamped to 4) coincide* — confirmed by the scalar-0.98 output and
+all four gradient arrays remaining **bit-identical** to the pre-fix `HEAD` build
+(`np.array_equal` True). Would have mattered only if a bottom TE stencil offered
+<4 turbulent nodes (e.g. transition very near the TE), where the buggy 4 could also
+index out of bounds.
+
+**Bug 2 — `chordScale` missing in the `x_target == 1.0` branch.** The normal
+single-point path scales `theta`/`delta*` by `chordScale` (they are lengths) before
+forming `delta99` and feeding Amiet; the TE special-case averaging branch (the
+`NSAMPLES` block) omitted it, so a sample at exactly `x/c = 1.0` fed length scales a
+factor `chordScale` wrong into the noise model. Fixed by applying the same
+`*= chordScale` to `theta`/`delta*` (before `delta99`) on both surfaces, mirroring
+the normal path. **Magnitude:** NACA 0012, α=2°, chord=0.3, `TEsample=1.0`: OASPL
+**87.07 dB (buggy) → 81.24 dB (fixed)**, a 5.83 dB error (CL unchanged — only the
+acoustic length scales were wrong). Real, but never hit: runs use 0.98, and the
+default chord is 1.0 (where `chordScale=1` makes it a no-op anyway). *Superseded:*
+the `x_target == 1.0` branch was subsequently removed entirely (see the
+TE-sampling-removal entry above), so this fix no longer applies to live code.
+
+**Window/TE interaction guard.** With the 1.0 branch now `chordScale`-consistent, a
+*window* must still never let a station land on `x/c == 1.0` — that would route one
+station through the nested 0.96–0.985 TE sub-average while the others are point
+samples, silently mixing two sampling semantics. The Python layer already rejects
+this (`inputs.py` requires `0 < x_lo < x_hi < 1`, so the top station `= x_hi < 1`);
+a defensive C++ guard in the window dispatcher now also throws
+`std::invalid_argument` (→ Python `ValueError`) if `x_hi >= 1.0`, covering the
+standalone/JSON path that bypasses the Python validation. Verified: `[0.96, 1.0]`
+rejected at both layers; `[0.95, 0.99]` unchanged (OASPL bit-matches the pre-fix
+windowed build, `dOASPL_dalpha` AD-vs-FD relerr 5.3e-7, `dOASPL_dy` ~1e-5).
+
+---
+
+## Windowed Amiet TE sample — BL-averaged wall-pressure input (June 2026)
+
+**Motivation.** A confirmed Kambe–Amiet model exploit: the optimiser drives a
+smooth ~0.0022 surface undulation peaked at the *single* wall-pressure sampling
+station (`TEsample = 0.98`) to game the predicted OASPL. The undulation is smooth
+enough to pass a geometric/curvature constraint (that constraint was calibrated
+and correctly rejected — there is no geometric wiggle to catch). The root-cause
+fix is model-level: average the Amiet wall-pressure input over a short trailing-
+edge window so a localised undulation can no longer swing the predicted OASPL.
+
+**Change.** `Acoustics.TESampleLoc` now accepts *either* a scalar `x/c` (legacy,
+default `0.98`) *or* a length-2 `[x_lo, x_hi]` window. For a window the fully
+post-processed 7-slot BL/WPS input vectors `[theta, delta*, tau_max, Ue, dpdx,
+tau_wall, delta99]` are evaluated at `NWINDOW_SAMPLES` (=9) uniformly spaced
+stations across `[x_lo, x_hi]` and **trapezoidally averaged in x/c** (endpoints
+interpolated, not snapped), then a single Amiet evaluation runs on the averaged
+input — **Option A** (averaged input, one kernel eval), not a distributed-source
+integral. The new path reuses the single-point routine verbatim per station, so
+each station carries the correct post-processing. (The pre-existing hardcoded
+`x_target == 1.0` averaging branch was *not* a clean precedent — it had a latent
+`chordScale` bug, fixed separately below.)
+
+**Implementation.** `extract_BL_TE.hpp`: the legacy single-point body was renamed
+`interpolate_BL_single()` **unchanged**, and a thin dispatcher
+`interpolate_at_95_both_surfaces(..., x_lo, x_hi, ...)` was added. `x_hi <= x_lo`
+routes to the single-point routine (byte-identical scalar path); `x_hi > x_lo`
+runs the windowed average by calling the same single-point routine per station, so
+the two paths cannot drift. A second value `sampleTE_hi` was threaded through
+`runCode` (`run_forward.{h,cpp}`), `partialOutputspartialInputs` (`ADfuncs.hpp`),
+both pybind layers (`gfoil_fwd_bindings.cpp`, `gfoil_ad_bindings.cpp`, defaulting
+to `sampleTE` when the key is absent), and `srcAD/main.cpp`. Python: `inputs.py`
+validates a window (`0 < x_lo < x_hi < 1`), `gfoil.py` packs `sampleTE`/
+`sampleTE_hi`. The default stays the scalar `0.98`; no opt-script behaviour changed.
+
+**AD/tape hygiene.** `x_lo`/`x_hi` are passive (cast from a double input, never
+registered), so the station positions and trapezoid weights are passive constants;
+the sampled BL quantities remain taped through `glob.U` and the (geometry-
+dependent) node x-positions, so the average is correctly differentiated wrt y and
+alpha. All-Real arithmetic — no `fabs`/`hypot`/`.getValue()` introduced.
+
+**Verification** (NACA 0012, α=2°, nCrit=5, Re=2e6, model `kam`; baseline built
+from a clean `HEAD` worktree for comparison since the golden/test scaffolding was
+dropped in `bc28bf2`):
+
+- *Scalar path byte-identical.* `TEsample=0.98` reproduces baseline `HEAD`
+  bit-for-bit: CL/CD/CM/OASPL deltas exactly `0.0`, and the AD gradients
+  (`dOASPL_dy`, `dOASPL_dalpha`, `dCL_dy`, `dCL_dalpha`) are bit-identical
+  (`np.array_equal` True). The refactor did not perturb the scalar path.
+- *Window gradients correct.* AD-vs-central-FD at tightened rtol (1e-11),
+  step-size-studied: `dOASPL_dalpha` window relerr **5.3e-7** at `h=1e-4°`
+  (scalar control 3.2e-7); `dOASPL_dy` over the TE-window nodes relerr **~1e-5**
+  (FD floor, same as the scalar control). Coarser alpha FD steps (≥1e-3°) give
+  spurious disagreement from OASPL–alpha curvature — an FD artifact, not a
+  gradient bug (confirmed by the h-study converging to AD).
+- *Exploit collapse.* On the baseline foil, a smooth Gaussian undulation
+  (amp 0.0022, σ=0.004) peaked at x/c=0.98 swings scalar-0.98 OASPL by **+1.06 dB**
+  but windowed-[0.95,0.99] OASPL by only **+0.13 dB** (8.4× collapse); an isolated
+  single-node bump collapses 13× (+0.294 → +0.022 dB). The window removes the
+  single-station lever as intended. (The original ~6 dB figure was the fully-
+  optimised w16 runaway, whose artefacts were dropped with the scaffolding; the
+  collapse *ratio* is the transferable quantity.) Averaged inputs are bracketed by
+  the per-station single-point values by construction (positive trapezoid weights
+  summing to 1).
+
+**Reference values** (default rtol 1e-6, observer (1,0,1), span 3): scalar 0.98
+OASPL = 63.18598 dB; window [0.95,0.99] OASPL = 63.36702 dB. These are the
+window-path regression anchors to add when the test/golden suite is restored
+(the scalar anchor is unchanged from `HEAD`).
+
+---
+
 ## Forced-transition adjoint fix — `xift` taped (June 2026)
 
 **Bug.** For *forced* transition (`OperatingConds.transition != [1,1]`), the

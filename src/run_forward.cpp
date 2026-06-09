@@ -33,6 +33,7 @@ bool runCode(
     Real kinViscInf,
     const std::string model,
     const Real sampleTE,
+    const Real sampleTE_hi,
     const Real* obsX,
     const Real* obsY,
     const Real* obsZ,
@@ -113,7 +114,7 @@ bool runCode(
     }
 
     interpolate_at_95_both_surfaces(xcoords, glob.U, post.cp, oper, vsol.turb,
-                                    param, topsurf, botsurf, Uinf, sampleTE, chordScaling);
+                                    param, topsurf, botsurf, Uinf, sampleTE, sampleTE_hi, chordScaling);
     Real OASPL = calc_OASPL<Real>(botsurf, topsurf, chordScaling, Uinf,
                                    obsX, obsY, obsZ, nObs, S, kinViscInf, rhoInf, model,
                                    f_min, f_max, aWeighting, alpha);

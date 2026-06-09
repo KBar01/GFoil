@@ -1,7 +1,7 @@
 
 import numpy as np
 from dataclasses import dataclass, field, fields, is_dataclass
-from typing import Optional
+from typing import Optional, Sequence, Union
 
 
 # --------------------------------------------------------------------------- #
@@ -187,7 +187,13 @@ class Acoustics:
     TE-local chord-aligned Amiet frame accounting for angle of attack.
     """
     observerXYZ: np.ndarray
-    TESampleLoc: Optional[float] = 0.98
+    # TESampleLoc may be either:
+    #   * a scalar x/c (legacy single-point sample, default 0.98), or
+    #   * a length-2 [x_lo, x_hi] window over which the BL/WPS inputs are
+    #     averaged before a single Amiet evaluation (Option-A BL averaging).
+    # The window form removes the single-node wall-pressure lever the optimiser
+    # was exploiting; the scalar form is numerically unchanged.
+    TESampleLoc: Optional[Union[float, Sequence[float]]] = 0.98
     model: Optional[str] = "kam"
     aWeighting: bool = False
     f_min: float = 200.0   # lower acoustic frequency bound [Hz]
@@ -204,8 +210,27 @@ class Acoustics:
         self.observerXYZ = arr  # always (N, 3)
 
         if self.TESampleLoc is not None:
-            if not (0.0 <= self.TESampleLoc <= 1.0):
-                raise ValueError("TESampleLoc must be between 0 and 1 (inclusive)")
+            te = self.TESampleLoc
+            if isinstance(te, (list, tuple, np.ndarray)):
+                te = np.asarray(te, dtype=float).ravel()
+                if te.size != 2:
+                    raise ValueError(
+                        "TESampleLoc window must be a length-2 [x_lo, x_hi]"
+                    )
+                x_lo, x_hi = float(te[0]), float(te[1])
+                if not (0.0 < x_lo < x_hi < 1.0):
+                    raise ValueError(
+                        "TESampleLoc window must satisfy 0 < x_lo < x_hi < 1"
+                    )
+                # store as a plain (x_lo, x_hi) tuple of floats
+                self.TESampleLoc = (x_lo, x_hi)
+            else:
+                if not (0.0 <= float(te) < 1.0):
+                    raise ValueError(
+                        "TESampleLoc scalar must satisfy 0 <= x < 1; sampling at the "
+                        "trailing edge (x=1.0) is no longer supported — use a "
+                        "[x_lo, x_hi] window for trailing-edge sampling"
+                    )
 
         if self.f_min <= 0 or self.f_max <= self.f_min:
             raise ValueError("f_min must be > 0 and f_max > f_min")

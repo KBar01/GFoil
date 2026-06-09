@@ -8,6 +8,7 @@
 // (upper/lower) that feed calc_OASPL -> calc_WPS. Bridges the aero solve and the
 // acoustics (sound.hpp). Symbols: see NOMENCLATURE.md.
 #include <cmath>
+#include <stdexcept>
 // Callers must include real_type.h / real_type.hpp, and the shared
 // get_funcs.hpp (for get_cf, get_uk) before including this header.
 #include "get_funcs.hpp"
@@ -113,7 +114,7 @@ void get_nodes(int topFoundIdx,int botFoundIdx, Real x_target, int* topNodeList,
     }
     else{
         if (turb[botStart] == false){botStart -= 1; } // original start is not turbulent, shift start down a node
-        int botNnodes = botStart ;  // how many available nodes to use for interp
+        botNnodes = botStart ;  // how many available nodes to use for interp (write the OUT param, not a shadow)
         if (botNnodes>4){botNnodes=4;} // limit to 4 nodes for cubic
     }
 
@@ -232,102 +233,18 @@ Real interpolate_cf(const Real* xcoords, const Real* states, const int* nodeIdx,
     return Cf95;
 }
 
+// Single-point TE BL sampler. Fills the two fully post-processed 7-slot vectors
+// [theta, delta*, tau_max, Ue, dpdx, tau_wall, delta99] at chord fraction x_target.
+// The public interpolate_at_95_both_surfaces() dispatcher below calls it (once for
+// a scalar TE sample, N times for a window). x_target must be < 1.0: the trailing-
+// edge node is degenerate for the interpolation stencil (find_interp_position has
+// no bracket to return), which is enforced by the dispatcher. (The former x_target
+// == 1.0 special case averaged over a hardcoded 0.96–0.985 window — removed now
+// that an explicit [x_lo,x_hi] window can be requested directly.)
 template<typename Real, typename OperT, typename TurbT, typename ParamT>
-void interpolate_at_95_both_surfaces(const Real* xcoords, const Real* states, const Real*Cps, const OperT& oper, const TurbT* turb, const ParamT& param,
+void interpolate_BL_single(const Real* xcoords, const Real* states, const Real*Cps, const OperT& oper, const TurbT* turb, const ParamT& param,
     Real (&topBLStates)[7],Real (&botBLStates)[7],const Real Uinf, const Real x_target, const Real chordScale) {
 
-    
-    if (x_target == 1.0){
-
-        // find my sampling positions
-        const int NSAMPLES = 6; 
-        const Real nSample = 6.0;
-        Real xSamples[NSAMPLES];
-        Real count = 0.0;
-        for (int i = 0; i < NSAMPLES; ++i) {
-            Real frac = 0.96 + (0.985 - 0.96) * count / (nSample-1);
-            xSamples[i] = frac;
-            count += 1.0;
-        }
-
-        // accumulators
-        Real topAccum[7] = {0.0}, botAccum[7] = {0.0};
-
-        Real NsampleTop = nSample ;
-        Real NsampleBot = nSample ;
-
-        for (int i = 0; i < NSAMPLES; ++i) {
-            Real tmpTop[7], tmpBot[7];
-
-            // call the same routine but for each sample location
-            // simplest is to factor your current body into a helper,
-            // but here we inline the code you already have:
-            // -------------------------------------------------------
-            int foundIndexBot = find_interp_position(xcoords, 0, 98, xSamples[i]);
-            int foundIndexTop = find_interp_position(xcoords, Ncoords - 98, Ncoords - 1, xSamples[i]);
-
-            int topIdx[4] = {0}, botIdx[4] = {0}, topN, botN;
-            get_nodes(foundIndexTop, foundIndexBot, xSamples[i], topIdx, topN, botIdx, botN, turb);
-
-            interp_BL_states(topIdx, botIdx, topN, botN, xSamples[i],
-                             xcoords, states, tmpTop, tmpBot);
-
-            
-            if (tmpBot[0] == 0.0 && NsampleBot != 1.0){
-                NsampleBot -= 1.0;
-            }
-            if (tmpTop[0] == 0.0 && NsampleTop != 1.0){
-                NsampleTop -= 1.0;
-            }
-
-            Real dpdxBot = interpolate_dpdx(xcoords, Cps, botIdx, botN, xSamples[i], oper, chordScale, Uinf);
-            Real dpdxTop = interpolate_dpdx(xcoords, Cps, topIdx, topN, xSamples[i], oper, chordScale, Uinf);
-
-            // do exactly same post-processing as your original code but using tmpTop/tmpBot:
-            // --- bottom
-            Real ignore;
-            Real UeCorrected = (get_uk(tmpBot[3], param, ignore)) * Uinf;
-            tmpBot[3] = UeCorrected;
-            Real tauMaxBot = (tmpBot[2]*tmpBot[2]) * (oper.rho * (tmpBot[3]*tmpBot[3]));
-            tmpBot[2] = tauMaxBot;
-            tmpBot[4] = dpdxBot;
-            Real cfBot = interpolate_cf(xcoords, states, botIdx, botN, xSamples[i], turb, param);
-            Real tauWallBot = (cfBot/2) * oper.rho * tmpBot[3]*tmpBot[3];
-            tmpBot[5] = tauWallBot;
-            Real deltaBot = 0.0;
-            if (tauWallBot!=0.0)
-                deltaBot = tmpBot[0]*(3.15 + 1.72/((tmpBot[1]/tmpBot[0])-1)) + tmpBot[1];
-            tmpBot[6] = deltaBot;
-
-            // --- top
-            UeCorrected = (get_uk(tmpTop[3], param, ignore)) * Uinf;
-            tmpTop[3] = UeCorrected;
-            Real tauMaxTop = (tmpTop[2]*tmpTop[2]) * (oper.rho * (tmpTop[3]*tmpTop[3]));
-            tmpTop[2] = tauMaxTop;
-            tmpTop[4] = dpdxTop;
-            Real cfTop = interpolate_cf(xcoords, states, topIdx, topN, xSamples[i], turb, param);
-            Real tauWallTop = (cfTop/2) * oper.rho * tmpTop[3]*tmpTop[3];
-            tmpTop[5] = tauWallTop;
-            Real deltaTop = 0.0;
-            if (tauWallTop!=0.0)
-                deltaTop = tmpTop[0]*(3.15 + 1.72/((tmpTop[1]/tmpTop[0])-1)) + tmpTop[1];
-            tmpTop[6] = deltaTop;
-
-            // accumulate
-            for (int k = 0; k < 7; ++k) {
-                topAccum[k] += tmpTop[k];
-                botAccum[k] += tmpBot[k];
-            }
-        }
-
-        // average and copy back
-        for (int k = 0; k < 7; ++k) {
-            topBLStates[k] = topAccum[k] / NsampleTop;
-            botBLStates[k] = botAccum[k] / NsampleBot;
-        }
-    }
-
-    else {
 
     /* State order: theta, delta*, tau_max, Ue, dpdx, tau_wall, delta 99% thickness*/
     
@@ -397,8 +314,82 @@ void interpolate_at_95_both_surfaces(const Real* xcoords, const Real* states, co
     }
     
     topBLStates[6] = deltaTop;
+
+}
+
+
+// Number of trapezoidal quadrature stations spanning a BL-averaging window.
+// 9 gives good trapezoidal accuracy at modest extra tape cost; the endpoints are
+// included so x_lo / x_hi are sampled (interpolated) directly.
+#ifndef NWINDOW_SAMPLES
+#define NWINDOW_SAMPLES 9
+#endif
+
+// Backward-compatible TE sampling entry point. All sample points must be < 1.0.
+//   x_hi <= x_lo : single-point sample at x_lo (byte-identical to the legacy path).
+//   x_hi  > x_lo : Option-A BL-averaged window. The fully post-processed 7-slot
+//                  BL/WPS input vectors are evaluated at NWINDOW_SAMPLES uniformly
+//                  spaced stations across [x_lo, x_hi] (endpoints interpolated, not
+//                  snapped) and trapezoidally averaged in x/c before a single
+//                  downstream Amiet evaluation. This removes the single-node
+//                  wall-pressure lever the optimiser was exploiting: a smooth
+//                  one-node surface undulation can no longer swing the predicted
+//                  OASPL because the WPS input is integrated over the window.
+//
+// AD note: x_lo/x_hi are passive (cast from a double input, never registered), so
+// the station positions xs and trapezoid weights w are passive constants. The
+// sampled BL quantities (tmp*) are taped through glob.U and the node x-positions,
+// so the average remains correctly differentiated w.r.t. y / alpha. All-Real
+// arithmetic — no fabs/hypot/getValue here.
+template<typename Real, typename OperT, typename TurbT, typename ParamT>
+void interpolate_at_95_both_surfaces(const Real* xcoords, const Real* states, const Real* Cps,
+    const OperT& oper, const TurbT* turb, const ParamT& param,
+    Real (&topBLStates)[7], Real (&botBLStates)[7], const Real Uinf,
+    const Real x_lo, const Real x_hi, const Real chordScale) {
+
+    // No sample point may reach the trailing-edge node (x/c == 1.0): it is
+    // degenerate for the interpolation stencil (find_interp_position returns no
+    // bracket). The legacy x_target==1.0 averaging hack that papered over this was
+    // removed — request an explicit window strictly inside (0,1) for TE-region
+    // sampling. The scalar point is x_lo; the top window station is x_hi. (The
+    // Python layer also enforces this; the C++ guard covers the standalone/JSON
+    // path.)
+    if (x_lo >= 1.0 || x_hi >= 1.0) {
+        throw std::invalid_argument(
+            "TEsample x/c must be < 1.0 (the trailing-edge node is degenerate for "
+            "interpolation; the legacy 1.0 averaging was removed — use a window "
+            "[x_lo,x_hi] inside (0,1) for trailing-edge sampling)");
     }
 
+    // Scalar / degenerate-window path: reproduce the legacy single-point result exactly.
+    if (!(x_hi > x_lo)) {
+        interpolate_BL_single(xcoords, states, Cps, oper, turb, param,
+                              topBLStates, botBLStates, Uinf, x_lo, chordScale);
+        return;
+    }
+
+    // Windowed Option-A path: trapezoidal average in x/c of the single-point inputs.
+    // Average = (1/width) * trapz(f) ; the window width cancels, leaving station
+    // weights [0.5, 1, ..., 1, 0.5] / (N-1).
+    constexpr int N = NWINDOW_SAMPLES;
+    Real topAccum[7] = {0.0}, botAccum[7] = {0.0};
+    for (int i = 0; i < N; ++i) {
+        Real frac = static_cast<Real>(i) / static_cast<Real>(N - 1);
+        Real xs   = x_lo + (x_hi - x_lo) * frac;
+        Real w    = ((i == 0 || i == N - 1) ? 0.5 : 1.0) / static_cast<Real>(N - 1);
+
+        Real tmpTop[7], tmpBot[7];
+        interpolate_BL_single(xcoords, states, Cps, oper, turb, param,
+                              tmpTop, tmpBot, Uinf, xs, chordScale);
+        for (int k = 0; k < 7; ++k) {
+            topAccum[k] += w * tmpTop[k];
+            botAccum[k] += w * tmpBot[k];
+        }
+    }
+    for (int k = 0; k < 7; ++k) {
+        topBLStates[k] = topAccum[k];
+        botBLStates[k] = botAccum[k];
+    }
 }
 
 

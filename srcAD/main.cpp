@@ -122,6 +122,8 @@ int main(){
     RealVec2 nuInf = j["nu"].get<double>();
     RealVec2 custChord = j["chord"].get<double>();
     RealVec2 sampleTE = j["sampleTE"].get<double>();
+    RealVec2 sampleTE_hi = j.contains("sampleTE_hi") ? j["sampleTE_hi"].get<double>()
+                                                     : j["sampleTE"].get<double>();
     const RealVec2 S = j["S"].get<double>();
 
     std::vector<double> obsX_d, obsY_d, obsZ_d;
@@ -219,7 +221,7 @@ int main(){
     Realfwd Cddue = (2.0 * theta) * exponent * std::pow(ue, exponent - 1.0);
 
     double OASPL = partialOutputspartialInputs<RealVec2>(Ncrit,Ufac,TEfac,custChord,inXcoords_d,Re,Ma,rhoInf,nuInf,
-        model,sampleTE,obsX_2.data(),obsY_2.data(),obsZ_2.data(),nObs,S,inYcoords_2,targetAlphaDeg,states,turb,
+        model,sampleTE,sampleTE_hi,obsX_2.data(),obsY_2.data(),obsZ_2.data(),nObs,S,inYcoords_2,targetAlphaDeg,states,turb,
         d_CL_d_y,d_OASPL_d_y,d_CL_dalpha,d_OASPL_dalpha,d_CL_d_States,d_OASPL_d_States
     );
 

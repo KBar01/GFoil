@@ -130,6 +130,8 @@ py::dict run_AD_py(py::dict inp, py::dict jacobian) {
     RealVec2 nuInf          = inp["nu"].cast<double>();
     RealVec2 custChord      = inp["chord"].cast<double>();
     RealVec2 sampleTE       = inp["sampleTE"].cast<double>();
+    RealVec2 sampleTE_hi    = inp.contains("sampleTE_hi") ? inp["sampleTE_hi"].cast<double>()
+                                                          : inp["sampleTE"].cast<double>();
     const RealVec2 S        = inp["S"].cast<double>();
     const RealVec2 Ncrit    = inp["ncrit"].cast<double>();
     const RealVec2 Ufac     = inp["Ufac"].cast<double>();
@@ -191,7 +193,7 @@ py::dict run_AD_py(py::dict inp, py::dict jacobian) {
 
     partialOutputspartialInputs<RealVec2>(
         Ncrit, Ufac, TEfac, custChord, inXcoords_d, Re, Ma, rhoInf, nuInf,
-        model, sampleTE,
+        model, sampleTE, sampleTE_hi,
         obsX_2.data(), obsY_2.data(), obsZ_2.data(), nObs,
         S, inYcoords_2, targetAlphaDeg, states, turb,
         d_CL_d_y, d_OASPL_d_y, d_CL_dalpha, d_OASPL_dalpha,

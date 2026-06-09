@@ -37,6 +37,8 @@ py::dict run_forward_py(py::dict inp, py::object prev_jacobian = py::none()) {
     Real kinViscInf  = inp["nu"].cast<double>();
     Real custChord   = inp["chord"].cast<double>();
     Real sampleTE    = inp["sampleTE"].cast<double>();
+    Real sampleTE_hi = inp.contains("sampleTE_hi") ? inp["sampleTE_hi"].cast<double>()
+                                                   : inp["sampleTE"].cast<double>();
     Real S           = inp["S"].cast<double>();
     Real Ncrit       = inp["ncrit"].cast<double>();
     Real Ufac        = inp["Ufac"].cast<double>();
@@ -91,7 +93,7 @@ py::dict run_forward_py(py::dict inp, py::object prev_jacobian = py::none()) {
         Ncrit, Ufac, TEfac, custChord,
         inXcoords, inYcoords,
         alphad, Re, Ma, rhoInf, kinViscInf,
-        model, sampleTE,
+        model, sampleTE, sampleTE_hi,
         obsX.data(), obsY.data(), obsZ.data(), nObs,
         S,
         &rst, &fwd,
