@@ -1,6 +1,8 @@
 import numpy as np
 import os
-from .inputs import Aerofoil, Acoustics, OperatingConds, FwdResult, GradResult, VerboseResult
+from .inputs import (Aerofoil, Acoustics, OperatingConds,
+                     FwdResult, GradResult, VerboseResult, NoiseResult,
+                     _as_1d_float_array, _as_float_array)
 
 from . import gfoil_cpp
 
@@ -55,7 +57,11 @@ def _build_input_dict(aerofoil: Aerofoil,
 def _call_forward(inp: dict, prev_result: "FwdResult" = None) -> "FwdResult":
     """Single forward solve via pybind11. Returns FwdResult."""
     if prev_result is not None and prev_result.converged:
-        jac_in = {"states": prev_result.states, "turb": prev_result.turb}
+        # Pass the donor's converged stagnation bracket too, so the C++ warm path
+        # can seed stagpoint_move from it and reproduce the donor configuration
+        # (avoids the one-node stag reindex that perturbs the warm entry state).
+        jac_in = {"states": prev_result.states, "turb": prev_result.turb,
+                  "stag": prev_result.stag}
         r = gfoil_cpp.run_forward(inp, jac_in)
     else:
         r = gfoil_cpp.run_forward(inp)
@@ -113,6 +119,25 @@ def _call_forward(inp: dict, prev_result: "FwdResult" = None) -> "FwdResult":
         failure_mode=r.get("failure_mode", ""),
         newton_iterations=r.get("newton_iterations", 0),
     )
+
+
+def _is_stale_warm_accept(result: "FwdResult",
+                          call_alpha: float,
+                          donor_alpha: float) -> bool:
+    """Detect a warm-restart stale iteration-0 accept.
+
+    run_forward(inp, restart) can return converged with newton_iterations==0 and
+    the DONOR's solution unchanged when warm-started across an alpha change:
+    solve_coupled's entry convergence test only covers the BL-station rows, so an
+    alpha shift (which enters through the ue-coupling rows) is invisible at
+    iteration 0 and the donor state is accepted verbatim. Within standard_run
+    geometry/Re/nCrit are invariant, so alpha is the only varying input — an
+    it==0 accept at a CHANGED alpha is therefore always stale. Keys on converged
+    AND it==0 AND changed alpha together, so a genuine 0-iteration accept at an
+    identical alpha (true same-alpha restart) is NOT rejected.
+    """
+    return (result.converged and result.newton_iterations == 0
+            and abs(call_alpha - donor_alpha) > 1e-12)
 
 
 def standard_run(aerofoil: Aerofoil,
@@ -181,6 +206,17 @@ def standard_run(aerofoil: Aerofoil,
                                    verbose=verbose if is_final else False)
         r = _call_forward(fs_inp, prev_result=last_converged)
 
+        # Warm-restart stale-accept guard (see _is_stale_warm_accept): reject an
+        # it==0 accept that merely echoes the donor at a changed alpha and retry
+        # the SAME alpha cold. If the cold retry converges it flows through the
+        # stepping logic normally; if it fails, the existing step-shrink/failure
+        # logic below handles it unchanged.
+        if _is_stale_warm_accept(r, fwdalf, float(last_converged.alpha)):
+            print(f"[gfoil] warm-restart stale accept rejected at "
+                  f"alpha={fwdalf:.4f} (donor {float(last_converged.alpha):.4f}); "
+                  f"cold retry")
+            r = _call_forward(fs_inp)   # cold solve at the same alpha
+
         if r.converged:
             last_converged = r
             if abs(fwdalf - alphaDeg) < 1e-3:
@@ -239,6 +275,123 @@ def fwd_run(aerofoil: Aerofoil,
         return FwdResult(converged=False)
     else:
         return standard_run(aerofoil, operating, acoustics, verbose=verbose)
+
+
+def noise_run(BL_top,
+              BL_bot,
+              freqs_Hz,
+              observerXYZ,
+              Re: float,
+              nu: float,
+              chord: float,
+              span: float,
+              alphaDeg: float,
+              rho: float = 1.225,
+              Ma: float = 0.0,
+              model: str = "kam",
+              custom_WPS=None) -> NoiseResult:
+    """Acoustics-only forward run: WPS models + Amiet, with NO aero solve.
+
+    Supply trailing-edge boundary-layer states directly (or a custom
+    wall-pressure spectrum) and get back the raw linear wall-pressure spectra
+    and far-field PSD. This path is never differentiated.
+
+    Parameters
+    ----------
+    BL_top, BL_bot : array-like, shape (7,)
+        Upper / lower surface trailing-edge BL states, ordered
+        [theta, delta_star, tau_max, Ue, dpdx, tau_wall, delta99] — exactly the
+        ordering of FwdResult.verbose_data.BL_top / .BL_bot. A surface with
+        tau_max <= 0 (fully-laminar TE) is skipped (its WPS column is zeros).
+    freqs_Hz : array-like, shape (N,)
+        Frequencies [Hz], ANY length, ANY spacing.
+    observerXYZ : array-like, shape (N,3) or (3,)
+        Observer position(s) in the global frame, origin at quarter-chord
+        (same convention as Acoustics.observerXYZ).
+    Re, nu, chord, span, alphaDeg : float
+        Uinf is derived as Re*nu/chord; alphaDeg drives the global->TE-local
+        observer rotation.
+    rho, Ma : float
+        Density and Mach (Ma is accepted for API symmetry; the Amiet Mach
+        follows the Uinf/340 convention of the forward path).
+    model : str
+        WPS model key ('roz','goo','lee','kam','tno'). Ignored if custom_WPS
+        is given.
+    custom_WPS : array-like, shape (N,2), optional
+        Columns [upper, lower] wall-pressure spectra [Pa^2/omega]. If given, the
+        BL->WPS path is skipped for both surfaces and these are used directly.
+        An all-zero column skips that surface's far-field contribution.
+
+    Returns
+    -------
+    NoiseResult
+        freqs_Hz (N,), WPS_upper (N,), WPS_lower (N,), FF_spectra (nObs,N),
+        obsXYZ_TElocal (nObs,3). Spectra are raw linear Pa^2/omega.
+    """
+    BL_top = _as_1d_float_array(BL_top, "BL_top")
+    BL_bot = _as_1d_float_array(BL_bot, "BL_bot")
+    if BL_top.size != 7 or BL_bot.size != 7:
+        raise ValueError(
+            f"BL_top/BL_bot must have length 7 "
+            f"[theta, delta_star, tau_max, Ue, dpdx, tau_wall, delta99]; "
+            f"got {BL_top.size} and {BL_bot.size}"
+        )
+
+    freqs = np.asarray(freqs_Hz, dtype=float).ravel()
+    N = freqs.size
+    if N < 1:
+        raise ValueError("freqs_Hz must be non-empty")
+
+    obs = _as_float_array(observerXYZ, "observerXYZ").astype(float)
+    if obs.ndim == 1 and obs.size == 3:
+        obs = obs.reshape(1, 3)
+    elif obs.ndim == 2 and obs.shape[1] == 3:
+        pass
+    else:
+        raise ValueError(f"observerXYZ must be shape (3,) or (N,3), got {obs.shape}")
+    nObs = obs.shape[0]
+
+    inp = {
+        "alphaDeg": float(alphaDeg),
+        "Re":       float(Re),
+        "rho":      float(rho),
+        "nu":       float(nu),
+        "Ma":       float(Ma),
+        "chord":    float(chord),
+        "span":     float(span),
+        "X":        obs[:, 0].tolist(),
+        "Y":        obs[:, 1].tolist(),
+        "Z":        obs[:, 2].tolist(),
+        # 7 BL quantities as [upper, lower] pairs
+        "theta":     [float(BL_top[0]), float(BL_bot[0])],
+        "deltaStar": [float(BL_top[1]), float(BL_bot[1])],
+        "tauMax":    [float(BL_top[2]), float(BL_bot[2])],
+        "Ue":        [float(BL_top[3]), float(BL_bot[3])],
+        "dpdx":      [float(BL_top[4]), float(BL_bot[4])],
+        "tauWall":   [float(BL_top[5]), float(BL_bot[5])],
+        "delta99":   [float(BL_top[6]), float(BL_bot[6])],
+        "freqs_Hz":  freqs.tolist(),
+        "model":     str(model),
+    }
+
+    if custom_WPS is not None:
+        cw = np.asarray(custom_WPS, dtype=float)
+        if cw.shape != (N, 2):
+            raise ValueError(
+                f"custom_WPS must have shape (N,2)=({N},2) matching len(freqs_Hz); "
+                f"got {cw.shape}"
+            )
+        inp["custom_WPS"] = cw.tolist()
+
+    r = gfoil_cpp.noise_run(inp)
+
+    return NoiseResult(
+        freqs_Hz       = np.array(r["freqs_Hz"]),
+        WPS_upper      = np.array(r["WPS_upper"]),
+        WPS_lower      = np.array(r["WPS_lower"]),
+        FF_spectra     = np.array(r["FF_spectra"]).reshape(nObs, N),
+        obsXYZ_TElocal = np.array(r["obsXYZ_TElocal"]).reshape(nObs, 3),
+    )
 
 
 def grad_run(fwd_result: FwdResult,

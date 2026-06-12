@@ -8,8 +8,10 @@
 #include "restart_state.h"
 #include "run_forward.h"
 #include "gfoil_ad_impl.h"
+#include "noise_run.hpp"
 #include <string>
 #include <vector>
+#include <array>
 
 namespace py = pybind11;
 
@@ -82,6 +84,13 @@ py::dict run_forward_py(py::dict inp, py::object prev_jacobian = py::none()) {
         auto turb_py   = jac["turb"].cast<std::vector<int>>();
         warmStartState.states.assign(states_py.begin(), states_py.end());
         warmStartState.turb.assign(turb_py.begin(), turb_py.end());
+        // Donor's converged stagnation bracket — used to seed stagpoint_move on
+        // warm entry so it reproduces the donor configuration instead of landing
+        // one node off the inviscid seed. Optional for backward compatibility.
+        if (jac.contains("stag")) {
+            auto stag_py = jac["stag"].cast<std::vector<int>>();
+            warmStartState.stag.assign(stag_py.begin(), stag_py.end());
+        }
         warmStartPtr = &warmStartState;
     }
 
@@ -155,6 +164,72 @@ py::dict run_forward_py(py::dict inp, py::object prev_jacobian = py::none()) {
     return result;
 }
 
+// ── acoustics-only entry point (no aero solve, never AD'd) ───────────────────
+py::dict run_noise_py(py::dict inp) {
+    double alphaDeg = inp["alphaDeg"].cast<double>();
+    double Re       = inp["Re"].cast<double>();
+    double rho      = inp["rho"].cast<double>();
+    double nu       = inp["nu"].cast<double>();
+    double Ma       = inp["Ma"].cast<double>();
+    double chord    = inp["chord"].cast<double>();
+    double span     = inp["span"].cast<double>();
+    std::string model = inp["model"].cast<std::string>();
+
+    // ── observer arrays (accept list-or-scalar, like run_forward_py) ──────────
+    std::vector<double> obsX, obsY, obsZ;
+    auto xval = inp["X"];
+    if (py::isinstance<py::list>(xval) || py::isinstance<py::sequence>(xval)) {
+        obsX = xval.cast<std::vector<double>>();
+        obsY = inp["Y"].cast<std::vector<double>>();
+        obsZ = inp["Z"].cast<std::vector<double>>();
+    } else {
+        obsX = { xval.cast<double>() };
+        obsY = { inp["Y"].cast<double>() };
+        obsZ = { inp["Z"].cast<double>() };
+    }
+
+    // ── BL state pairs [upper, lower] ─────────────────────────────────────────
+    auto theta     = inp["theta"].cast<std::array<double,2>>();
+    auto deltaStar = inp["deltaStar"].cast<std::array<double,2>>();
+    auto tauMax    = inp["tauMax"].cast<std::array<double,2>>();
+    auto Ue        = inp["Ue"].cast<std::array<double,2>>();
+    auto dpdx      = inp["dpdx"].cast<std::array<double,2>>();
+    auto tauWall   = inp["tauWall"].cast<std::array<double,2>>();
+    auto delta99   = inp["delta99"].cast<std::array<double,2>>();
+
+    auto freqs_Hz  = inp["freqs_Hz"].cast<std::vector<double>>();
+
+    // ── optional custom WPS, shape (N,2) columns [upper, lower] ───────────────
+    bool has_custom = inp.contains("custom_WPS");
+    std::vector<double> custom_upper, custom_lower;
+    if (has_custom) {
+        auto cw = inp["custom_WPS"].cast<std::vector<std::array<double,2>>>();
+        custom_upper.resize(cw.size());
+        custom_lower.resize(cw.size());
+        for (std::size_t i = 0; i < cw.size(); ++i) {
+            custom_upper[i] = cw[i][0];
+            custom_lower[i] = cw[i][1];
+        }
+    }
+
+    NoiseRunResult r = noise_run_cpp<Real>(
+        alphaDeg, Re, rho, nu, Ma, chord,
+        obsX, obsY, obsZ, span,
+        theta, deltaStar, tauMax, Ue, dpdx, tauWall, delta99,
+        freqs_Hz, model,
+        has_custom, custom_upper, custom_lower);
+
+    py::dict result;
+    result["freqs_Hz"]       = r.freqs_Hz;
+    result["WPS_upper"]      = r.WPS_upper;
+    result["WPS_lower"]      = r.WPS_lower;
+    result["FF_spectra"]     = r.FF_spectra;        // flat nObs*N, row-major
+    result["obsXYZ_TElocal"] = r.obsXYZ_TElocal;    // flat nObs*3
+    result["nObs"]           = static_cast<int>(obsX.size());
+    result["N"]              = static_cast<int>(freqs_Hz.size());
+    return result;
+}
+
 PYBIND11_MODULE(gfoil_cpp, m) {
     m.def("run_forward", &run_forward_py,
           py::arg("input_dict"),
@@ -162,4 +237,8 @@ PYBIND11_MODULE(gfoil_cpp, m) {
           "Run forward aero+acoustic solver. Returns dict with CL/CD/CM/OASPL and jacobian.");
     m.def("run_AD", &run_AD_py,
           "Run AD solver given input dict and jacobian from run_forward.");
+    m.def("noise_run", &run_noise_py,
+          py::arg("input_dict"),
+          "Acoustics-only forward run (no aero solve, never AD'd). Returns raw "
+          "linear Pa^2/omega WPS and far-field spectra for arbitrary-length freqs.");
 }

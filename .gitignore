@@ -29,6 +29,18 @@ convergence_results.csv
 convergence_summary.txt
 debug_cold_start.txt
 
+# Geometry library — large external data set (1300 .dat files); not shipped in
+# releases (see pyproject sdist.exclude) and deliberately kept out of the repo.
+/Smoothed_TEfixed_linear/
+
+# Bench run artifacts — regenerable outputs of bench/*.py. The baseline-contract
+# data (cold_start_sweep.csv) and the narrative REPORT.md are tracked; the
+# intermediate sweep/rescue/timing CSV/log/JSON dumps are not.
+/bench/results/*.csv
+/bench/results/*.log
+/bench/results/*.json
+!/bench/results/cold_start_sweep.csv
+
 # Python
 __pycache__/
 *.pyc

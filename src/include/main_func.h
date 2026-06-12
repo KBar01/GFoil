@@ -33,7 +33,8 @@ void update_transition(Glob &glob, Vsol &vsol, Isol &isol, Param &param,
 bool solve_coupled(const Oper& oper, const Foil& foil, const Wake& wake,
     Param& param, Vsol& vsol, Isol& isol, Glob& glob,
     RestartState* restartOut    = nullptr,
-    std::string* failure_mode_out = nullptr);
+    std::string* failure_mode_out = nullptr,
+    bool warmEntry              = false);
 
 // Everything else is now a template in a shared .hpp:
 //   colMajorIndex       → inline in real_type.h

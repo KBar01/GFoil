@@ -7,7 +7,8 @@
 //   both expose infMatrix[].  tape.isActive() selects passive vs
 //   external-function path internally, so this one template covers both.
 //
-// compute_Dw : Dw = Cgam * Bp + Csig  (explicit loop, no cnp:: dependency).
+// compute_Dw : Dw = Cgam * Bp + Csig  (passive double loop; CoDiPack external
+//   function when the tape is active — same pattern as solve_sys_ue).
 //
 // calc_ue_m : full wake influence matrix assembly.
 //   All struct params duck-typed for Foil/Foil<Real>, Wake/Wake<Real>,
@@ -156,19 +157,128 @@ void solve_sys_ue(IsolT& isol, const Real* RHS, Real* Bp)
 
 // ── compute_Dw ────────────────────────────────────────────────────────────────
 // Dw[Nwake x nPanels] = Cgam[Nwake x Ncoords] * Bp[Ncoords x nPanels] + Csig
-// Uses explicit loops to avoid cnp:: template-ordering issues between src and srcAD.
+//
+// Taped as a CoDiPack external function (same pattern as solve_sys_ue above):
+// recording the 1.37M-FMA product element-wise was ~31% of the pass-2 tape.
+// The reverse of Dw = Cgam*Bp + Csig, given output adjoint L = dDw:
+//   dCgam += L * Bp^T,  dBp += Cgam^T * L,  dCsig += L.
+
+template<typename Active>
+struct ComputeDwData {
+  using Identifier = typename Active::Identifier;
+
+  static constexpr int nPanels = Nwake + Ncoords - 2;
+
+  Eigen::MatrixXd Cgam;              // Nwake x Ncoords (passive values)
+  Eigen::MatrixXd Bp;                // Ncoords x nPanels (passive values)
+  std::vector<Identifier> Cgam_id;   // Nwake*Ncoords
+  std::vector<Identifier> Bp_id;     // Ncoords*nPanels
+  std::vector<Identifier> Csig_id;   // Nwake*nPanels
+  std::vector<Identifier> Dw_id;     // Nwake*nPanels
+
+  ComputeDwData()
+    : Cgam(Nwake, Ncoords), Bp(Ncoords, nPanels),
+      Cgam_id(Nwake*Ncoords), Bp_id(Ncoords*nPanels),
+      Csig_id(Nwake*nPanels), Dw_id(Nwake*nPanels) {}
+};
+
+template<typename Active>
+static void compute_Dw_b(typename Active::Tape*, void* d,
+    codi::VectorAccessInterface<typename Active::Real,
+                                typename Active::Identifier>* adj)
+{
+  using Real       = typename Active::Real;
+  using Identifier = typename Active::Identifier;
+
+  auto* data = static_cast<ComputeDwData<Active>*>(d);
+  constexpr int nPanels = ComputeDwData<Active>::nPanels;
+
+  const size_t maxDim = adj->getVectorSize();
+  for (size_t dim = 0; dim < maxDim; ++dim) {
+    Eigen::MatrixXd L(Nwake, nPanels);     // output adjoint dDw
+    for (int j = 0; j < nPanels; ++j)
+      for (int i = 0; i < Nwake; ++i) {
+        int k = colMajorIndex(i, j, Nwake);
+        Identifier id = data->Dw_id[k];
+        L(i, j) = adj->getAdjoint(id, dim);
+        adj->resetAdjoint(id, dim);
+      }
+
+    for (int j = 0; j < nPanels; ++j)
+      for (int i = 0; i < Nwake; ++i)
+        adj->updateAdjoint(data->Csig_id[colMajorIndex(i,j,Nwake)], dim,
+                           Real(L(i, j)));
+
+    Eigen::MatrixXd dCgam = L * data->Bp.transpose();
+    for (int j = 0; j < Ncoords; ++j)
+      for (int i = 0; i < Nwake; ++i)
+        adj->updateAdjoint(data->Cgam_id[colMajorIndex(i,j,Nwake)], dim,
+                           Real(dCgam(i, j)));
+
+    Eigen::MatrixXd dBp = data->Cgam.transpose() * L;
+    for (int j = 0; j < nPanels; ++j)
+      for (int i = 0; i < Ncoords; ++i)
+        adj->updateAdjoint(data->Bp_id[colMajorIndex(i,j,Ncoords)], dim,
+                           Real(dBp(i, j)));
+  }
+}
+
+template<typename Active>
+static void compute_Dw_delete(typename Active::Tape*, void* d)
+{
+  delete static_cast<ComputeDwData<Active>*>(d);
+}
 
 template<typename Real>
 void compute_Dw(const Real* Cgam, const Real* Bp, const Real* Csig, Real* Dw)
 {
   constexpr int nPanels = Nwake + Ncoords - 2;
+  using Active = Real;
+  using Tape   = typename Active::Tape;
+  Tape& tape   = Active::getTape();
+
+  // Primal on passive doubles — MUST keep this exact loop nest and summation
+  // order (k ascending, then + Csig): it is bit-identical to the former
+  // Real-arithmetic version, and the forward golden depends on that. Do not
+  // replace with an Eigen GEMM.
   for (int i = 0; i < Nwake; ++i)
     for (int j = 0; j < nPanels; ++j) {
-      Real s = 0;
+      double s = 0;
       for (int k = 0; k < Ncoords; ++k)
-        s += Cgam[colMajorIndex(i,k,Nwake)] * Bp[colMajorIndex(k,j,Ncoords)];
-      Dw[colMajorIndex(i,j,Nwake)] = s + Csig[colMajorIndex(i,j,Nwake)];
+        s += Cgam[colMajorIndex(i,k,Nwake)].getValue()
+           * Bp[colMajorIndex(k,j,Ncoords)].getValue();
+      Dw[colMajorIndex(i,j,Nwake)] = s + Csig[colMajorIndex(i,j,Nwake)].getValue();
     }
+
+  if (!tape.isActive()) return;
+
+  auto* data = new ComputeDwData<Active>();
+
+  for (int j = 0; j < Ncoords; ++j)
+    for (int i = 0; i < Nwake; ++i) {
+      int k = colMajorIndex(i, j, Nwake);
+      data->Cgam(i, j) = Cgam[k].getValue();
+      data->Cgam_id[k] = Cgam[k].getIdentifier();
+    }
+
+  for (int j = 0; j < nPanels; ++j)
+    for (int i = 0; i < Ncoords; ++i) {
+      int k = colMajorIndex(i, j, Ncoords);
+      data->Bp(i, j) = Bp[k].getValue();
+      data->Bp_id[k] = Bp[k].getIdentifier();
+    }
+
+  for (int j = 0; j < nPanels; ++j)
+    for (int i = 0; i < Nwake; ++i) {
+      int k = colMajorIndex(i, j, Nwake);
+      data->Csig_id[k] = Csig[k].getIdentifier();
+      (void)tape.registerExternalFunctionOutput(Dw[k]);
+      data->Dw_id[k] = Dw[k].getIdentifier();
+    }
+
+  tape.pushExternalFunction(codi::ExternalFunction<Tape>::create(
+    &compute_Dw_b<Active>, data,
+    &compute_Dw_delete<Active>));
 }
 
 // ── calc_ue_m ─────────────────────────────────────────────────────────────────

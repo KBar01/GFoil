@@ -304,6 +304,22 @@ class VerboseResult(_ResultMixin):
 
 
 @dataclass(repr=False)
+class NoiseResult(_ResultMixin):
+    """Returned by noise_run (acoustics-only, no aero solve).
+
+    All spectra are RAW LINEAR wall-pressure / far-field PSD in Pa^2/omega
+    (i.e. per rad/s — NOT per Hz, NOT in dB, NOT integrated to OASPL). A
+    surface whose BL state has tau_max <= 0 (or an all-zero custom-WPS column)
+    is skipped and its WPS column is zeros.
+    """
+    freqs_Hz:       np.ndarray  # frequency array [Hz]                 shape (N,)
+    WPS_upper:      np.ndarray  # upper surface WPS [Pa^2/omega]       shape (N,)
+    WPS_lower:      np.ndarray  # lower surface WPS [Pa^2/omega]       shape (N,)
+    FF_spectra:     np.ndarray  # far-field PSD     [Pa^2/omega]       shape (nObs, N)
+    obsXYZ_TElocal: np.ndarray  # observer coords in TE-local frame [m] shape (nObs, 3)
+
+
+@dataclass(repr=False)
 class FwdResult(_ResultMixin):
     """Returned by fwd_run. Pass to grad_run to get gradients."""
 

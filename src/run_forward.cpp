@@ -17,6 +17,7 @@
 #include "run_forward.h"
 #include <string>
 #include <memory>
+#include <cstdlib>   // std::getenv — warm-restart stag seed switch + diagnostic
 
 bool runCode(
     bool fromRestart,
@@ -92,14 +93,43 @@ bool runCode(
             glob.U[i] = warmStart->states[i];
         for (int i = 0; i < (Ncoords + Nwake); ++i)
             vsol.turb[i] = static_cast<bool>(warmStart->turb[i]);
+
+        // Warm-restart stag seed. identify_surfaces/set_wake_gap/calc_ue_m above
+        // ran from the INVISCID stagpoint_find; the single viscous stagpoint_move
+        // below uses isol.stagIndex as its sign-scan seed. Left at the inviscid
+        // value it can land one node off the donor's converged stag, reindexing
+        // the BL stations (entry BL_rms ~0.6, a same-alpha restart that should
+        // accept in ~0-2 iterations took 8). Seeding the bracket from the donor's
+        // converged stag (RestartState.stag) lets stagpoint_move + its
+        // identify_surfaces rebuild reproduce the donor's Is/distFromStag exactly.
+        // wgap is already the donor's (set_wake_gap is keyed to the inviscid stag,
+        // which is identical for the same geometry+alpha). GFOIL_NOSTAGSEED keeps
+        // the pre-fix behaviour for A/B gating.
+        static const bool no_stagseed = (std::getenv("GFOIL_NOSTAGSEED") != nullptr);
+        const bool warm_dbg = (std::getenv("GFOIL_DEBUG") != nullptr);
+        if (warm_dbg)
+            std::cerr << "[GFOIL_DEBUG] warm: inviscid stag=["
+                      << isol.stagIndex[0] << "," << isol.stagIndex[1]
+                      << "] donor stag=["
+                      << (warmStart->stag.size() >= 2 ? warmStart->stag[0] : -1) << ","
+                      << (warmStart->stag.size() >= 2 ? warmStart->stag[1] : -1) << "]"
+                      << std::endl;
+        if (!no_stagseed && warmStart->stag.size() >= 2) {
+            isol.stagIndex[0] = warmStart->stag[0];
+            isol.stagIndex[1] = warmStart->stag[1];
+        }
     } else {
         init_boundary_layer(oper, foil, param, isol, vsol, glob);
     }
 
     stagpoint_move(isol, glob, foil, wake, vsol);
+    if (warmStart != nullptr && std::getenv("GFOIL_DEBUG") != nullptr)
+        std::cerr << "[GFOIL_DEBUG] warm: post-move stag=["
+                  << isol.stagIndex[0] << "," << isol.stagIndex[1] << "]" << std::endl;
     std::string failure_mode;
     bool converged = solve_coupled(oper, foil, wake, param, vsol, isol, glob, restartOut,
-                                   (fwdOut != nullptr) ? &failure_mode : nullptr);
+                                   (fwdOut != nullptr) ? &failure_mode : nullptr,
+                                   (warmStart != nullptr));
     Post post;
     calc_force<>(oper, geom, param, foil, glob, post);
 

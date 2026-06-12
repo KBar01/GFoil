@@ -22,6 +22,7 @@
 
 #include <cmath>
 #include <complex>
+#include <vector>
 #include <codi.hpp>  // for codi::StatementPushHelper in errFunc
 #include "Faddeeva.hh"
 
@@ -439,6 +440,122 @@ void TE_noise_outer(
     // b = semi-chord (half-chord), passed directly as parameter
     Real b_half = b;  // b is already the semi-chord (c/2) passed by caller
     for (int i = 0; i < Nsound; ++i) {
+        Real _t1   = (omega[i]*b_half*z) / (2.0*M_PI*c0*S0*S0);
+        Real term1 = _t1 * _t1;
+
+        if (surf == 0) {
+            farfieldSpectra[i]  = term1 * 2.0*span * I_abs2[i] * WPS_upper[i] * l_y[i];
+        } else {
+            farfieldSpectra[i] += term1 * 2.0*span * I_abs2[i] * WPS_lower[i] * l_y[i];
+        }
+    }
+    }
+
+}
+
+
+/////////////////////////// Length-generic (_vec) overloads ///////////////////////////
+//
+// Identical physics to Radiation_integral_total / TE_noise_outer above, but the
+// fixed [Nsound] arrays become std::vector<Real> of length omega.size(). The
+// scalar per-frequency calls (Radiation_integral1/2, Estar, errFunc) are reused
+// unchanged. Used ONLY by noise_run (acoustics-only forward path, never AD'd);
+// the fixed-Nsound versions remain on the AD-critical path untouched.
+
+template<typename Real>
+void Radiation_integral_total_vec(
+    const std::vector<Real>& C,
+    const std::vector<Real>& K_bar,
+    const std::vector<Real>& mu_bar,
+    Real S0,
+    const std::vector<Real>& K_1_bar,
+    Real alpha,
+    Real M,
+    Real x,
+    std::vector<Real>& I_abs2
+)
+{
+    for (std::size_t i = 0; i < C.size(); ++i)
+    {
+        // K̄₂ = 0 at mid-span → kbar2 = μ̄², k_min_bar = μ̄, B = K̄₁ + (1+M)·μ̄
+        Real k_min_bar = mu_bar[i];
+        Real B = K_1_bar[i] + M*mu_bar[i] + k_min_bar;
+
+        Real fr1, fi1;
+        Radiation_integral1<Real>(B, C[i], fr1, fi1);
+
+        Real fr2, fi2;
+        Radiation_integral2<Real>(
+            B,
+            K_bar[i],
+            k_min_bar,
+            mu_bar[i],
+            S0,
+            K_1_bar[i],
+            alpha,
+            x,
+            M,
+            fr2, fi2);
+
+        Real Ireal = fr1 + fr2;
+        Real Iimag = fi1 + fi2;
+
+        I_abs2[i] = Ireal*Ireal + Iimag*Iimag;
+    }
+}
+
+
+template<typename Real>
+void TE_noise_outer_vec(
+    Real M, Real U, Real x, Real y, Real z,
+    Real b, Real c, Real span,
+
+    Real c0,
+
+    const std::vector<Real>& omega,
+    const Real Ue_bot, const Real Ue_top,
+    std::vector<Real>& WPS_lower, std::vector<Real>& WPS_upper,
+
+    std::vector<Real>& farfieldSpectra
+)
+{
+    const std::size_t N = omega.size();
+    Real Ue[2] = {Ue_top, Ue_bot};
+
+    Real beta = std::sqrt(1.0 - M*M);
+    Real S0   = std::sqrt(x*x + beta*beta*z*z);
+
+    for (int surf = 0; surf < 2; ++surf) {
+
+    Real U_c  = 0.7 * Ue[surf];
+    Real alpha = U / U_c;
+
+    std::vector<Real> C(N);
+    std::vector<Real> K_bar(N);
+    std::vector<Real> mu_bar(N);
+    std::vector<Real> K_1_bar(N);
+
+    for (std::size_t i = 0; i < N; ++i)
+    {
+        Real K = omega[i] / U;
+
+        K_bar[i]   = K * b;
+        mu_bar[i]  = K_bar[i] * M / (beta*beta);
+        K_1_bar[i] = alpha * K_bar[i];
+        C[i]       = K_1_bar[i] - mu_bar[i] * (x/S0 - M);   // Eq. 12
+    }
+
+    std::vector<Real> I_abs2(N);
+    Radiation_integral_total_vec(C, K_bar, mu_bar, S0, K_1_bar, alpha, M, x, I_abs2);
+
+    // Roger & Moreau (2005) Eq. 19 — Corcos spanwise correlation length (K̄₂=0).
+    Real b_c = 1.47;
+    std::vector<Real> l_y(N);
+    for (std::size_t i = 0; i < N; ++i)
+        l_y[i] = (b_c * U_c) / omega[i];
+
+    Real b_half = b;  // b is already the semi-chord (c/2) passed by caller
+    for (std::size_t i = 0; i < N; ++i) {
         Real _t1   = (omega[i]*b_half*z) / (2.0*M_PI*c0*S0*S0);
         Real term1 = _t1 * _t1;
 

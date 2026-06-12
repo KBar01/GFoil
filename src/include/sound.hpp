@@ -68,6 +68,46 @@ void calc_WPS(const std::string& model,
     else if (model == "tno") { calc_WPS_TNO<Real>       (delta,useTauW,Ue,omega,rho,nu,isSuction,WPS); }
 }
 
+// ── WPS model dispatch (length-generic) ───────────────────────────────────────
+// Identical input floors / guard logic to calc_WPS above, but operating on a
+// std::vector<Real> angular-frequency array of arbitrary length/spacing (WPS
+// pre-sized to omega.size() by the caller). Dispatches to the *_vec model
+// variants. Used ONLY by noise_run (acoustics-only forward path, never AD'd).
+// The fixed-Nsound calc_WPS above is left untouched (AD-critical path).
+template<typename Real>
+void calc_WPS_vec(const std::string& model,
+              const Real theta_in, const Real deltaStar_in, const Real delta_in,
+              const Real tauW_in, const Real tauMax_in,
+              const Real edgeVel, const Real dpdx,
+              const std::vector<Real>& omega,
+              Real nu, const Real Uinf,
+              const Real S, const Real rho,
+              const int isSuction,
+              std::vector<Real>& WPS)
+{
+    constexpr double Cf_min   = 1e-4;
+    constexpr double beta_max = 50.0;
+    constexpr double H_min    = 1.05;
+
+    const Real Ue        = std::max(edgeVel,    Real(1e-6));
+    const Real theta     = std::max(theta_in,   Real(1e-12));
+    const Real deltaStar = std::max(deltaStar_in, Real(H_min) * theta);
+    const Real delta     = std::max(delta_in,   deltaStar);
+    const Real q         = Real(0.5) * rho * Ue * Ue;          // dynamic pressure
+    Real tauW            = std::max(tauW_in, Real(Cf_min) * q);
+    tauW                 = std::max(tauW, theta * std::abs(dpdx) / Real(beta_max));
+    const Real tauMax    = std::max(tauMax_in, tauW);          // tauMax >= tauWall
+
+    Real useTauW = tauW;
+    if (tauW > tauMax) { useTauW = tauMax; }
+
+    if      (model == "roz") { calc_WPS_Rozenburg_vec<Real>(theta,deltaStar,delta,useTauW,tauMax,Ue,dpdx,omega,rho,nu,WPS); }
+    else if (model == "goo") { calc_WPS_Goody_vec<Real>    (theta,deltaStar,delta,useTauW,tauMax,Ue,dpdx,omega,rho,nu,Uinf,WPS); }
+    else if (model == "lee") { calc_WPS_Lee_vec<Real>       (theta,deltaStar,delta,useTauW,tauMax,Ue,dpdx,omega,rho,nu,WPS); }
+    else if (model == "kam") { calc_WPS_Kamruzzaman_vec<Real>(theta,deltaStar,useTauW,Ue,dpdx,omega,rho,nu,WPS); }
+    else if (model == "tno") { calc_WPS_TNO_vec<Real>       (delta,useTauW,Ue,omega,rho,nu,isSuction,WPS); }
+}
+
 // ── OASPL ─────────────────────────────────────────────────────────────────────
 // Overall sound pressure level integrated from PSD over Nsound frequencies
 // (200-20000 Hz, log-spaced). OASPL = 10*log10(integral(PSD*domega) / pref^2)

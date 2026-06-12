@@ -134,7 +134,8 @@ double partialOutputspartialInputs(
         jacobianOASPL_states[i] = (states[i].getGradient()[1]);
     }
 
-    tape.resetHard();
+    // reset() not resetHard(): holds tape/adjoint allocations (~330 MB RSS, × N ProcessPoolExecutor workers) instead of re-growing the adjoint vector every call (was 13.9% of AD time); see CHANGELOG "Tape reset A/B".
+    tape.reset();
     return post.cl.getValue();
 
 };
@@ -290,7 +291,8 @@ void partialRpartialx(
     dgCDdalpha = alphad.getGradient()[1];
     dgOASPLdalpha = alphad.getGradient()[2];
 
-    tape.resetHard();
+    // reset() not resetHard(): same held-memory vs per-call-regrowth trade as partialOutputspartialInputs above.
+    tape.reset();
 }
 
 

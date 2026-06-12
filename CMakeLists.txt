@@ -52,54 +52,12 @@ list(REMOVE_ITEM SOURCES "${CMAKE_SOURCE_DIR}/src/main.cpp")
 list(REMOVE_ITEM SOURCES "${CMAKE_SOURCE_DIR}/src/gfoil_fwd_bindings.cpp")
 list(REMOVE_ITEM SOURCES "${CMAKE_SOURCE_DIR}/src/gfoil_ad_bindings.cpp")
 
-add_executable(GFoil_fwd_codi src/main.cpp ${SOURCES})
-target_link_libraries(GFoil_fwd_codi PRIVATE Eigen3::Eigen CoDiPack nlohmann_json::nlohmann_json)
-
-target_include_directories(GFoil_fwd_codi PRIVATE
- ${COMMON_INCLUDES_FWD}
- ${NOISE_INCLUDES_FWD}
- ${codipack_SOURCE_DIR}/include
-)
-
-target_compile_definitions(GFoil_fwd_codi PRIVATE
-  -DUSE_CODIPACK
-  -DCODI_EnableEigen
-  -DFWD_CODI_VERSION
-  -DDO_BL_GRADIENT=${DO_BL_GRADIENT_DEFINE}
-)
-
-if(CMAKE_BUILD_TYPE STREQUAL "Release")
-  target_compile_options(GFoil_fwd_codi PRIVATE 
-    -O2
-    -fno-fast-math
-  )
-endif()
-
-######## the AD version ######
-
-set(COMMON_INCLUDES_AD ${PROJECT_SOURCE_DIR}/srcAD/include)
-set(NOISE_INCLUDES_AD ${PROJECT_SOURCE_DIR}/srcAD/noise_includes)
-add_executable(GFoil_AD srcAD/main.cpp src/Faddeeva.cpp)
-target_link_libraries(GFoil_AD PRIVATE Eigen3::Eigen CoDiPack nlohmann_json::nlohmann_json)
-target_include_directories(GFoil_AD PRIVATE
- ${COMMON_INCLUDES_AD}
- ${COMMON_INCLUDES_FWD}
- ${NOISE_INCLUDES_AD}
- ${NOISE_INCLUDES_FWD}
- ${codipack_SOURCE_DIR}/include
-)
-target_compile_definitions(GFoil_AD PRIVATE
-  -DUSE_CODIPACK
-  -DCODI_EnableEigen
-  -DAD_VERSION
-  -DDO_BL_GRADIENT=${DO_BL_GRADIENT_DEFINE}
-)
-if(CMAKE_BUILD_TYPE STREQUAL "Release")
-  target_compile_options(GFoil_AD PRIVATE
-    -O2
-    -fno-fast-math
-  )
-endif()
+# NOTE: the standalone GFoil_fwd_codi / GFoil_AD executables (built from
+# src/main.cpp and srcAD/main.cpp) were removed — the Python package only ever
+# loads the gfoil_cpp pybind11 module. src/main.cpp and srcAD/main.cpp are now
+# build-orphaned (uncompiled) and are candidates for a later _quarantine/ sweep.
+# The srcAD include paths are still needed by gfoil_ad_bindings.cpp and are
+# passed directly to the gfoil_cpp target below.
 
 ######## pybind11 module ########
 
@@ -146,7 +104,7 @@ target_compile_definitions(gfoil_cpp PRIVATE
 )
 
 if(CMAKE_BUILD_TYPE STREQUAL "Release")
-  target_compile_options(gfoil_cpp PRIVATE -O2 -fno-fast-math)
+  target_compile_options(gfoil_cpp PRIVATE -fno-fast-math)
 endif()
 
 # Place the .so in the Python package directory for in-tree development builds.

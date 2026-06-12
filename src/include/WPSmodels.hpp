@@ -3,6 +3,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <iostream>
+#include <vector>
 
 // Goody (2004) "Empirical Spectral Model of Surface Pressure Fluctuations"
 // AIAA Journal Vol. 42 No. 9 — outer-layer scaling with Reynolds-number correction
@@ -477,6 +478,297 @@ void calc_WPS_TNO(
 
         // pretty sure this code gives you the wavenumber frequency PSD, 
         // so convert using same method in R&M with span corr length: 
+
+        Real ly = 1.4*Uc / omega[w] ;
+
+        phiqq[w] = (4.0 * rho*rho * integral) * M_PI * (1.0/ly) *  2.0;
+    }
+}
+
+/////////////////////////// Length-generic (_vec) overloads ///////////////////////////
+//
+// Identical physics to the fixed-Nsound templates above, but accept an
+// arbitrary-length / arbitrary-spacing angular-frequency array as a
+// std::vector<Real> (with phiqq pre-sized by the caller to omega.size()).
+// These are used ONLY by noise_run (acoustics-only forward path, never AD'd);
+// the fixed-Nsound versions remain on the AD-critical forward path untouched.
+// For TNO the wall-normal arrays stay fixed-size (NblPoints); only the OUTER
+// frequency loop becomes runtime-length.
+
+template<typename Real>
+void calc_WPS_Goody_vec(Real theta,
+                    Real deltaS,
+                    Real delta,
+                    Real tauWall,
+                    Real tauMax,
+                    Real edgeVel,
+                    Real dpdx,
+                    const std::vector<Real>& omega,
+                    Real rho,
+                    Real nu,
+                    Real Uinf,
+                    std::vector<Real>& phiqq){
+
+    Real a = 3;
+    Real b = 2;
+    Real c = 0.75;
+    Real d = 0.5;
+    Real e = 3.7;
+    Real f = 1.1;
+    Real g = -0.57;
+    Real h = 7;
+    Real i = 1;
+    Real Ue = edgeVel;
+    Real u_t = std::sqrt(tauWall/rho);
+    Real Rt= (delta/Ue)/(nu/(u_t*u_t));
+    Real SS   = Ue / (tauWall*tauWall*delta);
+    Real FS   = delta/Ue ;
+
+    for (std::size_t n=0;n<omega.size();++n){
+        Real omegaBar= omega[n]*FS ;
+        phiqq[n] = ((a*std::pow(omegaBar,b))/(std::pow(i*std::pow(omegaBar, c) + d, e) + std::pow((f*std::pow(Rt, g)*omegaBar), h))) / SS;
+    }
+
+}
+
+template<typename Real>
+void calc_WPS_Kamruzzaman_vec(Real theta,
+                    Real deltaS,
+                    Real tauWall,
+                    Real Ue,
+                    Real dpdx,
+                    const std::vector<Real>& omega,
+                    Real rho,
+                    Real nu,
+                    std::vector<Real>& phiqq)
+    {
+
+    Real H = deltaS/theta ;
+
+
+    Real Cf = tauWall / (0.5*Ue*Ue*rho) ;
+    Real lambda_ = std::sqrt(2.0/Cf);
+    Real G = lambda_ * (1.0 - (1.0/H)) ;
+
+    Real beta_c = ((G+1.7) / 6.1)*((G+1.7) / 6.1) - 1.81 ;
+    Real Pi = 0.227;
+    if (beta_c > -0.5){
+        Pi = 0.8*std::pow(beta_c+0.5, 0.75);
+    }
+
+    // Table 1 in Lee : Comparison and Assessment of RecentEmpirical Models for Turbulent BoundaryLayer Wall Pressure Spectrum
+    Real m = 0.5*std::pow(H/1.31, 0.3);
+    Real a = 0.45*(1.75*std::pow(Pi*Pi*beta_c*beta_c, m) + 15);
+    Real u_t = std::sqrt(tauWall/rho);
+    Real Rt = (deltaS * u_t * u_t) / (nu*Ue);
+    Real B3 = std::pow(1.15*Rt, -2.0/7.0);
+
+    Real SS   = Ue / (tauWall*tauWall*deltaS);
+    Real FS   = deltaS/Ue ;
+
+    for (std::size_t n=0;n<omega.size();++n){
+        Real omegaBar= omega[n]*FS ;
+        phiqq[n] = ((a*std::pow(omegaBar,2.0)) / (std::pow(std::pow(omegaBar, 1.637) + 0.27, 2.47) + std::pow((B3*omegaBar), 7.0)))/SS;
+    }
+
+}
+
+template<typename Real>
+void calc_WPS_Rozenburg_vec(Real theta,
+                    Real deltaS,
+                    Real delta,
+                    Real tauWall,
+                    Real tauMax,
+                    Real Ue,
+                    Real dpdx,
+                    const std::vector<Real>& omega,
+                    Real rho,
+                    Real nu,
+                    std::vector<Real>& phiqq){
+
+    Real Delta = delta/deltaS  ;
+
+    Real beta_c = std::max((theta/tauWall)*(dpdx),-0.5);
+    Real Pi = 0.227;
+    if (beta_c > -0.5){
+        Pi = 0.8*std::pow(beta_c+0.5, 0.75);
+    }
+    Real u_t = std::sqrt(tauWall/rho);
+    Real Rt = (delta/Ue)/(nu/(u_t*u_t));
+
+
+    Real b = 2; // Done
+    Real c = 0.75; // Done
+    Real A1 = 3.7 + 1.5*beta_c ; //Done - A1
+    Real F1 = 4.76*std::pow((1.4/Delta), 0.75) * (0.375*A1 -1) ; // F1
+
+    Real a = (2.82*Delta*Delta*std::pow((6.13*std::pow(Delta,-0.75) + F1), A1))  *  (4.2*(Pi/Delta) + 1); //Done
+    Real f = 8.8; //done
+    Real g = -0.57; //done
+    Real F2 = std::min(3.0,19.0/ std::sqrt(Rt)); // done
+    Real i = 4.76; //done
+
+    Real SS   = Ue / (tauMax*tauMax*deltaS);
+    Real FS   = deltaS/Ue ;
+
+    Real C3prime = 8.8*std::pow(Rt, -0.57);
+
+    if (std::getenv("GFOIL_DEBUG")) {
+        auto nf = [](double v){ return !std::isfinite(v); };
+        const char* first = "none";
+        if      (nf(Delta.getValue()))   first = "Delta";
+        else if (nf(beta_c.getValue()))  first = "beta_c";
+        else if (nf(u_t.getValue()))     first = "u_t";
+        else if (nf(Rt.getValue()))      first = "Rt";
+        else if (nf(SS.getValue()))      first = "SS";
+        else if (nf(a.getValue()))       first = "a";
+        else if (nf(F1.getValue()))      first = "F1";
+        else if (nf(C3prime.getValue())) first = "C3prime";
+        std::cerr << "[WPS roz_vec] FIRST_NONFINITE=" << first << "\n";
+    }
+
+    for (std::size_t n=0;n<omega.size();++n){
+        Real omegaBar= omega[n]*FS ;
+        Real top = (a*std::pow(omegaBar, 2));
+        Real bot = std::pow(4.76*std::pow(omegaBar, 0.75) + F1, A1)   +   std::pow((C3prime*omegaBar), F2);
+        phiqq[n] = ( top/bot )/SS;
+    }
+
+}
+
+template<typename Real>
+void calc_WPS_Lee_vec(Real theta,
+                    Real deltaS,
+                    Real delta,
+                    Real tauWall,
+                    Real tauMax,
+                    Real Ue,
+                    Real dpdx,
+                    const std::vector<Real>& omega,
+                    Real rho,
+                    Real nu,
+                    std::vector<Real>& phiqq){
+
+    Real Delta = delta/deltaS  ;
+
+    Real beta_c = std::max((theta/tauWall)*(dpdx),-0.5);
+    Real Pi = 0.227;
+    if (beta_c > -0.5){
+        Pi = 0.8*std::pow(beta_c+0.5, 0.75);
+    }
+    Real u_t = std::sqrt(tauWall/rho);
+    Real Rt = (delta/Ue)/(nu/(u_t*u_t));
+
+    Real e = 3.7 + 1.5*beta_c ; //Done - A1
+    Real d = 4.76*std::pow((1.4/Delta), 0.75) * (0.375*e -1) ; // F1
+    Real dStar = d ;
+    if (beta_c < 0.5){
+        dStar = std::max(1.0,1.5*d) ;
+    }
+
+    Real hStar_temp = std::min(5.35, 0.139 + 3.1043*beta_c); // done
+    Real hStar = std::min(hStar_temp, 19.0/std::sqrt(Rt)) + 7.0 ;
+    if (hStar == 12.35){
+        hStar = std::min(3.0,  19.0/std::sqrt(Rt))+ 7.0 ;
+    }
+
+    Real firstTerm = std::max(1.0,(0.25*beta_c - 0.52));
+
+    Real aStar = firstTerm*(2.82*Delta*Delta*std::pow((6.13*std::pow(Delta,-0.75) + d), e))  *  (4.2*(Pi/Delta) + 1); //Done
+
+    Real SS   = Ue / (tauWall*tauWall*deltaS);
+    Real FS   = deltaS/Ue ;
+
+    Real C3prime = 8.8*std::pow(Rt, -0.57);
+
+    for (std::size_t n=0;n<omega.size();++n){
+        Real omegaBar= omega[n]*FS ;
+        Real top = (aStar*std::pow(omegaBar, 2));
+        Real bot = std::pow(4.76*std::pow(omegaBar, 0.75) + dStar, e)   +   std::pow((C3prime*omegaBar), hStar);
+        phiqq[n] = ( top/bot )/SS;
+    }
+
+}
+
+template<typename Real>
+void calc_WPS_TNO_vec(
+    const Real delta,
+    Real tauWall,
+    const Real edgeVel,
+    const std::vector<Real>& omega,
+    const Real rho,
+    const Real nu,
+    const int isSuction,
+    std::vector<Real>& phiqq)
+{
+    // Compute shear velocity and min y from target y+
+    Real u_t = std::sqrt(tauWall / rho);
+
+    const Real yplus_target = 3.0;
+    Real y_min = yplus_target * nu / u_t;
+
+    //Build wall-normal grid with either cosine or linear spacing
+    Real y[NblPoints];
+    const Real y_max = delta;
+
+    // flag: true = cosine stretching, false = linear spacing
+    bool useCosineStretch = false;
+
+    for (int i = 0; i < NblPoints; ++i)
+    {
+        Real eta = static_cast<Real>(i) / static_cast<Real>(NblPoints - 1);
+
+        if (useCosineStretch)
+        {
+            Real y_stretch = 0.5 * (1.0 - std::cos(M_PI * eta));
+            y[i] = y_min + (y_max - y_min) * y_stretch;
+        }
+        else
+        {
+            Real y_stretch = eta;
+            y[i] = y_min + (y_max - y_min) * y_stretch;
+        }
+    }
+
+    Real Uc = 0.65 * edgeVel;
+
+    Real U[NblPoints], dUdy[NblPoints];
+    mean_velocity_profile(y, delta, u_t, nu, edgeVel, U, dUdy);
+
+    Real L2[NblPoints], l_mix[NblPoints];
+    Integral_Length_scale(delta, y, L2, l_mix);
+
+    Real u22[NblPoints];
+    Turb_shear_stress(dUdy, l_mix, isSuction, u22);
+
+    Real phi22[NblPoints];
+
+    Real F[NblPoints];
+    for (int i = 0; i < NblPoints; ++i){
+        F[i] =  L2[i] * (1/Uc) * (dUdy[i] * dUdy[i]) * u22[i];
+    }
+
+    for (std::size_t w = 0; w < omega.size(); ++w)
+    {
+        // Lee (2016) Eq. 37 — frequency-loop wall-normal integration for Φ_pp(ω)
+        Real k1 = omega[w] / Uc;
+        Real k = std::abs(k1);
+
+        Energy_density_spectrum(k1, L2, phi22);
+
+        Real integrand[NblPoints];
+        for (int i = 0; i < NblPoints; ++i)
+        {
+            integrand[i] = F[i]*phi22[i]*std::exp(-2.0 * y[i] * k);
+        }
+
+        // trapezoidal integration
+        Real integral = 0.0;
+        for (int i = 1; i < NblPoints; ++i)
+        {
+            Real dy_local = y[i] - y[i - 1];
+            integral += 0.5 * (integrand[i] + integrand[i - 1]) * dy_local;
+        }
 
         Real ly = 1.4*Uc / omega[w] ;
 

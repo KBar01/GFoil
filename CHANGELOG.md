@@ -6,6 +6,361 @@ chronological record.
 
 ---
 
+## Warm-restart stagnation reindex fixed (June 2026)
+
+**What.** Fixes the second defect scoped in the warm-restart entry. On a warm
+entry `runCode` (`run_forward.cpp`) ran `identify_surfaces`/`set_wake_gap`/
+`calc_ue_m` from the INVISCID `stagpoint_find`, then a single viscous
+`stagpoint_move` whose sign-scan is seeded from `isol.stagIndex`. Left at the
+inviscid value it landed one node off the donor's converged stag (e.g. [81,82] vs
+donor [82,83]), reindexing the BL stations: a same-alpha restart that should
+accept in ~0-2 iterations took 8 (entry BL_rms ~0.6). The donor's converged
+`stagIndex` was stored in `RestartState.stag` but unused at load.
+
+**Fix.** `RestartState.stag` is now plumbed through the pybind warm path
+(`_call_forward` adds `stag` to `jac_in`; `gfoil_fwd_bindings.cpp` reads it) and,
+on warm entry, seeds `isol.stagIndex` before `stagpoint_move`. The sign-scan then
+starts from the donor bracket, finds the loaded states consistent with it (no
+move), and `stagpoint_move`'s `identify_surfaces` rebuilds `Is`/`distFromStag` to
+the donor configuration. `wgap` is already donor-identical (keyed to the inviscid
+stag, identical for the same geometry+alpha — confirmed in the Part B
+instrumentation). `GFOIL_NOSTAGSEED` keeps the pre-fix behaviour for A/B.
+
+**Mechanism (GFOIL_DEBUG, `bench/stagseed_probe.py`).** EPPLER 399 nCrit=5, warm
+6.5<-6.5 (donor converges at stag [82,83]): NOSTAGSEED → post-move [81,82], entry
+BL_rms 0.621, Is 82/118, it=8; seed → post-move [82,83], entry BL_rms 7.7e-09, Is
+83/117, xi 0.992173 (all matching the donor's converged values), it=1. The fix
+reproduces the donor configuration rather than inventing one. `stagpoint_move`
+rebuilds `Is` every iteration, so the donor's converged Is tracks its converged
+stag; the seed reproduces it. For warm 5.0<-5.5 the inviscid stag already equals
+the donor [83,84], so the seed is a no-op there.
+
+**Gates.** (1) Regression **22/22 bit-identical** (golden is cold; warm seed path
+not taken). (2) warm 6.5<-6.5 **8 → 1** iteration; warm 5.0<-5.5 stays a real
+re-solve under Fix B (it=26, nonzero) with cold-truth CL 1.27228 — the
+stale-accept fix remains effective. (3) 133-case rescue (`bench/rescue_cost.py`,
+seed vs NOSTAGSEED, same binary): rescue rate **94/133 → 94/133** (unchanged);
+converged-iteration cost over the 94 commonly-rescued cases **5157 → 4408
+(−14.5 %)**, 70 cheaper / 8 marginally costlier (largest: AH 79-100 C +8/nc9
+142→87, GOE 346 +8/nc5 59→19). (4) 840 cold sweep vs the post-Part-C baseline:
+**0 conv / 0 failure_mode / 0 newton_iteration diffs** (warm path dead on cold
+runs). AD path untouched.
+
+---
+
+## Warm-restart stale accept: driver guard + solver root cause + scatter-add (June 2026)
+
+Three sequential changes; full evidence in `bench/results/REPORT.md`
+(addenda Part A/B/C). The forward solver and the Python driver mishandled warm
+(restart) entries; Part C is an unrelated, bit-identical performance change to the
+Newton linear solve. The AD path (`srcAD/`, `gfoil_ad_bindings.cpp`,
+`ADfuncs.hpp`) was not touched.
+
+### Part A — Python guard against the warm-restart stale accept (`GFoil/gfoil.py`)
+
+**What.** `run_forward(inp, restart)` could return `converged` with
+`newton_iterations == 0` and the DONOR's solution unchanged after an alpha change
+(EPPLER 399, nCrit=5: warm 5.0←5.5 returned the 5.5 donor CL 1.3206 as
+"alpha=5.0", +3.7% error). `standard_run`'s forward-stepping loop now rejects an
+it==0 accept at a changed alpha (`_is_stale_warm_accept`: converged AND it==0 AND
+|Δalpha|>1e-12 — geometry/Re/nCrit are invariant within `standard_run`, so alpha
+is the only varying input) and retries the same alpha cold. A genuine same-alpha
+0-iteration restart is left allowed.
+
+**Measurements.** `bench/eppler399_guard.py`: warm 5.0←5.5 now returns the
+cold-truth CL 1.27228 (|Δ|=2.8e-6) via a fresh cold solve; same-alpha 6.5←6.5 not
+rejected. `bench/rescue_guard.py` re-ran the 133 cold-failure rescues with the
+guard: corrected rescue count **97 → 87** (13 prior "rescues" were stale accepts;
+3 newly rescued via healthier continuation; guard fired in 32 runs). CSV gains a
+`rescue_conv_guarded` column (`rescue_conv` kept). Golden regression bit-identical
+(no C++, golden uses cold `run_forward`).
+
+### Part B — solve_coupled entry-accept root cause (`src/coupled.cpp`, `run_forward.cpp`, `main_func.h`)
+
+**Mechanism (confirmed, GFOIL_DEBUG, `bench/b1_instrument.py`).** `solve_coupled`
+tests `resid_rms(glob.R, Rsize)` with `Rsize = 3*(Ncoords+Nwake)` — the BL-station
+rows only. The ue-coupling rows (`3*Nsys..4*Nsys-1`), where alpha enters via
+`ue_residual_kernel` (called from `solve_glob` AFTER the test), never participate.
+Warm 5.0←5.5 ENTRY: BL_rms=**1.8e-07** (< rtol 1e-6) but ue_rms=**0.042**
+(>> rtol) → instant it=0 accept. Cold 5.0 control: both large.
+
+**Same-alpha it=8 anomaly — a SECOND, distinct defect (scoped, not fixed).** Donor
+cold-6.5 *converges* at `stagIndex=[82,83]`; warm 6.5←6.5 *enters* at `[81,82]`
+(Is sizes/`distFromStag` shifted, entry BL_rms=0.62). On a warm restart `runCode`
+runs the inviscid `stagpoint_find` then a single viscous `stagpoint_move`, which
+lands one node off the donor's converged stag, reindexing the BL stations — so the
+BL rows are no longer the donor's converged residuals. `RestartState.stag` is
+stored but never re-imposed on warm entry. This is why the original 0.5-deg vs
+same-alpha asymmetry exists (instant accept only when the re-entry stag happens to
+match). `wgap` was identical (same geometry+alpha → same inviscid stag). A fix
+would re-impose the donor stag (+`set_wake_gap`) on warm entry.
+
+**Fixes (both retained behind `GFOIL_BFIX`; default Fix B).** Fix A
+(`GFOIL_BFIX=A`): honest criterion `max(BL_rms, ue_rms) < rtol` (a max, not a
+pooled 4*Nsys RMS, to preserve the BL rows' per-equation rtol). Fix B (default):
+skip the iteration-0 accept on a warm entry (`warmEntry` threaded from `runCode`),
+forcing ≥1 Newton iteration; cold paths bit-identical by construction.
+`GFOIL_BFIX=off` reproduces the defect.
+
+**Measurements.** EPPLER warm 5.0←5.5: off it=0/1.3206 (stale); A it=26/1.27228;
+B it=26/1.27228 (`bench/b3_eppler.py`). Golden regression: Fix B 22/22
+bit-identical; Fix A also 22/22 bit-identical (on well-behaved solves the ue rows
+are already converged when the BL rows are). 840-case cold sweep
+(`bench/cold_only_sweep.py`) vs baseline: BOTH fixes 0 conv / 0 failure_mode /
+0 newton_iteration diffs, 707/840, median 16/p90 41/max 59, none over the 60 cap —
+so no newly-failing case under Fix A and the B.3(iii) spot-check has no candidates
+(the old criterion never declared convergence on an unconverged ue system on this
+cold grid). Wall-time (golden, 30 reps): off≈90 ms, B≈90 ms (no-op on cold),
+A≈92 ms (~2%, the per-iteration ue-kernel).
+
+**Decision.** Fix B active by default (sufficient, provably bit-identical on cold,
+zero-cost); Fix A retained behind the switch (the more principled criterion,
+empirically bit-identical here but not universally guaranteed). Baseline contract
+unchanged.
+
+### Part C — scatter-add replaces per-iteration setFromTriplets (`src/include/sparselinsolve.hpp`)
+
+**What.** `setFromTriplets` + sparse copy was ~17% of forward time. Keyed to the
+existing FNV pattern hash: on a pattern change, build A with `setFromTriplets`,
+`analyzePattern`, and record `slot[k]` (the `valuePtr()` index for triplet k, via
+binary search of the compressed CSC) and `is_first[k]`. On an unchanged pattern,
+skip `setFromTriplets`: the first triplet per slot ASSIGNS (seeds verbatim),
+duplicates ADD in ascending-k order — the cached matrix is reused for factorize,
+solve, and the unchanged external-function adjoint (`data->A`).
+
+**Bit-identity (mandatory, GFOIL_CVERIFY).** Initial mismatch was signed zero:
+the triplet list is duplicate-free here (`nonZeros()==nnz`; `addColumnValues`
+pre-sums in place), so `setFromTriplets` stores `-0.0` verbatim while
+`fill(0.0)+=` yields `+0.0`. Fixed by assign-first. After: **0 memcmp failures
+across 297 solves** (golden + 5 slow cases, incl. golden AD recording);
+`dup_iters=0` everywhere. `GFOIL_NOSCATTER` forces the old build (same binary) as
+an A/B control.
+
+**Pattern churn (`bench/c1_pattern.py`).** changes/total: golden 1/9, slow cases
+8/59…18/56 (max 32% on AH 79-100 C); ≥68% of iterations use the scatter path.
+
+**Gates.** Regression 22/22 bit-identical (scatter and NOSCATTER). 840-case cold
+sweep vs post-B baseline: 0 conv / 0 failure_mode / 0 newton_iteration diffs
+(identical trajectories). Wall-time (`bench/c4_timing.py`, scatter vs NOSCATTER,
+full `run_forward`): golden −3.9%; slow cases −2.2% to −12.8% (GOE 458 −12.8%,
+GOE 328 −10.0%), smallest on the highest-churn case (AH 79-100 C −3.2%).
+
+---
+
+## Tape reset A/B: `reset()` replaces `resetHard()` after each AD pass (June 2026)
+
+**What.** Profiling showed 13.9% of AD time in
+`std::vector<Direction<3>>::_M_default_append` — the pass-2 adjoint vector being
+re-grown on every `run_AD` call because the end-of-pass `tape.resetHard()` in
+`ADfuncs.hpp` (`partialOutputspartialInputs`, `partialRpartialx`) released all
+chunk/adjoint memory. Both sites now call `tape.reset()`, which clears tape data
+and zeroes adjoints but keeps the allocations. The pre-call resets in
+`run_AD_py` (`gfoil_ad_bindings.cpp`) are likewise `reset()` — note they were
+never the operative ones; A/B-ing them alone changed nothing because the
+end-of-pass `resetHard()` had already freed the memory.
+
+**Measurements** (golden case, 30 reps in one process, `bench/tape_reset_ab.py`;
+RSS plateau = median of last 10 `VmRSS` readings):
+
+| Variant | AD median (ms) | RSS plateau, 30× run_AD | RSS plateau, 30× fwd+AD alternating |
+|---|---|---|---|
+| A `resetHard()` | 113.1 | 237.6 MB | — |
+| B `reset()` | 86.3 (−24%) | 327.0 MB | 350.1 MB |
+
+**Correctness gate.** Gradients from all 30 B calls are bit-identical to each
+other and to all 30 A calls (`reset()` does not leak identifiers/adjoints across
+calls); full regression suite 22/22 incl. the forced-transition case.
+
+**Trade.** Each process holds ~90 MB extra steady-state RSS; under a
+ProcessPoolExecutor this multiplies by the worker count (e.g. 8 workers ≈
+0.7 GB extra), still well under the ~400 MB/process budget. Raw data:
+`bench/results/tape_reset_{A,B,B_alt}.json`.
+
+---
+
+## `compute_Dw` as a CoDiPack external function (June 2026)
+
+**What.** `compute_Dw` (`calc_ue_m.hpp`), the wake-influence product
+`Dw = Cgam·Bp + Csig` with `Cgam` (Nwake×Ncoords), `Bp` (Ncoords×nPanels),
+`Csig` (Nwake×nPanels), `nPanels = Ncoords+Nwake-2`, was being recorded
+element-wise on the tape: 30·228·200 = **1,368,000 FMA statements — 31.2% of the
+pass-2 tape** (perf profile, June 2026) for a plain matrix product. It is now a
+CoDiPack external function following the `implicit_block_solve_b` pattern in the
+same file (`ComputeDwData` + `compute_Dw_b` + `compute_Dw_delete`).
+
+**Reverse callback.** Given the output adjoint `L = d̄Dw` (Nwake×nPanels),
+looped over `adj->getVectorSize()` dims:
+
+```
+d̄Cgam += L · Bpᵀ        (Nwake×Ncoords, Eigen GEMM)
+d̄Bp   += Cgamᵀ · L      (Ncoords×nPanels, Eigen GEMM)
+d̄Csig += L              (identity, accumulated directly)
+```
+
+The EF data stores passive `double` copies of Cgam and Bp (needed in reverse)
+plus identifier arrays for Cgam/Bp/Csig (inputs, `updateAdjoint`) and Dw
+(outputs, `getAdjoint`+`resetAdjoint`) — ~0.7 MB replacing ~80 MB of tape.
+
+**Primal bit-identity.** The primal is computed with the SAME triple loop in the
+SAME summation order as before (i→j, k ascending, then `+ Csig`), on
+`.getValue()` doubles — NOT an Eigen GEMM, whose different summation order would
+shift Dw at the ~1e-16 level and break the forward golden. Verified: forward
+scalars **byte-identical** (out.json `cmp`-equal pre/post). When the tape is
+inactive (forward build) the double loop is the entire function, which also
+removed compute_Dw's passive-CoDi cost from the forward solve (was 0.6%).
+`calc_ue_m`'s row-0 overwrite of Dw (with Bp's last row) is untouched outside
+the EF.
+
+**Measured gradient deltas vs the pre-change goldens** (free-transition case):
+`dCL/dy` max rel **2.048e-7**, `dCD/dy` **5.168e-8**, `dOASPL/dy` **1.805e-7**;
+alpha scalars ~1e-15. Cause: the reverse accumulation for this product now runs
+in Eigen GEMM summation order instead of tape statement order — pure
+associativity, same class as the 3–6e-8 PanelGeom-refactor precedent. AD-vs-FD
+after the change: `dOASPL_dalpha` relerr 5.0e-7 (rtol 1e-11, h=1e-4°) for both
+scalar-0.98 and window TE sampling, `dOASPL_dy` at the ~1e-5 FD floor on
+O(100)-magnitude nodes (small-|gradient| near-TE nodes show larger *relative*
+FD scatter that an h-study confirms is FD noise, not an AD error).
+
+**Wins** (NACA 0012, α=2°, Re=2e6, nCrit=5; same-day before/after, lean -O3
+build): pass-2 tape statements 4,382,326 → 3,014,327 (**−31.2%**, exactly the
+1.368M compute_Dw statements), Jacobian entries 13.46M → 9.35M, tape memory
+258.5 → 178.9 MB (**−79.7 MB**), AD pass wall time 136.8 → 107.8 ms median over
+20 reps (**−21.2%**; −19.3% on the 30-iteration mean protocol). Forward wall
+time unchanged within noise.
+
+**Goldens regenerated** under this entry's justification: the gradient-array
+shifts above are associativity-level and FD-verified, and the forward scalars
+are bit-identical. Regenerated together with the regression-suite restoration
+below.
+
+---
+
+## Regression suite restored and extended (June 2026)
+
+`tests/` (deleted in bc28bf2, "runtime-only package") is restored from
+`bc28bf2~1` and brought up to date: `regression_test.py` now drives
+`GFoil.gfoil_cpp` for **two golden cases** — the original free-transition case
+and a new **forced-transition case** (same conditions, `transition=[0.1,0.1]`,
+golden files `forced_*`) covering the taped-`xift` adjoint path for the first
+time (sanity-checked before freezing: `dOASPL_dalpha` AD-vs-FD relerr 3.2e-8 at
+rtol 1e-11, h=1e-4°; `dCD_dy` h-study converges to AD, best 1.8e-5 at h=3e-7) —
+plus the two **windowed-Amiet OASPL anchors** (scalar 0.98 → 63.18598 dB,
+window [0.95,0.99] → 63.36702 dB, tol 1e-6 rel) with their full config embedded
+in the test.
+
+**Anchor config clarification.** The "Reference values" paragraph (windowed
+Amiet entry, below) omitted the foil: the recorded anchors require the
+**analytic open-TE NACA 0012** (4-digit thickness polynomial with the −0.1015
+trailing coefficient, cosine spacing, 301 points) — reproduced to ~1e-8.
+The `tests/input.json` sharp-TE NACA 0012 coordinates give 63.05499/63.24251
+instead (verified identical on a clean 261736a worktree build, so this is foil
+geometry, not code drift). The analytic generator is embedded in
+`regression_test.py`.
+
+22 checks total; suite passes 22/22 on the current tree, with both golden cases
+regenerated here at rel_err exactly 0 by construction (see the compute_Dw entry
+above for why regeneration was due).
+
+---
+
+## CMake cleanup + new `noise_run` acoustics-only entry point (June 2026)
+
+Two independent changes.
+
+### 1. Removed the standalone executable builds
+
+`CMakeLists.txt` no longer builds the `GFoil_fwd_codi` (from `src/main.cpp`) and
+`GFoil_AD` (from `srcAD/main.cpp`) executables. The Python package
+(`pip install .`, scikit-build-core) only ever loads the `gfoil_cpp` pybind11
+module and calls `run_forward` / `run_AD`; the two executables were redundant
+compiles never used by any Python workflow. The `add_executable(...)` blocks and
+all their `target_*` lines were deleted.
+
+`src/main.cpp` and `srcAD/main.cpp` are **not** deleted from disk — they are now
+**build-orphaned** (uncompiled) and are candidates for a later `_quarantine/`
+sweep per the repo cleanup discipline (not quarantined in this change).
+
+The `gfoil_cpp` module target is unchanged, including its `srcAD/include` and
+`srcAD/noise_includes` include paths (still needed by `gfoil_ad_bindings.cpp`),
+the `SOURCES` glob, and the three `list(REMOVE_ITEM ...)` lines.
+
+**Verification:** the module configures, compiles, links, and imports; the
+forward solve (NACA 0012, α=2°, nCrit=5) and the AD pass (`grad_run`) both run
+correctly. No source on the forward/AD path was touched, so the build is
+output-identical by construction (the no-aero `noise_run` reproduces the forward
+acoustic path bit-for-bit — see below).
+
+### 2. New `noise_run` — acoustics-only, length-generic, never AD'd
+
+A forward-only acoustic investigation entry point that runs the WPS models +
+Amiet model directly with **no aerodynamic solve**. The caller supplies
+trailing-edge BL states (or a custom wall-pressure spectrum) and gets back the
+raw linear wall-pressure spectra and far-field PSD (Pa²/ω — no dB, no
+integration, no OASPL). It uses the same `Real = codi::RealReverse` type as the
+forward path (so `calc_WPS_*`/Amiet, which need a CoDiPack active type for
+`errFunc`, reuse without a `double` retype) but **no gradient is ever taken
+through it**.
+
+**Length-generic `_vec` overloads.** The existing fixed-`Nsound` (250) templates
+are on the AD-critical forward path and are left **byte-for-byte unchanged**. New
+`_vec` overloads accept an arbitrary-length / arbitrary-spacing angular-frequency
+array as `std::vector<Real>`:
+- `WPSmodels.hpp`: `calc_WPS_{Goody,Kamruzzaman,Rozenburg,Lee,TNO}_vec` —
+  identical bodies, `omega[Nsound]`/`phiqq[Nsound]` → `std::vector<Real>`, loop
+  bound `Nsound` → `omega.size()`. For TNO the wall-normal arrays stay fixed-size
+  (`NblPoints`); only the outer frequency loop becomes runtime-length.
+- `sound.hpp`: `calc_WPS_vec` dispatcher — same input floors / `Cf_min` /
+  `beta_max` / `H_min` guard logic as `calc_WPS`, dispatching to the `_vec`
+  variants.
+- `newAmiet.hpp`: `Radiation_integral_total_vec` and `TE_noise_outer_vec` —
+  fixed `[Nsound]` arrays/scratch (`C`, `K_bar`, `mu_bar`, `K_1_bar`, `I_abs2`,
+  `l_y`) → `std::vector<Real>`; the scalar per-frequency calls
+  (`Radiation_integral1/2`, `Estar`, `errFunc`) are reused unchanged.
+
+**Implementation.** `src/include/noise_run.hpp` (`noise_run_cpp<Real>`, template,
+forward-only). Inputs: `alphaDeg` (drives the global→TE-local observer rotation,
+`te_offset = 0.75·chord`, same transform as `calc_OASPL`), `Re/rho/nu/Ma/chord`
+(`Uinf = Re·nu/chord`; the Amiet Mach follows `calc_OASPL`'s `Uinf/340`
+convention — `Ma` is accepted but not used for that, so the `_vec` path
+reproduces the fixed-size path), observers (global frame, ¼-chord origin), span,
+the 7 BL quantities as `[upper, lower]` pairs (`theta, delta_star, tau_max, Ue,
+dpdx, tau_wall, delta99`), `freqs_Hz` (any length/spacing), `model`, and an
+optional `custom_WPS` (N,2) override.
+
+- **Custom-WPS override:** if given, the BL→WPS path is skipped for both surfaces
+  and the columns are used directly (model string irrelevant).
+- **Per-surface skip:** BL path skips a surface with `tau_max <= 0` (matches the
+  `sound.hpp` gate); custom path skips an all-zero column. A skipped surface has
+  a zeros WPS column (no far-field contribution) and passes `Uinf` as its
+  fallback edge velocity (mirrors `calc_OASPL`'s `edgeVel = Uinf` fallback).
+
+**Tape hygiene:** `noise_run_cpp` calls `Real::getTape().reset()` at the start to
+prevent unbounded tape growth across repeated in-process calls (the forward tape
+is inactive by default, so `errFunc`'s `StatementPushHelper` records no
+statements — confirmed: 500 repeated calls show zero maxrss growth).
+
+**Bindings / Python:** `run_noise_py` in `gfoil_fwd_bindings.cpp`
+(`m.def("noise_run", ...)`); `GFoil.noise_run(...)` wrapper +
+`NoiseResult` dataclass (`inputs.py`); both exported from `__init__.py`.
+
+> Note: the `_vec` overloads and `noise_run.hpp` live in `src/include/`
+> alongside the existing `WPSmodels.hpp`/`sound.hpp`/`newAmiet.hpp` (the headers
+> are there, not in `src/noise_includes/`, which holds only `Faddeeva.hh`).
+
+**Verification.**
+- A converged `fwd_run(verbose=True)` (NACA 0012, α=2°, nCrit=5, kam, 2
+  observers) fed back into `noise_run` on the **same 250-pt log grid** reproduces
+  the forward path's internal `WPS_upper`/`WPS_lower` **and** per-observer
+  `FF_spectra` and `obsXYZ_TElocal` to **0.0** difference (exact) — the `_vec`
+  path is bit-identical to the fixed-size path on a matching grid.
+- Arbitrary length/spacing (37-pt linear grid) runs; custom-WPS override drives
+  the far field with BL inputs ignored; an all-zero column zeroes that surface's
+  contribution (verified strictly-additive vs the both-surface case at matched
+  Ue); a both-zero custom WPS yields zero far-field; `custom_WPS` shape (N,2) is
+  validated in the Python wrapper.
+
+---
+
 ## Trailing-edge (`x/c == 1.0`) sampling removed (June 2026)
 
 With explicit `[x_lo, x_hi]` windows now available (see *Windowed Amiet TE sample*
