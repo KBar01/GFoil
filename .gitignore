@@ -41,6 +41,18 @@ debug_cold_start.txt
 /bench/results/*.json
 !/bench/results/cold_start_sweep.csv
 
+# Guard the repo ROOT against future bench-run litter (root scope only — the
+# canonical copies live under bench/results/). Quarantine convention for any
+# tracked stray: git mv to _quarantine/ with RESTORE.md (never rm).
+/cold_start_sweep.csv
+/cold_baseline_orig.csv
+/cold_sweep_*.csv
+/cold_sweep_*.log
+/rescue_*.csv
+/rescue_*.log
+/tape_reset_*.json
+/REPORT.md
+
 # Python
 __pycache__/
 *.pyc
@@ -50,3 +62,6 @@ __pycache__/
 .idea/
 *.swp
 *~
+
+# Packaging output (python -m build)
+/dist/

@@ -17,7 +17,6 @@
 #include "run_forward.h"
 #include <string>
 #include <memory>
-#include <cstdlib>   // std::getenv — warm-restart stag seed switch + diagnostic
 
 bool runCode(
     bool fromRestart,
@@ -103,18 +102,8 @@ bool runCode(
         // converged stag (RestartState.stag) lets stagpoint_move + its
         // identify_surfaces rebuild reproduce the donor's Is/distFromStag exactly.
         // wgap is already the donor's (set_wake_gap is keyed to the inviscid stag,
-        // which is identical for the same geometry+alpha). GFOIL_NOSTAGSEED keeps
-        // the pre-fix behaviour for A/B gating.
-        static const bool no_stagseed = (std::getenv("GFOIL_NOSTAGSEED") != nullptr);
-        const bool warm_dbg = (std::getenv("GFOIL_DEBUG") != nullptr);
-        if (warm_dbg)
-            std::cerr << "[GFOIL_DEBUG] warm: inviscid stag=["
-                      << isol.stagIndex[0] << "," << isol.stagIndex[1]
-                      << "] donor stag=["
-                      << (warmStart->stag.size() >= 2 ? warmStart->stag[0] : -1) << ","
-                      << (warmStart->stag.size() >= 2 ? warmStart->stag[1] : -1) << "]"
-                      << std::endl;
-        if (!no_stagseed && warmStart->stag.size() >= 2) {
+        // which is identical for the same geometry+alpha).
+        if (warmStart->stag.size() >= 2) {
             isol.stagIndex[0] = warmStart->stag[0];
             isol.stagIndex[1] = warmStart->stag[1];
         }
@@ -123,9 +112,6 @@ bool runCode(
     }
 
     stagpoint_move(isol, glob, foil, wake, vsol);
-    if (warmStart != nullptr && std::getenv("GFOIL_DEBUG") != nullptr)
-        std::cerr << "[GFOIL_DEBUG] warm: post-move stag=["
-                  << isol.stagIndex[0] << "," << isol.stagIndex[1] << "]" << std::endl;
     std::string failure_mode;
     bool converged = solve_coupled(oper, foil, wake, param, vsol, isol, glob, restartOut,
                                    (fwdOut != nullptr) ? &failure_mode : nullptr,

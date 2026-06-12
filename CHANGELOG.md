@@ -6,6 +6,32 @@ chronological record.
 
 ---
 
+## Repository cleanup: development diagnostics removed (June 2026)
+
+The env-gated diagnostics and alternate implementations added while developing
+the warm-restart fixes and the scatter-add were removed now that the defaults
+are settled. Behaviour is unchanged (the switches selected non-default paths
+only); the removed code is recoverable from commit `127de6d` and its parent.
+
+Removed:
+- `GFOIL_BFIX` selector and the **Fix A** implementation (honest
+  `max(BL_rms, ue_rms)` criterion) in `coupled.cpp` — **Fix B** (skip the
+  iteration-0 accept on a warm entry) is now the unconditional behaviour.
+- The solver `GFOIL_DEBUG` ENTRY/CONVERGED instrumentation and `dbg_*` index
+  arrays in `coupled.cpp`, and the warm-entry stag trace in `run_forward.cpp`.
+- `GFOIL_NOSTAGSEED` in `run_forward.cpp` — the warm-restart stag seed is now
+  unconditional.
+- `GFOIL_NOSCATTER`, `GFOIL_CVERIFY` (the whole per-iteration memcmp
+  bit-identity harness), and `GFOIL_CPAT` in `sparselinsolve.hpp` — the
+  scatter-add is now unconditional. A one-line comment records that bit-identity
+  was verified over 297 solves.
+
+The only `GFOIL_DEBUG` reads that remain are in the acoustics chain
+(`sound.hpp`, `WPSmodels.hpp`); they predate this work (see CLAUDE.md) and are
+unaffected.
+
+---
+
 ## Warm-restart stagnation reindex fixed (June 2026)
 
 **What.** Fixes the second defect scoped in the warm-restart entry. On a warm

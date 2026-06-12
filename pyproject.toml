@@ -15,6 +15,15 @@ dev = ["pytest"]
 [tool.scikit-build]
 cmake.build-type = "Release"
 wheel.packages = ["GFoil"]
+# Keep developer scaffolding, docs, datasets and run artifacts out of a published
+# source distribution (wheels are already runtime-only via wheel.packages). The
+# geometry library is also untracked, so it never reaches an sdist regardless.
+sdist.exclude = [
+  "tests", "bench", "_quarantine",
+  "CLAUDE.md", "CHANGELOG.md", "NOMENCLATURE.md", "REPORT.md",
+  "*.csv", "*.log", "*.json",
+  "Smoothed_TEfixed_linear",
+]
 
 [tool.scikit-build.cmake.define]
 DO_BL_GRADIENT = "OFF"

@@ -22,7 +22,6 @@
 #include "restart_state.h"
 #include <chrono>
 #include <fstream>
-#include <cstdlib>   // std::getenv — Part B Phase-1 instrumentation only
 
 #include "nlohmann/json.hpp"
 
@@ -42,25 +41,6 @@ Real resid_rms(const Real* R, int size) {
     return std::sqrt(sum / static_cast<Real>(size));
 }
 
-// Part B Phase-2 fix selector (temporary env-var switch; both implementations
-// are retained per the brief). Read once per solve.
-//   GFOIL_BFIX unset / "B" -> Fix B: skip the iteration-0 convergence accept on a
-//                             warm (restart) entry, forcing >= 1 Newton iteration.
-//                             Cold paths are bit-identical by construction. DEFAULT.
-//   GFOIL_BFIX = "A"        -> Fix A: honest convergence criterion that includes
-//                             the ue-coupling rows, max(BL_rms, ue_rms) < rtol.
-//   GFOIL_BFIX = "off"      -> neither (original BL-rows-only criterion; for
-//                             baseline / defect reproduction).
-enum class BFix { B, A, Off };
-static BFix read_bfix() {
-    const char* e = std::getenv("GFOIL_BFIX");
-    if (e == nullptr) return BFix::B;
-    const std::string s(e);
-    if (s == "A" || s == "a")   return BFix::A;
-    if (s == "off" || s == "OFF" || s == "Off") return BFix::Off;
-    return BFix::B;
-}
-
 bool solve_coupled(const Oper& oper, const Foil& foil, const Wake& wake,
     Param& param, Vsol& vsol, Isol& isol, Glob& glob,
     RestartState* restartOut,
@@ -70,14 +50,6 @@ bool solve_coupled(const Oper& oper, const Foil& foil, const Wake& wake,
     bool converged = false;
     constexpr int Rsize = 3*(Ncoords + Nwake);
     constexpr int Rallsize = 4*(Ncoords + Nwake);
-
-    // Part B Phase-1 instrumentation (GFOIL_DEBUG only — no behaviour change when
-    // unset). Representative node indices for the wgap (Nwake=30) and distFromStag
-    // (Ncoords+Nwake=230) diffs requested in B.1.
-    const bool dbg = (std::getenv("GFOIL_DEBUG") != nullptr);
-    const int  dbg_wgap_idx[5] = {0, 7, 15, 22, 29};
-    const int  dbg_xi_idx[5]   = {0, 50, 100, 199, 215};
-    const BFix bfix = read_bfix();
 
     // Return last-laminar node index (0-based in Is[si]) for surface si.
     auto find_ilam = [&](int si) -> int {
@@ -110,59 +82,14 @@ bool solve_coupled(const Oper& oper, const Foil& foil, const Wake& wake,
         build_glob_RV(foil, vsol, isol, glob, param);
         Real residualNorm = resid_rms(glob.R, Rsize);   // BL-row RMS, vs param.rtol
 
-        // ue-row residual. Needed by Fix A's convergence criterion and by the
-        // Phase-1 ENTRY print. ue_residual_kernel WRITES glob.R[3*Nsys:] (it does
-        // not accumulate), and the subsequent solve_glob refills those rows
-        // identically before they are ever read, so this pre-fill is
-        // non-invasive (verified: golden bit-identical under Fix B/off). Tape is
-        // inactive in the forward solve, so no tape entries are produced.
-        Real ue_rms = -1.0;
-        if (bfix == BFix::A || (dbg && i == 0)) {
-            ue_residual_kernel<Real>(isol, isol, vsol, glob);
-            Real ue_sum = 0.0;
-            for (int k = Rsize; k < Rallsize; ++k) ue_sum += glob.R[k] * glob.R[k];
-            ue_rms = std::sqrt(ue_sum / static_cast<Real>(Ncoords + Nwake));
-        }
-
-        if (dbg && i == 0) {
-            std::cerr << "[GFOIL_DEBUG] ENTRY  BL_rms=" << residualNorm.getValue()
-                      << " ue_rms=" << ue_rms.getValue()
-                      << " rtol=" << param.rtol.getValue()
-                      << " warmEntry=" << warmEntry
-                      << " stagIndex=[" << isol.stagIndex[0] << ","
-                      << isol.stagIndex[1] << "]"
-                      << " Is[0].size=" << vsol.Is[0].size()
-                      << " Is[1].size=" << vsol.Is[1].size() << std::endl;
-            std::cerr << "[GFOIL_DEBUG] ENTRY  wgap=";
-            for (int j = 0; j < 5; ++j) std::cerr << vsol.wgap[dbg_wgap_idx[j]].getValue() << " ";
-            std::cerr << "| xi=";
-            for (int j = 0; j < 5; ++j) std::cerr << isol.distFromStag[dbg_xi_idx[j]].getValue() << " ";
-            std::cerr << std::endl;
-        }
-
-        // Convergence test. Fix A pools the BL and ue rows with a max (NOT a
-        // 4*Nsys pooled RMS — pooling would loosen the per-equation tolerance of
-        // the BL rows). Fix B never accepts at iteration 0 of a warm restart.
-        bool conv_test = (bfix == BFix::A)
-            ? (std::max(residualNorm, ue_rms) < param.rtol)
-            : (residualNorm < param.rtol);
-        if (bfix == BFix::B && warmEntry && i == 0)
-            conv_test = false;
-
-        if (conv_test) {
-
-            if (dbg) {
-                std::cerr << "[GFOIL_DEBUG] CONVERGED it=" << i
-                          << " stagIndex=[" << isol.stagIndex[0] << ","
-                          << isol.stagIndex[1] << "]"
-                          << " Is[0].size=" << vsol.Is[0].size()
-                          << " Is[1].size=" << vsol.Is[1].size() << std::endl;
-                std::cerr << "[GFOIL_DEBUG] CONVERGED wgap=";
-                for (int j = 0; j < 5; ++j) std::cerr << vsol.wgap[dbg_wgap_idx[j]].getValue() << " ";
-                std::cerr << "| xi=";
-                for (int j = 0; j < 5; ++j) std::cerr << isol.distFromStag[dbg_xi_idx[j]].getValue() << " ";
-                std::cerr << std::endl;
-            }
+        // Convergence: BL-row RMS vs rtol, but never accept at iteration 0 of a
+        // warm (restart) entry. On a warm entry the BL rows can already read as
+        // the donor's converged residuals while the ue-coupling rows — where the
+        // alpha change enters, and which are filled later in solve_glob — are
+        // not yet converged; the BL-only test would then accept the donor state
+        // verbatim. Forcing >= 1 Newton iteration on a warm entry closes that
+        // stale-accept path. Cold entries (warmEntry=false) are unaffected.
+        if ((residualNorm < param.rtol) && !(warmEntry && i == 0)) {
 
             solve_glob(foil,isol,glob,vsol,oper,0);
 

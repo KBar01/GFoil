@@ -5,11 +5,7 @@
 #include <Eigen/Sparse>
 #include <Eigen/SparseLU>
 #include <vector>
-#include <algorithm>   // std::fill, std::min
-#include <cstdlib>     // std::getenv  (Part C instrumentation/verification)
-#include <cstring>     // std::memcmp  (Part C bit-identity verification)
 #include <cassert>
-#include <iostream>
 #include "real_type.h"
 #include "data_structs.h"
 
@@ -151,13 +147,12 @@ void solve_sys_sparse(Glob &glob) {
   // factorisation and slot map are still valid. Do NOT filter zero values from
   // the triplets — explicit structural zeros keep the pattern constant.
   //
-  // On a pattern change we build A with setFromTriplets (which sums duplicates
-  // in an implementation-defined order) and record, for each triplet k, the
-  // index slot[k] into A.valuePtr() where its (row,col) lives. On an unchanged
-  // pattern we skip setFromTriplets entirely: zero the value array and
-  // scatter-add R_V_vals[k] into valuePtr()[slot[k]] in ASCENDING k order,
-  // which reproduces setFromTriplets' duplicate-summation bitwise (verified
-  // every iteration under GFOIL_CVERIFY — see C.2).
+  // On a pattern change we build A with setFromTriplets and record, for each
+  // triplet k, the index slot[k] into A.valuePtr() where its (row,col) lives.
+  // On an unchanged pattern we skip setFromTriplets and scatter-add (see below)
+  // in ascending-k order. Bit-identity vs setFromTriplets was verified over 297
+  // solves (golden + slow cases, forward + AD) with a per-iteration memcmp
+  // harness; that harness was env-gated and is recoverable from git history.
   static bool     have_pattern = false;
   static uint64_t cached_hash  = 0;
   static int      cached_nnz   = -1;
@@ -166,28 +161,17 @@ void solve_sys_sparse(Glob &glob) {
   static std::vector<int>  slot;       // triplet k -> valuePtr index
   static std::vector<char> is_first;   // triplet k is the first to touch its slot
 
-  // Read switches once (zero overhead after first call).
-  static const bool cpat    = (std::getenv("GFOIL_CPAT")    != nullptr);
-  static const bool cverify = (std::getenv("GFOIL_CVERIFY") != nullptr);
-  // GFOIL_NOSCATTER forces the original per-iteration setFromTriplets build on
-  // every call (analyzePattern still cached) — the pre-Part-C behaviour, kept as
-  // an A/B timing control on the same binary.
-  static const bool noscatter = (std::getenv("GFOIL_NOSCATTER") != nullptr);
-
   const bool pattern_changed = !have_pattern
                              || (nnz          != cached_nnz)
                              || (pattern_hash != cached_hash);
 
-  if (pattern_changed || noscatter) {
+  if (pattern_changed) {
     std::vector<Eigen::Triplet<double>> triplets;
     triplets.reserve(nnz);
     for (int k = 0; k < nnz; ++k)
       triplets.emplace_back(glob.R_V_rows[k], glob.R_V_cols[k],
                             glob.R_V_vals[k].getValue());
     A.setFromTriplets(triplets.begin(), triplets.end()); // leaves A compressed
-  }
-
-  if (pattern_changed) {
     lu.analyzePattern(A);
     cached_hash  = pattern_hash;
     cached_nnz   = nnz;
@@ -223,10 +207,10 @@ void solve_sys_sparse(Glob &glob) {
       assert(slot[k] < A.nonZeros() && inner[slot[k]] == r);
       if (!seen[slot[k]]) { is_first[k] = 1; seen[slot[k]] = 1; }
     }
-  } else if (!noscatter) {
+  } else {
     // Unchanged pattern: rescatter values into the cached structure. First
-    // triplet per slot assigns (seeds verbatim); duplicates accumulate in
-    // ascending-k order (matches setFromTriplets — verified under CVERIFY).
+    // triplet per slot assigns (seeds verbatim, preserving -0.0); duplicates
+    // accumulate in ascending-k order, matching setFromTriplets' summation.
     double* vp = A.valuePtr();
     for (int k = 0; k < nnz; ++k) {
       const double v = glob.R_V_vals[k].getValue();
@@ -234,42 +218,6 @@ void solve_sys_sparse(Glob &glob) {
       else             vp[slot[k]] += v;
     }
   }
-
-  // ---- Bit-identity verification (GFOIL_CVERIFY, C.2 mandatory gate) -----
-  if (cverify) {
-    Eigen::SparseMatrix<double> Aref(Nsize, Nsize);
-    std::vector<Eigen::Triplet<double>> tref;
-    tref.reserve(nnz);
-    for (int k = 0; k < nnz; ++k)
-      tref.emplace_back(glob.R_V_rows[k], glob.R_V_cols[k],
-                        glob.R_V_vals[k].getValue());
-    Aref.setFromTriplets(tref.begin(), tref.end());
-    Eigen::SparseMatrix<double> Aref2(Nsize, Nsize);
-    Aref2.setFromTriplets(tref.begin(), tref.end());
-    const bool comp_A    = A.isCompressed();
-    const bool comp_ref  = Aref.isCompressed();
-    const bool nz_ok     = (Aref.nonZeros() == A.nonZeros());
-    const bool outer_ok  = nz_ok && std::memcmp(Aref.outerIndexPtr(), A.outerIndexPtr(),
-                              sizeof(int) * (Nsize + 1)) == 0;
-    const bool inner_ok  = nz_ok && std::memcmp(Aref.innerIndexPtr(), A.innerIndexPtr(),
-                              sizeof(int) * Aref.nonZeros()) == 0;
-    const bool value_ok  = nz_ok && std::memcmp(Aref.valuePtr(), A.valuePtr(),
-                              sizeof(double) * Aref.nonZeros()) == 0;
-    // setFromTriplets determinism self-check (Aref vs Aref2 from same triplets)
-    const bool ref_det   = (Aref.nonZeros() == Aref2.nonZeros())
-        && std::memcmp(Aref.outerIndexPtr(), Aref2.outerIndexPtr(), sizeof(int)*(Nsize+1)) == 0
-        && std::memcmp(Aref.innerIndexPtr(), Aref2.innerIndexPtr(), sizeof(int)*Aref.nonZeros()) == 0
-        && std::memcmp(Aref.valuePtr(), Aref2.valuePtr(), sizeof(double)*Aref.nonZeros()) == 0;
-    const bool ok = nz_ok && outer_ok && inner_ok && value_ok;
-    std::cerr << "[CVERIFY] nnz=" << nnz << " changed=" << pattern_changed
-              << " nz_ok=" << nz_ok << " outer_ok=" << outer_ok
-              << " inner_ok=" << inner_ok << " value_ok=" << value_ok
-              << " ref_det=" << ref_det
-              << " compA=" << comp_A << " compRef=" << comp_ref
-              << " memcmp_ok=" << ok << std::endl;
-  }
-  if (cpat)
-    std::cerr << "[CPAT] nnz=" << nnz << " changed=" << pattern_changed << std::endl;
 
   // ---- Build passive rhs b ----
   Eigen::VectorXd b(Nsize);
