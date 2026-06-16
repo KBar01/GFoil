@@ -1,18 +1,12 @@
 import numpy as np
 import os
-from .inputs import (Aerofoil, Acoustics, OperatingConds,
-                     FwdResult, GradResult, VerboseResult, NoiseResult,
-                     _as_1d_float_array, _as_float_array)
-
+from .inputs import (Aerofoil, Acoustics, OperatingConds, FwdResult, GradResult, VerboseResult, NoiseResult, _as_1d_float_array, _as_float_array)
 from . import gfoil_cpp
 
 
-def _build_input_dict(aerofoil: Aerofoil,
-                      operating: OperatingConds,
-                      acoustics: Acoustics,
-                      alphaDeg: float = None,
-                      fromRestart: int = 0,
-                      verbose: bool = False) -> dict:
+def _build_input_dict(aerofoil: Aerofoil, operating: OperatingConds, acoustics: Acoustics, alphaDeg: float = None, fromRestart: int = 0, verbose: bool = False) -> dict:
+    
+    
     force = 1 if (operating.transition[0] != 1.0 or operating.transition[1] != 1.0) else 0
     alpha = alphaDeg if alphaDeg is not None else float(operating.alpha)
     # TESampleLoc is either a scalar x/c (single-point sample) or a length-2
@@ -140,22 +134,15 @@ def _is_stale_warm_accept(result: "FwdResult",
             and abs(call_alpha - donor_alpha) > 1e-12)
 
 
-def standard_run(aerofoil: Aerofoil,
-                 operating: OperatingConds,
-                 acoustics: Acoustics,
-                 verbose: bool = False) -> FwdResult:
+def standard_run(aerofoil: Aerofoil, operating: OperatingConds, acoustics: Acoustics, verbose: bool = False):
     """
-    Forward solve with backstepping/continuation on failure.
-    Returns FwdResult; result.converged is False if all attempts fail.
-    verbose=True populates result.verbose_data on the final converged solve.
+    Forward solve with backstepping when it fails intial convergence.
     """
     inp = _build_input_dict(aerofoil, operating, acoustics, verbose=verbose)
     result = _call_forward(inp)
     if result.converged:
         return result
 
-    # Preserve the failure_mode from the initial attempt so it can be returned
-    # if all continuation attempts also fail.
     initial_failure_mode = result.failure_mode
 
     print("Initial run failed. Starting backstepping ...")
@@ -240,11 +227,7 @@ def standard_run(aerofoil: Aerofoil,
     return FwdResult(converged=False, failure_mode=initial_failure_mode)
 
 
-def fwd_run(aerofoil: Aerofoil,
-            operating: OperatingConds,
-            acoustics: Acoustics,
-            repanel: bool = False,
-            verbose: bool = False) -> FwdResult:
+def fwd_run(aerofoil: Aerofoil, operating: OperatingConds, acoustics: Acoustics, repanel: bool = False, verbose: bool = False):
     """
     Run forward solver. Returns FwdResult.
     result.converged is False on failure.
@@ -426,5 +409,3 @@ def grad_run(fwd_result: FwdResult,
         dCD_dalpha=g["dCD_dalpha"],
         dOASPL_dalpha=g["dOASPL_dalpha"],
     )
-
-
