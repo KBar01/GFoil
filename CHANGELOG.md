@@ -6,6 +6,26 @@ chronological record.
 
 ---
 
+## Scalar TESampleLoc re-permitted in Acoustics (June 2026)
+
+`Acoustics.__post_init__` in `inputs.py` now accepts TESampleLoc as either:
+
+- **scalar** `x` (0 < x < 1): stored as a bare `float`; `gfoil.py`'s existing
+  `_build_input_dict` equal-packs it to `sampleTE = sampleTE_hi = x`, which the
+  C++ dispatcher routes through its `!(x_hi > x_lo)` guard to the
+  `interpolate_BL_single` path — byte-identical to the legacy single-point result.
+- **window** `[x_lo, x_hi]` (0 < x_lo < x_hi < 1): unchanged; stored as tuple.
+
+`x/c == 1.0` is rejected in both forms (TE node is degenerate for the
+interpolation stencil). Only `inputs.py` changed; `gfoil.py`, all C++ files, and
+the golden suite are untouched and no rebuild is required.
+
+Anchor: scalar `TESampleLoc=0.98` with NACA 0012 analytic open-TE, α=2°,
+Re=2e6, nCrit=5, kam, observer (1,0,1), span 3, rtol=1e-6 → **OASPL = 63.18598 dB**
+(confirmed step 5, |diff| = 5e-7 dB from reference).
+
+---
+
 ## Repository cleanup: development diagnostics removed (June 2026)
 
 The env-gated diagnostics and alternate implementations added while developing

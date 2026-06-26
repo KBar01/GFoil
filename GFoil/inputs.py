@@ -83,6 +83,10 @@ class Acoustics:
     what WPS model to use, and frequency range + A-weighting option 
     """
     observerXYZ: np.ndarray
+    # TESampleLoc: scalar x/c float OR length-2 [x_lo, x_hi] window.
+    #   scalar x   -> 0 < x < 1; stored as bare float; gfoil.py equal-packs to C++ single-point path.
+    #   [x_lo,x_hi]-> 0 < x_lo < x_hi < 1; stored as (x_lo,x_hi) tuple; C++ BL-averaged window.
+    #   x/c == 1.0 is rejected (TE node is degenerate for the interpolation stencil).
     TESampleLoc: Optional[Union[float, Sequence[float]]] = 0.98
     model: Optional[str] = "kam"
     aWeighting: bool = False
@@ -100,15 +104,29 @@ class Acoustics:
         self.observerXYZ = arr  # always (N, 3)
 
         if self.TESampleLoc is not None:
-            te = self.TESampleLoc
-
-            te = np.asarray(te, dtype=float).ravel()
-            if te.size != 2:
-                raise ValueError("TESampleLoc window must be a length-2 [x_lo, x_hi]")
-            x_lo, x_hi = float(te[0]), float(te[1])
-            if not (0.0 < x_lo < x_hi < 1.0):
-                raise ValueError("TESampleLoc window must satisfy 0 < x_lo < x_hi < 1")
-            self.TESampleLoc = (x_lo, x_hi)
+            te = np.asarray(self.TESampleLoc, dtype=float).ravel()
+            if te.size == 1:
+                x = float(te[0])
+                if not (0.0 < x < 1.0):
+                    raise ValueError(
+                        f"TESampleLoc scalar must satisfy 0 < x < 1 (got {x}); "
+                        "x/c == 1.0 is rejected (TE node is degenerate; "
+                        "use a window for TE-region sampling)"
+                    )
+                self.TESampleLoc = x
+            elif te.size == 2:
+                x_lo, x_hi = float(te[0]), float(te[1])
+                if not (0.0 < x_lo < x_hi < 1.0):
+                    raise ValueError(
+                        f"TESampleLoc window must satisfy 0 < x_lo < x_hi < 1 "
+                        f"(got [{x_lo}, {x_hi}]); x/c == 1.0 is rejected (TE node is degenerate)"
+                    )
+                self.TESampleLoc = (x_lo, x_hi)
+            else:
+                raise ValueError(
+                    f"TESampleLoc must be a scalar x/c or a length-2 [x_lo, x_hi] window; "
+                    f"got {te.size} elements"
+                )
            
 
         if self.f_min <= 0 or self.f_max <= self.f_min:
