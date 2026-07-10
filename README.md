@@ -81,9 +81,12 @@ print(f"dCL/dy: length {len(grads.dCL_dy)} (one entry per coordinate)")
 
 ### Inputs
 
-- **`Aerofoil(xcoords, ycoords, chord=1.0, span=...)`** — coordinates are
-  re-panelled internally; the trailing edge must be at `x = 1.0` on both
-  surfaces.
+- **`Aerofoil(xcoords, ycoords, chord=1.0, span=...)`** — any number of
+  coordinate points `n >= 10` is accepted (no upper limit); the geometry is
+  spline-fit and re-panelled internally onto a fixed 200-node distribution, so
+  input coarseness affects only how well the spline captures the true shape.
+  The trailing edge must be at `x = 1.0` on both surfaces. Gradient arrays
+  returned by `grad_run` have length `n`.
 - **`OperatingConds(alpha=, Re=, Ma=0.0, nCrit=9.0, rtol=1e-6)`** — `alpha` in
   degrees; `rtol` is the RMS convergence tolerance (tighten to ≤ 1e-10 for
   AD-vs-finite-difference gradient checks).

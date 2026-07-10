@@ -64,6 +64,13 @@ TE_noise_outer<Real>(c, Uinf, X, Y, Z, chordScale/2.0, chordScale,
 | `src/include/real_type.h` | `Real = codi::RealReverse`, all macros incl. Nsound |
 | `srcAD/include/real_type.hpp` | same macros, no Real typedef (uses template) |
 
+**`Nin` no longer exists** (July 2026): input geometry length is a runtime
+`int nIn` threaded from the bindings through `runCode`/the AD drivers to
+`make_panels`/`spline_curvature`, with hard floor `NinMin = 10` (defined in
+both real_type headers; mirrored as `N_MIN_INPUT_NODES` in `inputs.py`).
+Gradient arrays returned by `grad_run` have length `nIn`. Internal
+discretisation (`Nfine`, `Ncoords`, `RVdimension`, …) is unchanged and fixed.
+
 **Never include both in the same TU** — `norm2` redefinition results.
 
 **Nsound** must be defined before any noise header. Satisfied by include order

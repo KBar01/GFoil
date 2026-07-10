@@ -1,13 +1,22 @@
 #!/usr/bin/env python3
 """Regression test suite for GFoil — forward and AD solvers.
 
-Covers three groups:
+Covers five groups:
   1. Free-transition golden case (tests/input.json, NACA 0012 sharp-TE coords,
      alpha=2, Re=2e6, nCrit=5, model roz): forward scalars + AD scalars/arrays.
   2. Forced-transition golden case (same conditions, transition forced at
      x/c = 0.1 on both surfaces): exercises the taped-xift adjoint path
      (see CHANGELOG "Forced-transition adjoint fix").
-  3. Windowed-Amiet anchors (config embedded below, ANALYTIC open-TE NACA 0012
+  3. Coarse-input golden case (analytic open-TE NACA 0012, 101 nodes, same
+     operating conditions as group 1): exercises the runtime-nIn input path
+     (input geometry length is no longer fixed at 301; see CHANGELOG
+     "Variable-length input geometry"). Gradient arrays are length 101.
+  4. AD-vs-FD spot check on the coarse case: central differences at rtol=1e-11
+     on a handful of y-nodes away from the transition-sensitive region
+     (transition-adjacent nodes have kinked responses on the ±1e-5 scale, so
+     central FD there is h-dependent — pre-existing physics, seen identically
+     on 301-node inputs; FD converges to the AD value as h -> 0).
+  5. Windowed-Amiet anchors (config embedded below, ANALYTIC open-TE NACA 0012
      — NOT the input.json coords): scalar-0.98 and window-[0.95,0.99] OASPL
      reference values from CHANGELOG "Windowed Amiet TE sample / Reference
      values", tolerance 1e-6 relative.
@@ -27,12 +36,48 @@ FWD_SCALAR_KEYS = ["CL", "CD", "CM", "OASPL"]
 AD_SCALAR_KEYS  = ["d cl / d alpha", "d cd / d alpha", "d OASPL / d alpha"]
 AD_ARRAY_KEYS   = ["d cl / d ycoords", "d cd / d ycoords", "d OASPL / d ycoords"]
 
+def naca0012_analytic(n_half: int = 150):
+    """Analytic open-TE NACA 0012, cosine-spaced, 2*n_half+1 points."""
+    import numpy as np
+    beta = np.linspace(0.0, np.pi, n_half + 1)
+    xs = 0.5 * (1 + np.cos(beta))                  # 1 -> 0
+    def yt(x):
+        return 5 * 0.12 * (0.2969 * np.sqrt(x) - 0.1260 * x
+                           - 0.3516 * x**2 + 0.2843 * x**3 - 0.1015 * x**4)
+    x = np.concatenate([xs, xs[::-1][1:]])
+    y = np.concatenate([-yt(xs), yt(xs[::-1][1:])])
+    return x.tolist(), y.tolist()
+
+
+def _coarse_overrides():
+    x, y = naca0012_analytic(n_half=50)   # 101 nodes
+    return {"xcoords": x, "ycoords": y}
+
+
 # Golden cases: (name, golden-file prefix, input-dict overrides)
 CASES = [
     ("free transition",   "",        {}),
     ("forced transition", "forced_", {"toptrans": 0.1, "bottrans": 0.1,
                                       "forcetrans": 1}),
+    # Coarse-input case: 101-node analytic foil, otherwise the free-transition
+    # conditions. Golden deliberately generated at introduction (June 2026,
+    # variable-length input change) — the case did not previously exist.
+    ("coarse 101-node input", "coarse101_", _coarse_overrides()),
 ]
+
+# ---------------------------------------------------------------------------
+# AD-vs-FD spot check on the coarse case (group 4 in the module docstring)
+# ---------------------------------------------------------------------------
+# Nodes chosen away from the transition-sensitive region (x ~ 0.2 at these
+# conditions), 2-3 per surface: lower TE-region (10, 15), lower near-LE (45),
+# upper mid-chord (75), upper aft (85). Screened at introduction: typical
+# agreement ~1e-5, worst 4.4e-4 (dCD at the near-LE node). Central FD with a
+# loose forward rtol is dominated by 1/(2h)-amplified convergence noise, hence
+# the tight rtol (see bench/results/FREE_TRANS_VERIFY.md).
+FD_NODES = [10, 15, 45, 75, 85]
+FD_STEP  = 1e-5
+FD_RTOL  = 1e-11
+FD_TOL   = 2e-3
 
 # ---------------------------------------------------------------------------
 # Windowed-Amiet anchor checks (CHANGELOG "Reference values")
@@ -49,19 +94,6 @@ ANCHORS = [
     ("anchor: scalar TEsample=0.98",    0.98, 0.98, 63.18598),
     ("anchor: window [0.95,0.99]",      0.95, 0.99, 63.36702),
 ]
-
-
-def naca0012_analytic(n_half: int = 150):
-    """Analytic open-TE NACA 0012, cosine-spaced, 2*n_half+1 points."""
-    import numpy as np
-    beta = np.linspace(0.0, np.pi, n_half + 1)
-    xs = 0.5 * (1 + np.cos(beta))                  # 1 -> 0
-    def yt(x):
-        return 5 * 0.12 * (0.2969 * np.sqrt(x) - 0.1260 * x
-                           - 0.3516 * x**2 + 0.2843 * x**3 - 0.1015 * x**4)
-    x = np.concatenate([xs, xs[::-1][1:]])
-    y = np.concatenate([-yt(xs), yt(xs[::-1][1:])])
-    return x.tolist(), y.tolist()
 
 
 def anchor_input(sample_lo: float, sample_hi: float) -> dict:
@@ -209,6 +241,87 @@ def create_golden(build_dir: Path) -> None:
     print("Commit them to the repository before making any code changes.")
 
 
+def run_coarse_fd_check(cpp) -> list:
+    """AD-vs-FD central-difference spot check on the coarse 101-node case."""
+    print(f"\nAD-vs-FD spot check (coarse 101-node case, h={FD_STEP:g}, "
+          f"rtol={FD_RTOL:g}):")
+    inp = json.loads(TEST_INPUT.read_text())
+    inp.update(_coarse_overrides())
+    inp["rtol"] = FD_RTOL
+
+    base = cpp.run_forward(inp)
+    if not base.get("conv", 0):
+        print("  [FAIL] base forward solve (tight rtol) did not converge")
+        return [False]
+    g = cpp.run_AD(inp, base["jacobian"])
+
+    results = []
+    for idx in FD_NODES:
+        fwd = {}
+        failed = False
+        for sgn in (+1, -1):
+            pert = dict(inp)
+            yy = list(inp["ycoords"])
+            yy[idx] += sgn * FD_STEP
+            pert["ycoords"] = yy
+            r = cpp.run_forward(pert)
+            if not r.get("conv", 0):
+                print(f"  [FAIL] node {idx}: perturbed solve ({sgn:+d}h) "
+                      f"did not converge")
+                results.append(False)
+                failed = True
+                break
+            fwd[sgn] = r
+        if failed:
+            continue
+        for q, key in [("CL", "dCL_dy"), ("CD", "dCD_dy"),
+                       ("OASPL", "dOASPL_dy")]:
+            fd = (fwd[1][q] - fwd[-1][q]) / (2.0 * FD_STEP)
+            ad = g[key][idx]
+            err = abs(fd - ad) / max(abs(ad), 1e-14)
+            passed = err < FD_TOL
+            tag = "PASS" if passed else "FAIL"
+            print(f"  [{tag}] d{q}/dy[{idx:>2d}]"
+                  f"{'':<{max(0, 26 - len(q) - len(str(idx)))}}"
+                  f"  AD={ad:.8g}  FD={fd:.8g}  rel_err={err:.3e}")
+            results.append(passed)
+    return results
+
+
+def run_coarse_noise_smoke(cpp) -> list:
+    """noise_run smoke check driven by the coarse case's TE BL states."""
+    print("\nnoise_run smoke check (coarse 101-node BL states):")
+    inp = json.loads(TEST_INPUT.read_text())
+    inp.update(_coarse_overrides())
+    inp["verbose"] = True
+    r = cpp.run_forward(inp)
+    if not r.get("conv", 0) or "BL_top" not in r:
+        print("  [FAIL] verbose forward solve did not converge / no BL data")
+        return [False]
+
+    freqs = list(r["freq_Hz"])
+    keys = ["theta", "deltaStar", "tauMax", "Ue", "dpdx", "tauWall", "delta99"]
+    ninp = {
+        "alphaDeg": inp["alpha_degrees"], "Re": inp["Re"], "rho": inp["rho"],
+        "nu": inp["nu"], "Ma": inp["Ma"], "chord": inp["chord"],
+        "span": inp["S"], "model": inp["model"],
+        "X": inp["X"], "Y": inp["Y"], "Z": inp["Z"],
+        "freqs_Hz": freqs,
+    }
+    for k, i in zip(keys, range(7)):
+        ninp[k] = [r["BL_top"][i], r["BL_bot"][i]]
+    n = cpp.noise_run(ninp)
+
+    ok_len = (len(n["WPS_upper"]) == len(freqs)
+              and len(n["FF_spectra"]) == len(inp["X"]) * len(freqs))
+    import math
+    ok_fin = all(math.isfinite(v) for v in n["FF_spectra"])
+    passed = ok_len and ok_fin
+    tag = "PASS" if passed else "FAIL"
+    print(f"  [{tag}] noise_run: lengths_ok={ok_len} all_finite={ok_fin}")
+    return [passed]
+
+
 def run_anchor_checks(cpp) -> list:
     print("\nWindowed-Amiet anchors (analytic NACA 0012, kam, obs (1,0,1), span 3):")
     results = []
@@ -257,6 +370,8 @@ def run_tests(build_dir: Path, tol: float) -> None:
         for key in AD_ARRAY_KEYS:
             results.append(compare_array(key, ad[key], golden_ad_arrays[key], tol))
 
+    results += run_coarse_fd_check(cpp)
+    results += run_coarse_noise_smoke(cpp)
     results += run_anchor_checks(cpp)
 
     n_pass  = sum(results)

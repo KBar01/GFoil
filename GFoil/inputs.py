@@ -27,12 +27,26 @@ def _require_length(arr: np.ndarray, n: int, name: str) -> np.ndarray:
     return arr
 
 
+# Hard structural floor on the input node count: the natural cubic spline +
+# curvature redistribution need at least this many points. Mirrors NinMin in
+# src/include/real_type.h — keep the two in sync.
+N_MIN_INPUT_NODES = 10
+
+
 @dataclass
 class Aerofoil:
 
     """
     This is first key input, an Aerofoil dataclass that should be all info about aerofoil
-    geometry, that includes the panelling coeffs as well 
+    geometry, that includes the panelling coeffs as well.
+
+    xcoords/ycoords may have ANY length n >= N_MIN_INPUT_NODES (= 10); there is
+    no fixed input node count and no upper limit. The geometry is spline-fit and
+    internally resampled onto a fixed 200-node panel distribution, so input
+    coarseness affects only how well the spline captures the true shape (and the
+    length of the gradient arrays returned by grad_run, which match n). Node
+    ordering is bottom-TE -> LE -> top-TE (auto-flipped if reversed); the
+    trailing edge must be at x = 1.0 on both surfaces.
     """
     xcoords: np.ndarray
     ycoords: np.ndarray
@@ -50,8 +64,11 @@ class Aerofoil:
                 f"xcoords and ycoords must be the same length; "
                 f"got {self.xcoords.size} and {self.ycoords.size}"
             )
-        if self.xcoords.size < 2:
-            raise ValueError("Need at least 2 points")
+        if self.xcoords.size < N_MIN_INPUT_NODES:
+            raise ValueError(
+                f"Aerofoil needs at least {N_MIN_INPUT_NODES} coordinate points "
+                f"for the cubic-spline re-panelling; got {self.xcoords.size}"
+            )
 
         x = self.xcoords
         y = self.ycoords

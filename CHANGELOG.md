@@ -6,6 +6,106 @@ chronological record.
 
 ---
 
+## AD formulation audit — gradients verified correct (July 2026)
+
+Full audit of the two-pass adjoint formulation
+(`bench/results/AD_FORMULATION_AUDIT.md`): derivation of the implemented
+identity `dg/dx = ∂g/∂x − λᵀ∂R/∂x` with `(∂R/∂U)ᵀλ = ∂g/∂U`, line-level
+verification of the Jacobian transpose, the manual Squire–Young CD chain,
+all three CoDiPack external functions (`errFunc`, `solve_sys_ue`,
+`compute_Dw`), residual-kernel sharing between fwd/AD TUs, and
+passive/active boundaries. Fresh numerical evidence: smooth-mode
+directional derivatives match FD to 1.6e-7…6.9e-5 across free/forced
+transition and Ma=0/0.2; alpha gradients to ≤1.4e-6. **No gradient defects
+found.** Two latent findings documented in the report: (F2) `param.Minf` is
+never assigned, so the Karman–Tsien compressibility branches are dead code —
+the manual CD chain is consistent with the forward as-is, but must be
+updated to chain through `uk(ue)` if `Minf` is ever wired up (~2%/entry
+error at Ma=0.2 otherwise); (F3) transition-front node flips make the
+response kinked at the ±1e-5 scale, so per-node central FD at h=1e-5 can
+read 10–100% "error" while FD(h→0) converges to the AD value — verification
+must use tight rtol plus smooth modes or h-sweeps. No code changed.
+
+---
+
+## Variable-length input geometry — `Nin` macro removed (July 2026)
+
+**What.** Input aerofoil geometry no longer has to be exactly 301 nodes. The
+compile-time `#define Nin 301` is gone from both `real_type.h` and
+`real_type.hpp`; the input node count is a runtime `int nIn` threaded
+explicitly (no global) from the entry points down the input-spline path only:
+bindings → `runCode` / `partialOutputspartialInputs` / `partialRpartialx` →
+`make_panels` → `spline_curvature` → `spline2dOrig` / `fit_cubic_splineOrig`
+(via a runtime `N` in `CubicSpline1DOrig`, now `std::vector<Real>` storage).
+Everything downstream of the initial fit is untouched: `Nfine` (501),
+`Ncoords` (200), `Nwake`, `Nsound`, `RVdimension`, the IBL system, transition,
+noise model, and the AD tape structure all stay on the fixed internal
+discretisation. Storage-only conversion — algorithm, loop order, and
+arithmetic are unchanged (the lone cosmetic edit: the literal `501` in
+`spline_curvature` step 6 is now spelled `Nfine`, numerically identical).
+
+**Provably unchanged.** The full golden regression on the existing 301-node
+cases (free + forced transition: forward scalars, AD scalars, all three
+gradient arrays) passes with `rel_err = 0.0` — bit-identical, run at
+`--tol 1e-300`. Goldens were NOT regenerated. Both windowed-Amiet anchors
+also pass unchanged.
+
+**Validation (new).** The forward binding previously read exactly 301
+elements from the Python lists regardless of their length — an out-of-bounds
+read for shorter inputs. Both bindings now require `len(xcoords) ==
+len(ycoords)` and `n >= NinMin` (= 10, `real_type.h`/`.hpp`; hard structural
+floor for the natural cubic spline + curvature redistribution), raising
+`ValueError` with the sizes in the message. No upper limit.
+`Aerofoil.__post_init__` enforces the same floor Python-side
+(`N_MIN_INPUT_NODES = 10` in `inputs.py`, superseding the old `>= 2` check);
+orientation auto-flip and node-ordering convention are unchanged.
+
+**Interface-visible change.** Gradient arrays returned by `grad_run`
+(`dCL_dy`, `dCD_dy`, `dOASPL_dy`) now have length `n` — the input node count —
+instead of always 301. Callers that chain through geometry modes (e.g.
+OptScripts2) consume whatever length is returned, but this is a contract
+change and is documented here.
+
+**Static-array finding.** The `static double dgdy_CL/CD/OASPL[Nin]` buffers in
+`gfoil_ad_bindings.cpp` (and `srcAD/main.cpp`) were inspected before
+conversion: `partialRpartialx` fully overwrites all entries by assignment on
+every call — no accumulation, so the `static` was stack-size caution only
+(2.4 KB) and there was no latent cross-call contamination bug. They are now
+function-local `std::vector<double>(nIn, 0.0)`, fresh each call, which also
+removes any n-changes-between-calls hazard (verified: 301 → 101 → 301 in one
+process reproduces the 301 gradients bit-identically). The
+`static double *_States[RVdimension]` / `adlambda_*[RVdimension]` arrays are
+fixed-size and fully overwritten per call; they are unchanged.
+
+**New golden case + AD-vs-FD check.** `tests/regression_test.py` gains a
+coarse-input golden case: analytic open-TE NACA 0012, `n_half=50` (101
+nodes), free-transition conditions of the existing golden case
+(`coarse101_*.json`). This golden is deliberately NEW — generated at
+introduction because the case could not previously exist. Results: CL
+0.22096718, CD 0.0065998235, OASPL 71.760416. Coarseness-only deltas vs a
+301-node run of the SAME analytic foil: ΔCL 5.8e-7, ΔCD −5.4e-8, ΔOASPL
+−3.6e-5 dB (the deltas vs the sharp-TE `input.json` golden are larger — ΔCL
+9.9e-3 — but that is the open-vs-sharp-TE geometry difference, not
+coarseness). An AD-vs-FD spot check (5 y-nodes × CL/CD/OASPL, central
+differences, h=1e-5, rtol=1e-11) passes at tol 2e-3; typical agreement
+~1e-5, worst 4.4e-4. Nodes are chosen away from x≈0.2: transition-adjacent
+nodes have kinked responses on the ±1e-5 scale (one-sided slopes +0.11 /
+−0.73 at coarse node 35), so central FD there is h-dependent — FD converges
+to the AD value as h→0 (h=1e-7: rel 2.4e-5), and the 301-node case shows the
+identical kink at the same x (node 105, rel 5.2 at h=1e-5). Pre-existing
+transition physics, not an AD defect. A `noise_run` smoke check on the coarse
+case's TE BL states is also included. Suite: 48 checks.
+
+**Also updated.** `srcAD/main.cpp` (build-orphaned standalone, kept
+compiling) converted to the runtime interface and sizes its arrays from the
+parsed JSON; `src/main.cpp` is a stub with no geometry code. The
+`GFOIL_BUILD_EXES` gate mentioned in the task brief does not exist — the
+standalone executables were removed from the build in the May 2026 CMake
+cleanup (see that entry); `srcAD/main.cpp` was verified by a standalone
+syntax-only compile.
+
+---
+
 ## Scalar TESampleLoc re-permitted in Acoustics (June 2026)
 
 `Acoustics.__post_init__` in `inputs.py` now accepts TESampleLoc as either:

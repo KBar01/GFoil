@@ -32,23 +32,23 @@ template<typename Real>
 double partialOutputspartialInputs(
 
     // geometry parameters
-    const Real nCrit, const Real Ufac, const Real TEfac, const Real chordScaling, 
-    const double (&inXcoords)[Nin], const Real Re, const Real Ma, const Real rhoInf, 
+    const Real nCrit, const Real Ufac, const Real TEfac, const Real chordScaling,
+    const double* inXcoords, int nIn, const Real Re, const Real Ma, const Real rhoInf,
     const Real kinViscInf,
     const std::string model, const Real sampleTE, const Real sampleTE_hi,
     const Real* obsX, const Real* obsY, const Real* obsZ, int nObs,
     const Real S,
-    
-    // inputs x ---------------------------------------------------
-    Real (&inYcoords)[Nin],
+
+    // inputs x (size nIn) ------------------------------------------
+    Real* inYcoords,
     Real alphad,
     // state vector omega (or U in this case) ---------------------
     Real (&states)[RVdimension],
     const int (&turb)[Ncoords+Nwake],
 
-    // Outputs ----------------------------------------------------
-    double (&jacobianCL_y)[Nin], 
-    double (&jacobianOASPL_y)[Nin],
+    // Outputs (caller-provided buffers of size nIn) ---------------
+    double* jacobianCL_y,
+    double* jacobianOASPL_y,
     double& jacobianCL_alf,
     double& jacobianOASPL_alf,
     double (&jacobianCL_states)[RVdimension],
@@ -63,7 +63,7 @@ double partialOutputspartialInputs(
     Tape& tape = Real::getTape();
     tape.setActive();
 
-    for (int i = 0; i < Nin; ++i) {
+    for (int i = 0; i < nIn; ++i) {
         tape.registerInput(inYcoords[i]);
     }
     tape.registerInput(alphad);
@@ -77,12 +77,12 @@ double partialOutputspartialInputs(
     oper.rho = rhoInf;
     Geom<Real> geom;
     Real flattenedCoords[2*Ncoords]={0};
-    Real inCoords[2*Nin]={0};
-    for (int i=0;i<Nin;++i){
+    std::vector<Real> inCoords(2*nIn, Real(0.0));
+    for (int i=0;i<nIn;++i){
         inCoords[colMajorIndex(0,i,2)] = inXcoords[i];
         inCoords[colMajorIndex(1,i,2)] = inYcoords[i];
     }
-    make_panels(inCoords,flattenedCoords,Ufac,TEfac); // does spline to redist nodes over aerofoil for fixed number of 200 nodes
+    make_panels(inCoords.data(),nIn,flattenedCoords,Ufac,TEfac); // does spline to redist nodes over aerofoil for fixed number of 200 nodes
 
     Foil foil(flattenedCoords);
 
@@ -121,7 +121,7 @@ double partialOutputspartialInputs(
     for (int i=0;i<jacobianHeight;++i){outputs[i].gradient()[i] = 1.0 ;}
     tape.evaluate();
 
-    for (int i = 0; i < Nin; ++i) {
+    for (int i = 0; i < nIn; ++i) {
         jacobianCL_y[i] = (inYcoords[i].getGradient()[0]);
         jacobianOASPL_y[i] = (inYcoords[i].getGradient()[1]);
     }
@@ -146,25 +146,25 @@ void partialRpartialx(
 
     // geometry parameters
     const Real nCrit, const Real Ufac, const Real TEfac,
-    const double (&inXcoords)[Nin], const Real Re, const Real Ma, const Real rhoInf,
+    const double* inXcoords, int nIn, const Real Re, const Real Ma, const Real rhoInf,
 
     int (&currStag)[2],
     // forced transition x/c per surface (0=lower, 1=upper; 1.0 = no forcing)
     const double xft_xc[2],
-    
+
     // ADJOINT VECTOR size  4*(Ncoords+Nwake)
     const double (&adlambdaCL)[RVdimension],
     const double (&adlambdaCD)[RVdimension],
     const double (&adlambdaOASPL)[RVdimension],
-    // inputs x 
-    Real (&inYcoords)[Nin],
+    // inputs x (size nIn)
+    Real* inYcoords,
     Real alphad,
     // state vector omega (or U in this case)
     const double (&states)[RVdimension],
     const int (&turb)[Ncoords+Nwake],
 
-    // OUTPUT — gradient of h wrt geometry coords + alpha
-    double (&dgCLdy)[Nin], double (&dgCDdy)[Nin], double (&dgOASPLdy)[Nin],
+    // OUTPUT — gradient of h wrt geometry coords + alpha (buffers of size nIn)
+    double* dgCLdy, double* dgCDdy, double* dgOASPLdy,
     double& dgCLdalpha, double& dgCDdalpha, double& dgOASPLdalpha
     ){
     
@@ -172,7 +172,7 @@ void partialRpartialx(
     Tape& tape = Real::getTape();
     tape.setActive();
 
-    for (int i = 0; i < Nin; ++i){
+    for (int i = 0; i < nIn; ++i){
         tape.registerInput(inYcoords[i]);
     }
     tape.registerInput(alphad);
@@ -182,13 +182,13 @@ void partialRpartialx(
     oper.rho = rhoInf;
     Geom<Real> geom;
     Real flattenedCoords[2*Ncoords]={0};
-    Real inCoords[2*Nin]={0};
-    for (int i=0;i<Nin;++i){
+    std::vector<Real> inCoords(2*nIn, Real(0.0));
+    for (int i=0;i<nIn;++i){
         inCoords[colMajorIndex(0,i,2)] = inXcoords[i];
         inCoords[colMajorIndex(1,i,2)] = inYcoords[i];
     }
 
-    make_panels(inCoords,flattenedCoords,Ufac,TEfac); // does spline to redist nodes over aerofoil for fixed number of 200 nodes
+    make_panels(inCoords.data(),nIn,flattenedCoords,Ufac,TEfac); // does spline to redist nodes over aerofoil for fixed number of 200 nodes
 
 
     Foil<Real> foil(flattenedCoords);
@@ -282,7 +282,7 @@ void partialRpartialx(
     for (int i=0;i<jacobianHeight;++i){out[i].gradient()[i] = 1.0 ;}
     tape.evaluate();
 
-    for (int i = 0; i < Nin; ++i){
+    for (int i = 0; i < nIn; ++i){
         dgCLdy[i] = inYcoords[i].getGradient()[0];
         dgCDdy[i] = inYcoords[i].getGradient()[1];
         dgOASPLdy[i] = inYcoords[i].getGradient()[2];

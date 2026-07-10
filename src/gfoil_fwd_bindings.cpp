@@ -12,6 +12,7 @@
 #include <string>
 #include <vector>
 #include <array>
+#include <stdexcept>
 
 namespace py = pybind11;
 
@@ -20,16 +21,25 @@ static py::dict extract_obs(py::dict& d, const std::string& key) {
 }
 
 py::dict run_forward_py(py::dict inp, py::object prev_jacobian = py::none()) {
-    // ── geometry / aero inputs ────────────────────────────────────────────────
-    Real inXcoords[Nin] = {0};
-    Real inYcoords[Nin] = {0};
-    {
-        auto xlist = inp["xcoords"].cast<std::vector<double>>();
-        auto ylist = inp["ycoords"].cast<std::vector<double>>();
-        for (int i = 0; i < Nin; ++i) {
-            inXcoords[i] = xlist[i];
-            inYcoords[i] = ylist[i];
-        }
+    // ── geometry / aero inputs (runtime length nIn, floor NinMin) ────────────
+    auto xlist = inp["xcoords"].cast<std::vector<double>>();
+    auto ylist = inp["ycoords"].cast<std::vector<double>>();
+    if (xlist.size() != ylist.size()) {
+        throw std::invalid_argument(
+            "xcoords and ycoords must be the same length; got " +
+            std::to_string(xlist.size()) + " and " + std::to_string(ylist.size()));
+    }
+    const int nIn = static_cast<int>(xlist.size());
+    if (nIn < NinMin) {
+        throw std::invalid_argument(
+            "input geometry needs at least " + std::to_string(NinMin) +
+            " nodes for the cubic-spline re-panelling; got " + std::to_string(nIn));
+    }
+    std::vector<Real> inXcoords(nIn, Real(0.0));
+    std::vector<Real> inYcoords(nIn, Real(0.0));
+    for (int i = 0; i < nIn; ++i) {
+        inXcoords[i] = xlist[i];
+        inYcoords[i] = ylist[i];
     }
 
     Real alphad      = inp["alpha_degrees"].cast<double>();
@@ -100,7 +110,7 @@ py::dict run_forward_py(py::dict inp, py::object prev_jacobian = py::none()) {
     bool converged = runCode(
         static_cast<bool>(doRestart),
         Ncrit, Ufac, TEfac, custChord,
-        inXcoords, inYcoords,
+        inXcoords.data(), inYcoords.data(), nIn,
         alphad, Re, Ma, rhoInf, kinViscInf,
         model, sampleTE, sampleTE_hi,
         obsX.data(), obsY.data(), obsZ.data(), nObs,

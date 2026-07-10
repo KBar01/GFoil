@@ -4,8 +4,8 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
-// real_type.hpp FIRST — defines macros (Nin, Ncoords, RVdimension, Nsound …)
-// and norm2 as a template. DO NOT include real_type.h after this point.
+// real_type.hpp FIRST — defines macros (Ncoords, RVdimension, Nsound …) plus
+// NinMin, and norm2 as a template. DO NOT include real_type.h after this point.
 #include "real_type.hpp"   // from srcAD/include/ via include path
 
 #include "codi.hpp"
@@ -15,6 +15,8 @@
 
 #include <vector>
 #include <cmath>
+#include <stdexcept>
+#include <string>
 #include <Eigen/Dense>
 #include <Eigen/LU>
 #include <Eigen/Sparse>
@@ -109,18 +111,27 @@ py::dict run_AD_py(py::dict inp, py::dict jacobian) {
         dRdU_cols[i] = RVrows_py[i];
     }
 
-    // ── unpack input ─────────────────────────────────────────────────────────
-    double inXcoords_d[Nin] = {0};
-    RealVec2 inYcoords_2[Nin] = {};
-    RealRev  inYcoords_Rev[Nin] = {};
-    {
-        auto xlist = inp["xcoords"].cast<std::vector<double>>();
-        auto ylist = inp["ycoords"].cast<std::vector<double>>();
-        for (int i = 0; i < Nin; ++i) {
-            inXcoords_d[i]    = xlist[i];
-            inYcoords_2[i]    = ylist[i];
-            inYcoords_Rev[i]  = ylist[i];
-        }
+    // ── unpack input (runtime length nIn, floor NinMin) ──────────────────────
+    auto xlist = inp["xcoords"].cast<std::vector<double>>();
+    auto ylist = inp["ycoords"].cast<std::vector<double>>();
+    if (xlist.size() != ylist.size()) {
+        throw std::invalid_argument(
+            "xcoords and ycoords must be the same length; got " +
+            std::to_string(xlist.size()) + " and " + std::to_string(ylist.size()));
+    }
+    const int nIn = static_cast<int>(xlist.size());
+    if (nIn < NinMin) {
+        throw std::invalid_argument(
+            "input geometry needs at least " + std::to_string(NinMin) +
+            " nodes for the cubic-spline re-panelling; got " + std::to_string(nIn));
+    }
+    std::vector<double>   inXcoords_d(nIn, 0.0);
+    std::vector<RealVec2> inYcoords_2(nIn, RealVec2(0.0));
+    std::vector<RealRev>  inYcoords_Rev(nIn, RealRev(0.0));
+    for (int i = 0; i < nIn; ++i) {
+        inXcoords_d[i]    = xlist[i];
+        inYcoords_2[i]    = ylist[i];
+        inYcoords_Rev[i]  = ylist[i];
     }
 
     RealVec2 targetAlphaDeg = inp["alpha_degrees"].cast<double>();
@@ -184,19 +195,19 @@ py::dict run_AD_py(py::dict inp, py::dict jacobian) {
     Realfwd Cddue    = (2.0 * theta_d) * exponent * std::pow(ue_d, exponent - 1.0);
 
     // ── AD pass 1: partialOutputspartialInputs ────────────────────────────────
-    double d_CL_d_y[Nin]    = {0};
-    double d_OASPL_d_y[Nin] = {0};
+    std::vector<double> d_CL_d_y(nIn, 0.0);
+    std::vector<double> d_OASPL_d_y(nIn, 0.0);
     double d_CL_dalpha = 0.0, d_OASPL_dalpha = 0.0;
     static double d_CL_d_States[RVdimension]    = {0};
     static double d_CD_d_States[RVdimension]    = {0};
     static double d_OASPL_d_States[RVdimension] = {0};
 
     partialOutputspartialInputs<RealVec2>(
-        Ncrit, Ufac, TEfac, custChord, inXcoords_d, Re, Ma, rhoInf, nuInf,
+        Ncrit, Ufac, TEfac, custChord, inXcoords_d.data(), nIn, Re, Ma, rhoInf, nuInf,
         model, sampleTE, sampleTE_hi,
         obsX_2.data(), obsY_2.data(), obsZ_2.data(), nObs,
-        S, inYcoords_2, targetAlphaDeg, states, turb,
-        d_CL_d_y, d_OASPL_d_y, d_CL_dalpha, d_OASPL_dalpha,
+        S, inYcoords_2.data(), targetAlphaDeg, states, turb,
+        d_CL_d_y.data(), d_OASPL_d_y.data(), d_CL_dalpha, d_OASPL_dalpha,
         d_CL_d_States, d_OASPL_d_States,
         aWeighting, f_min, f_max);
 
@@ -214,21 +225,25 @@ py::dict run_AD_py(py::dict inp, py::dict jacobian) {
         adlambda_CL, adlambda_CD, adlambda_OASPL);
 
     // ── AD pass 2: partialRpartialx ───────────────────────────────────────────
-    static double dgdy_CL[Nin]    = {0};
-    static double dgdy_CD[Nin]    = {0};
-    static double dgdy_OASPL[Nin] = {0};
+    // Function-local (NOT static): partialRpartialx fully overwrites all nIn
+    // entries by assignment each call, so fresh per-call buffers are equivalent
+    // — and they must be runtime-sized now that nIn can change between calls.
+    std::vector<double> dgdy_CL(nIn, 0.0);
+    std::vector<double> dgdy_CD(nIn, 0.0);
+    std::vector<double> dgdy_OASPL(nIn, 0.0);
     double dgdalpha_CL = 0, dgdalpha_CD = 0, dgdalpha_OASPL = 0;
 
     partialRpartialx<RealRev>(
-        Ncrit_r, Ufac_r, TEfac_r, inXcoords_d, Re_r, Ma_r, rhoInf_r, currStag,
+        Ncrit_r, Ufac_r, TEfac_r, inXcoords_d.data(), nIn, Re_r, Ma_r, rhoInf_r, currStag,
         xft_xc_d,
         adlambda_CL, adlambda_CD, adlambda_OASPL,
-        inYcoords_Rev, targetAlphaDeg_r, states_d, turb,
-        dgdy_CL, dgdy_CD, dgdy_OASPL, dgdalpha_CL, dgdalpha_CD, dgdalpha_OASPL);
+        inYcoords_Rev.data(), targetAlphaDeg_r, states_d, turb,
+        dgdy_CL.data(), dgdy_CD.data(), dgdy_OASPL.data(),
+        dgdalpha_CL, dgdalpha_CD, dgdalpha_OASPL);
 
     // ── total derivatives ─────────────────────────────────────────────────────
-    std::vector<double> totalCL(Nin), totalCD(Nin), totalOASPL(Nin);
-    for (int i = 0; i < Nin; ++i) {
+    std::vector<double> totalCL(nIn), totalCD(nIn), totalOASPL(nIn);
+    for (int i = 0; i < nIn; ++i) {
         totalCL[i]    = d_CL_d_y[i]    + dgdy_CL[i];
         totalCD[i]    = dgdy_CD[i];
         totalOASPL[i] = d_OASPL_d_y[i] + dgdy_OASPL[i];

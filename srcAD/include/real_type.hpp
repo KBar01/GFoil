@@ -15,9 +15,13 @@ Real norm2(const Real* x) {
 #define RVdimension 920
 #define Ncoords 200
 #define Nfine 501
-#define Nin 301
 #define Nsound 250
 #define NblPoints 250
+
+// Input geometry length is a RUNTIME quantity (nIn), threaded down from the
+// entry points — there is no fixed input node count. NinMin is the structural
+// floor for the natural cubic spline + curvature redistribution.
+static constexpr int NinMin = 10;
 
 // Upper bound on Jacobian non-zeros: empirically ~14% of RVdimension² (≈130 entries
 // per row of the 920×920 BL Jacobian). Observed peak NNZ is well below this limit.

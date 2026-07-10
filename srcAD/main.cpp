@@ -105,11 +105,23 @@ int main(){
     using RealRev = codi::RealReverseVec<3> ;
     using Realfwd = codi::RealForward;
    
-    RealVec2 inYcoords_2[Nin]={0};
-    RealRev inYcoords_Rev[Nin]={0};
-    double inXcoords_d[Nin] = {0};
-    for (int i = 0; i < Nin; ++i) {   
-        inXcoords_d[i] = j["xcoords"][i];  
+    // Runtime input-geometry length (floor NinMin), sized from the parsed JSON.
+    const int nIn = static_cast<int>(j["xcoords"].size());
+    if (static_cast<int>(j["ycoords"].size()) != nIn) {
+        std::cerr << "xcoords and ycoords must be the same length; got "
+                  << j["xcoords"].size() << " and " << j["ycoords"].size() << "\n";
+        return 1;
+    }
+    if (nIn < NinMin) {
+        std::cerr << "input geometry needs at least " << NinMin
+                  << " nodes for the cubic-spline re-panelling; got " << nIn << "\n";
+        return 1;
+    }
+    std::vector<RealVec2> inYcoords_2(nIn, RealVec2(0.0));
+    std::vector<RealRev> inYcoords_Rev(nIn, RealRev(0.0));
+    std::vector<double> inXcoords_d(nIn, 0.0);
+    for (int i = 0; i < nIn; ++i) {
+        inXcoords_d[i] = j["xcoords"][i];
         inYcoords_2[i] = j["ycoords"][i];
         inYcoords_Rev[i] = j["ycoords"][i];
     }
@@ -201,8 +213,8 @@ int main(){
         dRdU_vals[i] = jr["RVvals"][i] ;
     }
     
-    double d_CL_d_y[Nin];
-    double d_OASPL_d_y[Nin];
+    std::vector<double> d_CL_d_y(nIn, 0.0);
+    std::vector<double> d_OASPL_d_y(nIn, 0.0);
     double d_CL_dalpha ;
     double d_OASPL_dalpha;
     static double d_CL_d_States[RVdimension] = {0};
@@ -220,9 +232,9 @@ int main(){
     // Cddue = (2*theta) * exponent * ue^(exponent - 1)
     Realfwd Cddue = (2.0 * theta) * exponent * std::pow(ue, exponent - 1.0);
 
-    double OASPL = partialOutputspartialInputs<RealVec2>(Ncrit,Ufac,TEfac,custChord,inXcoords_d,Re,Ma,rhoInf,nuInf,
-        model,sampleTE,sampleTE_hi,obsX_2.data(),obsY_2.data(),obsZ_2.data(),nObs,S,inYcoords_2,targetAlphaDeg,states,turb,
-        d_CL_d_y,d_OASPL_d_y,d_CL_dalpha,d_OASPL_dalpha,d_CL_d_States,d_OASPL_d_States
+    double OASPL = partialOutputspartialInputs<RealVec2>(Ncrit,Ufac,TEfac,custChord,inXcoords_d.data(),nIn,Re,Ma,rhoInf,nuInf,
+        model,sampleTE,sampleTE_hi,obsX_2.data(),obsY_2.data(),obsZ_2.data(),nObs,S,inYcoords_2.data(),targetAlphaDeg,states,turb,
+        d_CL_d_y.data(),d_OASPL_d_y.data(),d_CL_dalpha,d_OASPL_dalpha,d_CL_d_States,d_OASPL_d_States
     );
 
     static double adlambda_CL[RVdimension] = {0.0}; 
@@ -238,9 +250,11 @@ int main(){
         adlambda_CL,adlambda_CD,adlambda_OASPL
     );
     
-    static double dgdy_CL[Nin] = {0};
-    static double dgdy_CD[Nin] = {0};
-    static double dgdy_OASPL[Nin] = {0};
+    // Function-local (NOT static): partialRpartialx fully overwrites all nIn
+    // entries by assignment each call, and the size is runtime now.
+    std::vector<double> dgdy_CL(nIn, 0.0);
+    std::vector<double> dgdy_CD(nIn, 0.0);
+    std::vector<double> dgdy_OASPL(nIn, 0.0);
     double dgdalpha_CL = {0};
     double dgdalpha_CD = {0};
     double dgdalpha_OASPL = {0};
@@ -249,19 +263,19 @@ int main(){
     xft_xc_main[0] = j.contains("bottrans") ? j["bottrans"].get<double>() : 1.0;
     xft_xc_main[1] = j.contains("toptrans") ? j["toptrans"].get<double>() : 1.0;
 
-    partialRpartialx<RealRev>(Ncrit_r,Ufac_r,TEfac_r,inXcoords_d,Re_r,Ma_r,rhoInf_r,currStag,
+    partialRpartialx<RealRev>(Ncrit_r,Ufac_r,TEfac_r,inXcoords_d.data(),nIn,Re_r,Ma_r,rhoInf_r,currStag,
         xft_xc_main,
         adlambda_CL,adlambda_CD,adlambda_OASPL,
-        inYcoords_Rev,targetAlphaDeg_r,states_d,turb,
-        dgdy_CL,dgdy_CD,dgdy_OASPL,dgdalpha_CL,dgdalpha_CD,dgdalpha_OASPL
+        inYcoords_Rev.data(),targetAlphaDeg_r,states_d,turb,
+        dgdy_CL.data(),dgdy_CD.data(),dgdy_OASPL.data(),dgdalpha_CL,dgdalpha_CD,dgdalpha_OASPL
     );
 
     // total gradient
-    double totalDerivative_CL[Nin] = {0.0};
-    double totalDerivative_CD[Nin] = {0.0};
-    double totalDerivative_OASPL[Nin] = {0.0};
+    std::vector<double> totalDerivative_CL(nIn, 0.0);
+    std::vector<double> totalDerivative_CD(nIn, 0.0);
+    std::vector<double> totalDerivative_OASPL(nIn, 0.0);
 
-    for(int i=0;i<Nin;i++){
+    for(int i=0;i<nIn;i++){
         totalDerivative_CL[i] = d_CL_d_y[i] + dgdy_CL[i];
         totalDerivative_CD[i] = dgdy_CD[i];
         totalDerivative_OASPL[i] = d_OASPL_d_y[i] + dgdy_OASPL[i];

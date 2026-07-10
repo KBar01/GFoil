@@ -4,11 +4,15 @@
 #include <vector>
 
 
+// Input-spline storage is RUNTIME-sized: the input node count nIn is chosen by
+// the caller (floor NinMin, see real_type.h). Everything downstream of the
+// initial fit runs on the fixed Nfine/Ncoords internal discretisation.
 template<typename Real>
 struct CubicSpline1DOrig {
-    int N = Nin;
-    Real x[Nin] = {0};       // nodes (1D, N)
-    Real c[4 * (Nin - 1)]={0};       // coefficients: (N-1) x 4 matrix stored column-major (4 rows)
+    int N = 0;
+    std::vector<Real> x;     // nodes (1D, N)
+    std::vector<Real> c;     // coefficients: (N-1) x 4 matrix stored column-major (4 rows)
+    explicit CubicSpline1DOrig(int n) : N(n), x(n, Real(0.0)), c(4 * (n - 1), Real(0.0)) {}
 };
 
 template<typename Real>
@@ -23,6 +27,7 @@ template<typename Real>
 struct Spline2DOrig {
     CubicSpline1DOrig<Real> Xspline;
     CubicSpline1DOrig<Real> Yspline;
+    explicit Spline2DOrig(int n) : Xspline(n), Yspline(n) {}
 };
 template<typename Real>
 struct Spline2DFine {
@@ -34,40 +39,38 @@ struct Spline2DFine {
 template<typename Real>
 void fit_cubic_splineOrig(const Real* x, const Real* y, CubicSpline1DOrig<Real>& spline) {
     // Solve for natural cubic spline coefficients
-    //spline.N = N;
-    //spline.x = new Real[N];
-    //spline.c = new Real[4 * (N - 1)];
+    const int n = spline.N;
 
-    Real h[Nin - 1]={0};
-    Real alpha[Nin - 1]={0};
+    std::vector<Real> h(n - 1, Real(0.0));
+    std::vector<Real> alpha(n - 1, Real(0.0));
 
-    for (int i = 0; i < Nin; ++i){ spline.x[i] = x[i];}
-    for (int i = 0; i < Nin - 1; ++i){
+    for (int i = 0; i < n; ++i){ spline.x[i] = x[i];}
+    for (int i = 0; i < n - 1; ++i){
         h[i] = x[i+1] - x[i];
     }
 
-    for (int i = 1; i < Nin - 1; ++i){
+    for (int i = 1; i < n - 1; ++i){
         alpha[i] = (3.0 / h[i]) * (y[i+1] - y[i]) - (3.0 / h[i-1]) * (y[i] - y[i-1]);
     }
 
     // Solve tridiagonal system for c coefficients
-    Real l[Nin]={0}, mu[Nin]={0}, z[Nin]={0};
+    std::vector<Real> l(n, Real(0.0)), mu(n, Real(0.0)), z(n, Real(0.0));
     l[0] = 1; mu[0] = 0; z[0] = 0;
 
-    for (int i = 1; i < Nin - 1; ++i) {
+    for (int i = 1; i < n - 1; ++i) {
         l[i] = 2 * (x[i+1] - x[i-1]) - h[i-1] * mu[i-1];
         mu[i] = h[i] / l[i];
         z[i] = (alpha[i] - h[i-1] * z[i-1]) / l[i];
     }
 
-    l[Nin-1] = 1; z[Nin-1] = 0;
+    l[n-1] = 1; z[n-1] = 0;
 
-    Real c[Nin] = {0}; // temporary c coefficients
-    Real b[Nin - 1] = {0};
-    Real d[Nin - 1] = {0};
-    
+    std::vector<Real> c(n, Real(0.0)); // temporary c coefficients
+    std::vector<Real> b(n - 1, Real(0.0));
+    std::vector<Real> d(n - 1, Real(0.0));
 
-    for (int j = Nin - 2; j >= 0; --j) {
+
+    for (int j = n - 2; j >= 0; --j) {
         c[j] = z[j] - mu[j] * c[j+1];
         b[j] = (y[j+1] - y[j]) / h[j] - h[j] * (c[j+1] + 2.0 * c[j]) / 3.0;
         d[j] = (c[j+1] - c[j]) / (3.0 * h[j]);
@@ -131,7 +134,9 @@ void fit_cubic_splineFine(const Real* x, const Real* y, CubicSpline1DFine<Real>&
 
 template<typename Real>
 void spline2dOrig(const Real* X, Spline2DOrig<Real>& spline) {
-    
+
+    const int n = spline.Xspline.N;
+
     Real xq[5] = {
         0.046910077030668, 0.230765344947158, 0.5,
         0.769234655052842, 0.953089922969332
@@ -142,11 +147,11 @@ void spline2dOrig(const Real* X, Spline2DOrig<Real>& spline) {
     };
 
     // Allocate arc length arrays
-    Real S[Nin]={0};
-    Real Snew[Nin] = {0};
+    std::vector<Real> S(n, Real(0.0));
+    std::vector<Real> Snew(n, Real(0.0));
 
     // 1. Initial arc length estimate
-    for (int i = 1; i < Nin; ++i) {
+    for (int i = 1; i < n; ++i) {
         Real dx = X[IDX(0,i,2)] - X[IDX(0,i-1,2)];
         Real dy = X[IDX(1,i,2)] - X[IDX(1,i-1,2)];
         S[i] = S[i-1] + std::sqrt(dx*dx + dy*dy);
@@ -154,16 +159,16 @@ void spline2dOrig(const Real* X, Spline2DOrig<Real>& spline) {
 
     // 2. Initial spline fit
 
-    Real xPoints[Nin] = {0} ;
-    Real yPoints[Nin] = {0};
+    std::vector<Real> xPoints(n, Real(0.0));
+    std::vector<Real> yPoints(n, Real(0.0));
 
-    for (int i=0;i<Nin;++i){
+    for (int i=0;i<n;++i){
         xPoints[i] = X[IDX(0,i,2)];
         yPoints[i] = X[IDX(1,i,2)];
     }
 
-    fit_cubic_splineOrig(S, xPoints,spline.Xspline);
-    fit_cubic_splineOrig(S, yPoints,spline.Yspline);
+    fit_cubic_splineOrig(S.data(), xPoints.data(),spline.Xspline);
+    fit_cubic_splineOrig(S.data(), yPoints.data(),spline.Yspline);
 
     // 3. Iterative correction
     constexpr int max_pass = 10;
@@ -171,7 +176,7 @@ void spline2dOrig(const Real* X, Spline2DOrig<Real>& spline) {
         Real serr = 0.0;
         Snew[0] = 0.0;
 
-        for (int i = 0; i < Nin-1; ++i) {
+        for (int i = 0; i < n-1; ++i) {
             Real ds = S[i+1] - S[i];
             Real sint = 0.0;
 
@@ -194,13 +199,13 @@ void spline2dOrig(const Real* X, Spline2DOrig<Real>& spline) {
         }
 
         // Replace S with Snew
-        for (int i = 0; i < Nin; ++i){
+        for (int i = 0; i < n; ++i){
             S[i] = Snew[i];
         }
 
         // Refit splines
-        fit_cubic_splineOrig(S, xPoints,spline.Xspline);
-        fit_cubic_splineOrig(S, yPoints,spline.Yspline);
+        fit_cubic_splineOrig(S.data(), xPoints.data(),spline.Xspline);
+        fit_cubic_splineOrig(S.data(), yPoints.data(),spline.Yspline);
     }
 }
 
@@ -354,19 +359,19 @@ Real cubic_interp1d(const Real* x, const Real* y, Real xq) {
 
 template<typename Real>
 void spline_curvature(
-    const Real* Xin,    // Input points 2xNin
+    const Real* Xin, int nIn,  // Input points 2 x nIn
     Real Ufac, Real TEfac,     // Uniformity & TE resolution factors
     Real* Xout, Real (&Sout)[Ncoords]     // Output points (2xNcoords) and s values (1xNcoords)
 ) {
     // 1. Find X min/max
     Real xmin = Xin[0], xmax = Xin[0];
-    for (int i = 1; i < Nin; ++i) {
+    for (int i = 1; i < nIn; ++i) {
         xmin = std::min(xmin, Xin[IDX(0,i,2)]);
         xmax = std::max(xmax, Xin[IDX(0,i,2)]);
     }
 
     // 2. Fit spline to original data
-    Spline2DOrig<Real> PP;
+    Spline2DOrig<Real> PP(nIn);
     spline2dOrig(Xin, PP);
 
     // 3. Evaluate fine grid
@@ -430,7 +435,7 @@ void spline_curvature(
     Real sksum = 0 ;
     for (int i=0;i<Nfine;++i){sksum += sk[i];}
     
-    for (int i = 0; i < Nfine; ++i){sk[i] += 2.0 * sksum / 501;}
+    for (int i = 0; i < Nfine; ++i){sk[i] += 2.0 * sksum / Nfine;}
 
     // 7. Map new s values
     Real skl[Ncoords]={0};
@@ -457,9 +462,9 @@ void spline_curvature(
 }
 
 template<typename Real>
-void make_panels(const Real (&inCoords)[2*Nin], Real (&outCoords)[2*Ncoords],const Real Ufac,const Real TEfac){
+void make_panels(const Real* inCoords, int nIn, Real (&outCoords)[2*Ncoords],const Real Ufac,const Real TEfac){
 
 
     Real outArcs[Ncoords];
-    spline_curvature(inCoords,Ufac,TEfac,outCoords,outArcs);
+    spline_curvature(inCoords,nIn,Ufac,TEfac,outCoords,outArcs);
 };

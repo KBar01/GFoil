@@ -24,8 +24,9 @@ bool runCode(
     const Real Ufac,
     const Real TEfac,
     const Real chordScaling,
-    const Real (&inXcoords)[Nin],
-    Real (&inYcoords)[Nin],
+    const Real* inXcoords,
+    Real* inYcoords,
+    int nIn,
     Real alphad,
     Real Re,
     Real Ma,
@@ -57,12 +58,12 @@ bool runCode(
     Geom geom;
 
     Real flattenedCoords[2 * Ncoords] = {0};
-    Real inCoords[2 * Nin] = {0};
-    for (int i = 0; i < Nin; ++i) {
+    std::vector<Real> inCoords(2 * nIn, Real(0.0));
+    for (int i = 0; i < nIn; ++i) {
         inCoords[colMajorIndex(0, i, 2)] = inXcoords[i];
         inCoords[colMajorIndex(1, i, 2)] = inYcoords[i];
     }
-    make_panels(inCoords, flattenedCoords, Ufac, TEfac);
+    make_panels(inCoords.data(), nIn, flattenedCoords, Ufac, TEfac);
 
     Foil foil(flattenedCoords);
     auto isolPtr = std::make_unique<Isol>();

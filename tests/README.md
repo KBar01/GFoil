@@ -3,7 +3,7 @@
 ## Overview
 
 The suite drives the `GFoil.gfoil_cpp` pybind11 module directly (no standalone
-binaries, no `restart.json`) and runs three groups of checks:
+binaries, no `restart.json`) and runs five groups of checks:
 
 1. **Free-transition golden case** — `tests/input.json` (NACA 0012 sharp-TE
    coordinates, alpha=2°, Re=2e6, nCrit=5, model `roz`, observer (0,3,0.5),
@@ -14,7 +14,18 @@ binaries, no `restart.json`) and runs three groups of checks:
    (CHANGELOG "Forced-transition adjoint fix"), which previously had no
    regression coverage. Same outputs and tolerance; golden files carry the
    `forced_` prefix.
-3. **Windowed-Amiet anchors** — two forward-only OASPL reference values from
+3. **Coarse-input golden case** — analytic open-TE NACA 0012 with only 101
+   nodes (`naca0012_analytic(n_half=50)`), free-transition conditions of
+   group 1. Exercises the runtime input-geometry length (`Nin` removed, see
+   CHANGELOG "Variable-length input geometry"); gradient arrays are length
+   101. Golden files carry the `coarse101_` prefix.
+4. **AD-vs-FD spot check** — on the coarse case: central finite differences
+   (h=1e-5, forward `rtol=1e-11`) at 5 y-nodes × {CL, CD, OASPL} against the
+   AD gradients, tolerance 2e-3 (typical agreement ~1e-5). Nodes deliberately
+   avoid the transition-sensitive x≈0.2 region where the response is kinked
+   on the ±1e-5 scale (pre-existing physics; see the CHANGELOG entry). Plus a
+   `noise_run` smoke check driven by the coarse case's TE BL states.
+5. **Windowed-Amiet anchors** — two forward-only OASPL reference values from
    CHANGELOG "Windowed Amiet TE sample / Reference values": scalar
    `TEsample=0.98` → 63.18598 dB and window `[0.95,0.99]` → 63.36702 dB,
    tolerance 1e-6 relative. **The anchor config is fully embedded in
@@ -23,7 +34,7 @@ binaries, no `restart.json`) and runs three groups of checks:
    NOT the `input.json` coordinates (those give 63.05499/63.24251; the foil
    generation is part of the recorded config).
 
-22 checks total. Exit code is **0** if all pass, **1** otherwise.
+48 checks total. Exit code is **0** if all pass, **1** otherwise.
 
 ---
 
@@ -90,3 +101,6 @@ that reorder reverse-mode accumulation (see CHANGELOG for precedents).
 | `tests/golden/forced_fwd_scalars.json` | Golden forward scalars (forced transition) |
 | `tests/golden/forced_ad_scalars.json` | Golden AD alpha scalars (forced) |
 | `tests/golden/forced_ad_gradients.json` | Golden AD gradient arrays (forced) |
+| `tests/golden/coarse101_fwd_scalars.json` | Golden forward scalars (101-node input) |
+| `tests/golden/coarse101_ad_scalars.json` | Golden AD alpha scalars (101-node input) |
+| `tests/golden/coarse101_ad_gradients.json` | Golden AD gradient arrays (101-node, length 101) |
