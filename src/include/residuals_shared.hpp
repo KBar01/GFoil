@@ -1,14 +1,9 @@
 #pragma once
 
-// residuals_shared.hpp — per-station integral-BL residual kernels.
+// residuals_shared.hpp : per-station integral-BL residual kernels.
 //
-// The two-point (node1->node2) discretised residuals of the integral BL
-// equations -- momentum (theta), shape-parameter / kinetic-energy (H*), and the
-// amplification/lag equation -- assembled by build_global_sys.cpp at every
-// interval, with their Jacobian blocks w.r.t. the two end states. Duck-typed
-// templates shared by the forward (codi) and AD builds. Runs inside the active
-// CoDi tape: do NOT re-order/re-express the Real arithmetic (see CLAUDE.md).
-// Symbols: see NOMENCLATURE.md.
+// The two-point  discretised residuals of the integral BL equations being momentum (theta), shape-parameter / kinetic-energy (H*), and the
+// amplification/lag equation, assembled by build_global_sys.cpp at every interval, with their Jacobian blocks wrt the two end states.
 #include <cmath>
 // Requires:
 //   - get_funcs.h (fwd) or get_funcs.hpp (AD) — for get_H, get_damp, etc.
@@ -54,7 +49,7 @@ Real upwind_half(
     return f ;
 }
 
-// Discretized BL equations, Fidkowski (2021) Eqs. 9-12.
+// Discretised BL equations, Fidkowski Eqs. 9-12.
 // Finite differences of logs for momentum (Eq.9), shape (Eq.10),
 // amplification (Eq.11), lag (Eq.12). Upwind factor from Eq.13.
 template<bool ComputeJacobian=true, typename Real, typename ParamT>
@@ -375,15 +370,10 @@ void residual_station(
 }
 
 
-// ─────────────────────────────────────────────────────────────────────────────
-// wake_sys — wake initialization residuals, Fidkowski (2021) Eq.14.
-//   R_mom:   theta_w1 = theta_1 + theta_N
-//   R_shape: delta*_w1 = delta*_1 + delta*_N + hTE
-//   R_lag:   c_tau^(1/2) momentum-weighted average
-//   VsolT / FoilT / GlobT / ParamT — duck-typed for Vsol/Vsol<Real> etc.
-//   ComputeJacobian=true  : fills R_U[36] and J[3]  (forward solver)
-//   ComputeJacobian=false : R_U and J ignored        (AD solver)
-// ─────────────────────────────────────────────────────────────────────────────
+// wake_sys : wake initialization residuals, Fidkowski Eq.14.
+// R_mom:   theta_w1 = theta_1 + theta_N
+// R_shape: delta*_w1 = delta*_1 + delta*_N + hTE
+// R_lag:   c_tau^(1/2) momentum-weighted average
 
 template<bool ComputeJacobian=true, typename Real,
          typename VsolT, typename FoilT, typename GlobT, typename ParamT>
@@ -447,7 +437,7 @@ void wake_sys(const VsolT& vsol, const FoilT& foil, const GlobT& glob,
     }
 }
 
-// Convenience overload — no Jacobian output (AD solver path).
+// Convenience overload - no Jacobian output (AD solver path).
 template<typename Real, typename VsolT, typename FoilT, typename GlobT, typename ParamT>
 void wake_sys(const VsolT& vsol, const FoilT& foil, const GlobT& glob,
               const ParamT& param, Real (&R)[3])
@@ -457,14 +447,10 @@ void wake_sys(const VsolT& vsol, const FoilT& foil, const GlobT& glob,
     wake_sys<false>(vsol, foil, glob, param, R, _dummy_U, _dummy_J);
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// residual_transition — Fidkowski (2021) Eq.16.
+// residual_transition Fidkowski Eq.16.
 // Transition interval: laminar sub-interval uses R_amp (Eq.11);
 // turbulent sub-interval uses R_lag (Eq.12).
 // c_tau^(1/2) initialised at transition via Eq.17.
-//   ComputeJacobian=true  : fills R_U[24] and R_x[6]  (forward solver)
-//   ComputeJacobian=false : R_U and R_x ignored         (AD solver)
-// ─────────────────────────────────────────────────────────────────────────────
 
 template<bool ComputeJacobian=true, typename Real, typename ParamT>
 void residual_transition(
@@ -488,7 +474,7 @@ void residual_transition(
     Real sa1=U1[2], sa2=U2[2];
     Real ue1=U1[3], ue2=U2[3];
 
-    // damp1_U1 declared always — needed as output arg of get_damp;
+    // damp1_U1 declared always, needed as output arg of get_damp;
     // used in Jacobian assembly but declared here so it's in scope for the
     // if constexpr block below.
     Real damp1, damp1_U1[4]={0};

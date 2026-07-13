@@ -67,12 +67,9 @@ void ue_residual_kernel(const IsolcT& isolc, const IsolvT& isolv,
         Rpointer[i] = ue[i] - (ueinv[i] + Rpointer[i]);
 }
 
-// ── stagpoint_move_impl ──────────────────────────────────────────────────────
+//stagpoint_move_impl 
 // Updates stagnation location after Newton step. Fidkowski (2021) Sec. V.C.
-// Shared core for stagpoint_move (fwd) and stagpoint_move_AD (AD).
-// stagPanel[2] are the two stagnation panel indices determined by the caller's
-// preamble. The impl always updates all fields and rebuilds ue_m (realloc=true).
-// IsolT duck-types over Isol (fwd, unified) and Isolv<Real> (AD, variable part).
+// Shared for stagpoint_move (fwd) and stagpoint_move_AD (AD).
 template<typename Real, typename IsolT, typename GlobT,
          typename FoilT, typename WakeT, typename VsolT>
 void stagpoint_move_impl(IsolT& isol, GlobT& glob,
@@ -110,13 +107,9 @@ void stagpoint_move_impl(IsolT& isol, GlobT& glob,
     rebuild_ue_m(foil, wake, isol, vsol, true);
 }
 
-// ── stagnation_state_impl ────────────────────────────────────────────────────
+// stagnation_state_impl
 // Fidkowski (2021) Eqs. 9-10 at xi=0, Sec. IV.C.
-// At stagnation xi,ue→0; ln(theta2/theta1) and ln(H*2/H*1) drop out.
-// u_e ~ K*xi so ln(ue2/ue1) = ln(xi2/xi1) = 1.
-// Shared kernel: computes Ust[0..3] and xst from two adjacent state vectors.
-// The fwd stagnation_state adds Jacobian outputs Ust_U[32] and Ust_x[8] on
-// top of this call; the AD stagnation_state is just this call.
+
 template<typename Real>
 void stagnation_state_impl(const Real* U1, const Real* U2,
                            const Real x1, const Real x2,
@@ -138,11 +131,9 @@ void stagnation_state_impl(const Real* U1, const Real* U2,
     Ust[3] = K*xst;
 }
 
-// ── build_wake_impl ──────────────────────────────────────────────────────────
+// build_wake_impl
 // Wake geometry: streamline from TE midpoint, Fidkowski (2021) Sec. IV.D.
 // Predictor-corrector arc-length spacing (space_wake_nodes) then streamline march.
-// Duck-typed on IsolcT — both Isol (fwd) and Isolc<Real> (AD) provide
-// .gammas[] and .uewi[]. Real deduced from op.Vinf.
 template<typename FoilT, typename GeomT, typename OperT,
          typename IsolcT, typename WakeT>
 void build_wake_impl(const FoilT& foil, const GeomT& geom,
@@ -214,11 +205,9 @@ void build_wake_impl(const FoilT& foil, const GeomT& geom,
     isol.uewi[Nwake-1] = (v1Store[0] * v1[0]) + (v1Store[1] * v1[1]);
 }
 
-// ── calc_force ───────────────────────────────────────────────────────────────
+// calc_force
 // Force coefficients, Fidkowski (2021) Eqs.33-36.
 // c_l: Eq.33, c_m: Eq.35, c_d (wake/Squire-Young): Eq.36
-// Duck-typed on all struct params. Real deduced from glob.U element type.
-// The fwd signature has an extra unused isol param (dropped here).
 template<typename OperT, typename GeomT, typename ParamT,
          typename FoilT, typename GlobT, typename PostT>
 void calc_force(const OperT& op, const GeomT& geom, const ParamT& par,
@@ -277,14 +266,10 @@ void calc_force(const OperT& op, const GeomT& geom, const ParamT& par,
     post.cd = 2.0 * U[0] * pow(uk / op.Vinf, (5.0 + H) / 2.0);
 }
 
-// ── stagpoint_find_impl ───────────────────────────────────────────────────────
+// stagpoint_find_impl
 // Fidkowski (2021) Sec. IV.C: s_stag = linear interp of adjacent u_e values.
 // edgeVelSign = direction factor d_i (negative on lower surface, +1 on upper/wake).
 // GammaT provides .gammas[] (Isol in fwd, Isolc<Real> in AD).
-// VarT    receives .stagIndex[], .stagArcLocation, etc. (Isol in fwd, Isolv<Real> in AD).
-// compute_sstag_g is a compile-time bool: true for fwd (Isol has sstag_g[]),
-// false for AD (Isolv does not). if constexpr prevents the field access from
-// being instantiated for the AD path.
 template<bool compute_sstag_g, typename GammaT, typename VarT,
          typename FoilT, typename WakeT>
 void stagpoint_find_impl(const GammaT& gammaStruct, VarT& varStruct,
@@ -328,10 +313,9 @@ void stagpoint_find_impl(const GammaT& gammaStruct, VarT& varStruct,
         varStruct.distFromStag[Ncoords + i] = wake.s[i] - varStruct.stagArcLocation;
 }
 
-// ── rebuild_ue_m ─────────────────────────────────────────────────────────────
+// rebuild_ue_m
 // Builds ue_m matrix (D matrix), Fidkowski (2021) Eq.26.
 // sigma = dm/dxi (Eq.23), m = ue*delta*
-// Real deduced from isol.edgeVelSign[0] element type.
 template<typename FoilT, typename WakeT, typename IsolT, typename VsolT>
 void rebuild_ue_m(const FoilT& foil, const WakeT& wake,
                   const IsolT& isol, VsolT& vsol, bool realloc) {
@@ -408,10 +392,9 @@ void rebuild_ue_m(const FoilT& foil, const WakeT& wake,
     }
 }
 
-// ── set_wake_gap ─────────────────────────────────────────────────────────────
-// Wake gap h_w(xi), Fidkowski (2021) Eq.15.
+// set_wake_gap
+// Wake gap h_w(xi), Fidkowski Eq.15.
 // Decreases from hTE to 0 over distance Lw = fw*hTE.
-// Accesses foil.te.hTE, foil.te.dtdx, isol.distFromStag[], vsol.wgap[].
 template<typename FoilT, typename IsolT, typename VsolT>
 void set_wake_gap(const FoilT& foil, const IsolT& isol, VsolT& vsol) {
 
@@ -430,7 +413,7 @@ void set_wake_gap(const FoilT& foil, const IsolT& isol, VsolT& vsol) {
     }
 }
 
-// ── range (non-template helper) ──────────────────────────────────────────────
+// range
 inline std::vector<int> range(int start, int end, int step = 1) {
     std::vector<int> result;
     if (step > 0) {
@@ -443,8 +426,7 @@ inline std::vector<int> range(int start, int end, int step = 1) {
     return result;
 }
 
-// ── identify_surfaces ─────────────────────────────────────────────────────────
-// No Real needed — only accesses isol.stagIndex[] (always int[]).
+// identify_surfaces
 template<typename IsolT, typename VsolT>
 void identify_surfaces(const IsolT& isol, VsolT& vsol) {
     vsol.Is.clear();
@@ -453,8 +435,7 @@ void identify_surfaces(const IsolT& isol, VsolT& vsol) {
     vsol.Is.push_back(range(Ncoords, Ncoords+Nwake));
 }
 
-// ── space_wake_nodes ─────────────────────────────────────────────────────────
-// Real is in the parameter types so it is deduced at each call site.
+//space_wake_nodes
 template<typename Real, typename FoilT, typename WakeT>
 void space_wake_nodes(const Real& wakeLength, const Real& firstPanelLength,
                       Real* wakeSpacing, const FoilT& foil, WakeT& wake) {
@@ -490,10 +471,9 @@ void space_wake_nodes(const Real& wakeLength, const Real& firstPanelLength,
     }
 }
 
-// ── init_thermo ───────────────────────────────────────────────────────────────
-// Compressibility corrections, Fidkowski (2021) Sec. VI.
+//init_thermo 
+// Compressibility corrections, Fidkowski Sec. VI.
 // Karman-Tsien correction Eq.29. Isentropic density Eq.31, Sutherland viscosity Eq.32.
-// Real is deduced from oper.Vinf so no explicit Real template param is needed.
 template<typename OperT, typename ParamT, typename GeomT>
 void init_thermo(const OperT& oper, ParamT& param, const GeomT& geom) {
 
@@ -523,9 +503,8 @@ void init_thermo(const OperT& oper, ParamT& param, const GeomT& geom) {
     }
 }
 
-// ── stagpoint_move (fwd non-template wrapper) ─────────────────────────────────
+// stagpoint_move (fwd non-template wrapper)
 // Only available after data_structs.h has been included (provides Isol/Glob/Real).
-// Guard: AIRFOIL_STRUCTS_H is defined by data_structs.h.
 #ifdef AIRFOIL_STRUCTS_H
 #include <cassert>
 

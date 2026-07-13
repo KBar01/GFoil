@@ -1,11 +1,7 @@
-// update_state.cpp — apply the relaxed Newton state update.
-//
-// update_state() computes a single under-relaxation factor omega from the most
-// restrictive physical limiter (bounded theta/ds change, non-negative amp/ctau,
-// capped ctau and ue steps), applies glob.U += omega*glob.dU, then enforces
-// physical post-fixes (minimum Hk, positive ctau, laminar amp <= ncrit).
-// Returns omega. Forward TU only; runs inside the active CoDi tape, so the
-// arithmetic must not be re-expressed (see CLAUDE.md).
+// update_state.cpp : apply the relaxed Newton state update.
+// computes a single under-relaxation factor omega from the most restrictive physical limiter (bounded theta/ds change, non-negative amp/ctau,
+// capped ctau and ue steps), applies glob.U += omega*glob.dU, then enforces physical post-fixes (minimum Hk, positive ctau, laminar amp <= ncrit).
+// Returns omega.
 #include <iostream>
 #include <cmath>
 #include <Eigen/Dense>

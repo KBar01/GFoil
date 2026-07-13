@@ -1,11 +1,7 @@
-// update_transition.cpp — e^N transition march and transition-front motion.
-//
-// march_amplification() integrates the amplification factor n~ along a surface
-// (e^N envelope) and returns the last laminar node, honouring forced transition.
-// update_transition() then moves the transition front per surface (with a
-// per-iteration advance cap), seeds newly turbulent nodes' ctau, restores
+// update_transition.cpp :  e^N transition march and transition-front motion.
+// integrates the amplification factor n~ along a surface (e^N envelope) and returns the last laminar node, honouring forced transition.
+// update_transition() then moves the transition front per surface (with a per-iteration advance cap), seeds newly turbulent nodes' ctau, restores
 // turbulent amps, and applies the ctau-freeze anti-oscillation logic.
-// Forward TU; .getValue() here is forward-only and safe.
 #include <iostream>
 #include <cmath>
 #include <Eigen/Dense>

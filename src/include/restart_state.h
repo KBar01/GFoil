@@ -19,7 +19,7 @@ struct ForwardResult {
     // "no_convergence" when not converged.
     std::string failure_mode = "";
 
-    // ── verbose output (only populated when verbose=true) ────────────────────
+    // verbose output (only populated when verbose=true)
     std::vector<double> innerFoilX;   // length Ncoords
     std::vector<double> innerFoilY;   // length Ncoords
 
@@ -35,21 +35,19 @@ struct ForwardResult {
     double topTransX = 0.0;
     double botTransX = 0.0;
 
-    // [theta, delta*, tau_max, Ue, dpdx, tau_wall, delta99]
-    std::vector<double> BL_top;       // length 7
-    std::vector<double> BL_bot;       // length 7
+    // [theta, delta*, tau_max, Ue, dpdx, tau_wall, delta99] delta99 pretty useless though idk
+    std::vector<double> BL_top;       
+    std::vector<double> BL_bot;       
 
-    std::vector<double> freq_Hz;      // length Nsound
+    std::vector<double> freq_Hz;     
     std::vector<double> WPS_upper;    // wall-pressure PSD upper [Pa^2/Hz]
     std::vector<double> WPS_lower;    // wall-pressure PSD lower [Pa^2/Hz]
     int nObs = 0;
     std::vector<double> FF_spectra;   // flat row-major (nObs, Nsound)
 
     // Per-observer integrated noise and observer geometry (verbose only).
-    std::vector<double> OASPL_perObs;    // length nObs; OASPL per observer [dB re 20uPa]
-    std::vector<double> obsXYZ_TElocal;  // flat row-major (nObs, 3): x_loc, y_loc, z_loc
-                                         // in the TE-local chord-aligned Amiet frame
-                                         // (origin at the trailing edge) [m]
+    std::vector<double> OASPL_perObs;    // length nObs; OASPL per observer [dB re 20e-6 Pa]
+    std::vector<double> obsXYZ_TElocal;  // flat row-major (nObs, 3): x_loc, y_loc, z_loc in the TE-local chord-aligned Amiet frame (origin at the trailing edge) [m]
 
-    int newton_iterations = 0;        // converging Newton iteration (param.niglob if not converged)
+    int newton_iterations = 0;        // converging Newton iteration
 };

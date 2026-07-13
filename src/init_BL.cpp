@@ -1,10 +1,6 @@
-// init_BL.cpp — cold-start boundary-layer initialisation.
-//
-// init_boundary_layer() seeds the stagnation node (Thwaites-style) and marches
-// node-by-node along each surface and the wake, running a small inner Newton at
-// each station to set a self-consistent initial [th, ds, sa, ue] before the
-// global coupled solve takes over. Only used on a cold start (no warm-start
-// state). Forward TU; active CoDi tape region.
+// init_BL.cpp is cold-start boundary-layer initialisation.
+// seeds the stagnation node (Thwaites-style) and marches node-by-node along each surface and the wake, running a small inner Newton at
+// each station to set a self-consistent initial [th, ds, sa, ue] before the global coupled solve takes over.
 #include <iostream>
 #include <cmath>
 #include <cstdlib>
@@ -17,7 +13,7 @@
 #include "get_funcs.hpp"
 #include "residuals.h"
 
-#include "nlohmann/json.hpp"  // nlohmann/json
+#include "nlohmann/json.hpp" 
 
 using json = nlohmann::json;
 
@@ -28,11 +24,6 @@ void thwaites_init(const Real&stagConstant, const Param&param,Real& momThickness
     momThickness = std::sqrt(0.45*nu/(6.0*stagConstant));
     dispThickness = 2.2*momThickness;
 }
-
-// NOTE (perf, not acted on): the inner station Newton recomputes both end-node
-// closures each step, but only the end node changes between steps — the start
-// node's quantities are fixed and could be cached. Left as-is for clarity.
-
 
 #ifndef USE_CODIPACK
 
@@ -176,9 +167,6 @@ void wake_init(const Vsol& vsol, const Foil& foil, const Glob& glob, const Param
     
     Uw[3] = ue;
 }
-
-
-
 
 
 
@@ -486,11 +474,6 @@ void init_boundary_layer(const Oper&oper, const Foil&foil, Param&param, Isol&iso
             }
 
             // Cap the last laminar node's amp to ncrit before storing.
-            // march_amplification re-integrates the eN ODE each Newton iteration
-            // from glob.U.  If this node's amp is stored above ncrit, the first
-            // march call sees an inconsistent laminar state, drives a large amp
-            // residual, and can cause a catastrophic transition jump that collapses
-            // omega to ~0.001 for 20+ iterations.
             if (tran) {
                 int prevNode = indexList[i - 1];
                 Real& prev_amp = glob.U[colMajorIndex(2, prevNode, 4)];
@@ -512,7 +495,7 @@ void init_boundary_layer(const Oper&oper, const Foil&foil, Param&param, Isol&iso
 }
 
 
-
+// probs delete i dont use it
 void init_boundary_layer_from_xfoil(const Oper&oper, const Foil&foil, const Param&param, Isol&isol, Vsol&vsol, Glob&glob) {
     
     constexpr int Nsys = Ncoords + Nwake;
