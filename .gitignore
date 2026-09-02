@@ -33,6 +33,7 @@ debug_cold_start.txt
 # releases (see pyproject sdist.exclude) and deliberately kept out of the repo.
 /Smoothed_TEfixed_linear/
 
+/venv/
 # Bench run artifacts — regenerable outputs of bench/*.py. The baseline-contract
 # data (cold_start_sweep.csv) and the narrative REPORT.md are tracked; the
 # intermediate sweep/rescue/timing CSV/log/JSON dumps are not.

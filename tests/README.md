@@ -38,6 +38,40 @@ binaries, no `restart.json`) and runs five groups of checks:
 
 ---
 
+## Other suites
+
+These are separate scripts, same conventions (plain script, PASS/FAIL, exit 0
+iff all pass). They are **not** run by `regression_test.py`.
+
+| Script | Covers |
+|---|---|
+| `tests/amiet_kernel_test.py --test` | The general oblique-gust Amiet kernel (29 checks): algebra identities, cut behaviour and the near-cutoff bridge, golden `golden/amiet_kernel_scalars.json` |
+| `tests/rotor_noise_test.py --test` | The rotor TE-noise wrapper (44 checks), golden `golden/rotor_noise_scalars.json` |
+| `tests/midspan_reduction_check.py` | One-off before/after gate (below) |
+
+### The mid-span reduction gate
+
+`midspan_reduction_check.py` is not a golden test — it compares two *builds*.
+The general `_vec` kernel must reduce to the mid-span kernel it replaced, at
+x2 = 0, to rtol ≤ 1e-13. Run it whenever the `_vec` kernel changes:
+
+```bash
+git stash push src/include/newAmiet.hpp            # or check out the old kernel
+cmake --build build --target gfoil_cpp -j8
+python3 tests/midspan_reduction_check.py --dump /tmp/ref.json
+git stash pop
+cmake --build build --target gfoil_cpp -j8
+python3 tests/midspan_reduction_check.py --check /tmp/ref.json
+```
+
+Last measured: worst relative error 8.6e-15 over 42 spectra × 64 frequencies,
+45% of values bit-identical. See CHANGELOG "General oblique-gust Amiet kernel"
+for why the remainder is not bit-identical (it is `Radiation_integral2_general`'s
+`D`, `Y²` and `coeffI`, algebraically identical at κ̄ = μ̄ but differently
+associated).
+
+---
+
 ## Quick reference
 
 ```bash
@@ -104,3 +138,8 @@ that reorder reverse-mode accumulation (see CHANGELOG for precedents).
 | `tests/golden/coarse101_fwd_scalars.json` | Golden forward scalars (101-node input) |
 | `tests/golden/coarse101_ad_scalars.json` | Golden AD alpha scalars (101-node input) |
 | `tests/golden/coarse101_ad_gradients.json` | Golden AD gradient arrays (101-node, length 101) |
+| `tests/amiet_kernel_test.py` | General oblique-gust Amiet kernel suite |
+| `tests/golden/amiet_kernel_scalars.json` | Golden \|I\| sweeps (both branches + bridge, rtol 1e-10) |
+| `tests/rotor_noise_test.py` | Rotor TE-noise wrapper suite |
+| `tests/golden/rotor_noise_scalars.json` | Golden rotor OASPL / pinned Spp (rtol 1e-10) |
+| `tests/midspan_reduction_check.py` | Mid-span reduction gate (before/after builds) |

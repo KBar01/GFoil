@@ -6,6 +6,364 @@ chronological record.
 
 ---
 
+## General oblique-gust Amiet kernel (phase 2) — `_vec` path (July 2026)
+
+**Headline.** Restored the general three-dimensional gust formulation of Roger &
+Moreau (2005) in the `_vec` overloads of `newAmiet.hpp` — the never-taped path
+`noise_run` uses. This fixes the phase-1 negative result recorded below: rotor
+directivity was **inverted**. On the Sinayoko et al. (2013) Table 2 wind-turbine
+element, measured before → after:
+
+| observer | phase 1 (mid-span) | phase 2 (general) | Δ |
+|---|---|---|---|
+| Θ = 0 (upstream axis) | 64.58 dB/Hz | 64.58 dB/Hz | 0.0 |
+| Θ = 180 (downstream axis) | 65.18 dB/Hz | 65.17 dB/Hz | 0.0 |
+| Θ = 90 (rotor plane) | 86.43 dB/Hz | 52.62 dB/Hz | **−33.8** |
+| **axis-to-plane contrast** | **−21.25 dB** | **+12.55 dB** | **+33.8** |
+
+The axial lobes do not move: near the rotor axis an observer never approaches a
+blade's spanwise direction, so the mid-span kernel was already right there. The
+entire correction lands in the rotor plane — exactly where the phase-1 analysis
+predicted. Gated forever by `tests/rotor_noise_test.py` group 10 (axis > plane
+by > 3 dB).
+
+**Scope.** C++ changes are confined to the `_vec` overloads plus the spanwise
+coordinate's plumbing. **The taped/AD path is byte-identical**: `errFunc`,
+`Estar`, `sinc_safe`, `cdiv`, `complex_sqrt`, `Radiation_integral1`,
+`Radiation_integral2`, `Radiation_integral_total` and `TE_noise_outer` all
+verified unchanged by function-level diff against `HEAD`. The 48-check fwd/AD
+suite passes with **every golden at `rel_err = 0.000e+00`** — no regeneration.
+
+**Restored from** `89319a1` (the 922-line pre-audit `newAmiet.hpp`, before the
+May 2026 audit cut it to 402 and removed "subcritical branch", `Ky`,
+`K_2_bar`, `beta`). Treated as UNVALIDATED per the audit's own note that it was
+removed as *unused* — and that proved correct: see the sign adjudication below,
+where the restored code **fails** the paper's decay invariant.
+
+### Substitution map (mid-span → general)
+
+Every changed expression, with its reduction at κ̄ = μ̄:
+
+| quantity | mid-span form | general form | ref |
+|---|---|---|---|
+| `S0` | `sqrt(x² + β²z²)` | `sqrt(x² + β²z² + β²y²)` | §2 |
+| `K̄₂` | `0` | `k̄·x₂/S0` | Eq. 18 |
+| `κ̄` | `μ̄` | `μ̄·sqrt(1 − ξ²)`, `ξ = K̄₂/(βμ̄)` | §3.1 |
+| `B` | `K̄₁ + Mμ̄ + μ̄` | `K̄₁ + Mμ̄ + κ̄` | Eq. 13 |
+| `C` | `K̄₁ − μ̄(x₁/S0 − M)` | unchanged in form; general S0 | Eq. 12 |
+| `D` | `μ̄(1 − x₁/S0)` | `κ̄ − μ̄·x₁/S0` | Eq. 14 |
+| `Y²` | `(K̄₁+(1+M)μ̄)/(K̄+(1+M)μ̄)` | `(K̄₁+Mμ̄+κ̄)/(K̄+Mμ̄+κ̄) = B/A` | Eq. 14 |
+| `coeffI` | `D + K̄ + (M−1)μ̄` | `D + K̄ + Mμ̄ − κ̄` | Eq. 14 |
+| `ε` | `(1 + 1/(4μ̄))^(−1/2)` | `(1 + 1/(4κ̄))^(−1/2)` | Eq. 9 |
+| `l_y` | `b_c·U_c/ω` | `l_c/(1 + (K₂·l_c)²)`, `l_c = b_c·U_c/ω` | Eq. 19 |
+| far-field prefactor | `(ω·x₃·b/(2π c₀ S0²))²` | unchanged; only S0 generalises | Eq. 18 |
+
+`Radiation_integral1` needed **no** change: it is already exactly general in
+`(B, C)`, so the general result follows from passing the general `B`. Only the
+guard differs, hence `Radiation_integral1_cplx`.
+
+**ε FORM — UNRESOLVED, for the maintainer to check against the typeset paper.**
+The validated mid-span code implements Eq. 9 as `(1 + 1/(4μ̄))^(−1/2)`; the
+project summary document renders it as `1 + (4μ̄)^(−1/2)`. Per the prompt these
+were not adjudicated: the existing form is preserved verbatim and only its
+argument swapped μ̄ → κ̄. Both readings recorded here.
+
+### Signs adjudicated numerically (Eq. 15/16)
+
+The transcription's OCR-fragile signs were resolved by the two stated invariants
+(continuity across the cut; decay for ξ ≫ 1), measured on the full |I| at the
+paper's Fig. 11 conditions. Evidence:
+
+* **Eq. 16 prefactor exponent: `e^{−2iB}/B`, NOT `e^{+2iB}/B`** (and the inner
+  bracket's exponent flips with it). Decisive and not close: since
+  `Im(A′₁) = −κ̄′`, the `+` reading grows as `e^{+2κ̄′}` and |I| **diverges** —
+  measured **4×10³⁷ at ξ = 20** instead of decaying. With the sign as
+  implemented, every term decays.
+* **`B ≡ A′₁ = K̄₁ + Mμ̄ − iκ̄′`** (the prompt's literal reading), not the
+  pre-audit code's `D′ = μ̄x₁/S0 − iκ̄′`. Scored on both criteria:
+
+  | variant | continuity (worst \|ln ratio\| at the anchors) | monotone decay | steeper at higher f |
+  |---|---|---|---|
+  | `e^{−2iB}`, **B = A′₁** | **0.681** (best) | ✓ both f | **✓** |
+  | `e^{−2iB}`, B = D′ | 1.517 (worst) | ✓ | ✗ |
+  | pre-audit code verbatim | 0.843 | **✗ fails at 200 Hz** | ✓ |
+
+  `A′₁` wins continuity outright and is the only variant satisfying decay fully.
+  The restored pre-audit code fails monotonicity — vindicating the decision to
+  treat it as unvalidated.
+* **`F*(sqrt(i·w)) = (1+i)·E*(w)`** is the operative F* convention. The prompt
+  offers two, and they are mutually inconsistent: `(1+i)E*(x) − 1 = −F*(sqrt(−ix))`
+  would require `(1+i)E*(−x) = 1 − (1+i)E*(x)`, which is not an identity.
+  Reading (b) is right because it makes **Eq. 15 the exact analytic continuation
+  κ̄ → −iκ̄′ of Eq. 13**: `B → A′₁` and `B−C → Z = μ̄x₁/S0 − iκ̄′`, both verified
+  algebraically. Reading (a) breaks that. This is why `Radiation_integral1_cplx`
+  serves both branches, and why I₁ is continuous across the cut by construction.
+  Independent corroboration: `erf(sqrt(4κ̄′))` in Eq. 16 is exactly the
+  continuation of `(1+i)E*(4κ̄)` in Eq. 14, since `(1+i)sqrt(2·(−i)κ̄′) = 2sqrt(κ̄′)`.
+
+**Discrepancies restored-code vs equations** (equations won, per the prompt):
+pre-audit `Radiation_integral1` had `pref_i = −cos2C/C` where its own comment
+derives `+cos2C/C` (the May 2026 audit had already fixed this — the current code
+is right); pre-audit `Radiation_integral2_subcrit` used the **modulus**
+`|sqrt(A′₁)|` in H′'s denominator instead of the complex root, and carried a
+factor 2 on the `sqrt(2κ̄′)` term that §4's Eq. 16 does not have.
+
+### Near-cutoff regularisation
+
+R&M §4.1 state only the *procedure* ("matching ∂I/∂K₂ from both sides of the
+cuts and then re-calculating I") and specify no window or interpolant. The
+implementation is documented in-code as a concrete realisation **consistent
+with, not verbatim from**, the paper: cubic Hermite in ξ on |I| (not on complex
+I — only |I|² enters Eq. 18, and phase interpolation across a cut is
+meaningless), between anchors at ξ_a = sqrt(1 − (κ̄_reg/μ̄)²) and
+ξ_b = sqrt(1 + (κ̄_reg/μ̄)²), with one-sided FD slopes over 0.01·(ξ_b − ξ_a)
+stepping away from the cut. **κ̄_reg = 0.125** is the paper's own stated accuracy
+threshold for the back-scatter approximation ("expected to be accurate enough
+for κ̄ > 0.125") — that sentence is its sole provenance. Low-frequency
+degeneracy μ̄ ≤ 2κ̄_reg caps κ̄_reg at μ̄/2.
+
+### ξ = β|x₂|/S0, and why production is always supercritical
+
+Since μ̄ = k̄/β² and K̄₂ = k̄x₂/S0, we get ξ = K̄₂/(βμ̄) = β·x₂/S0 identically; and
+S0² ≥ β²x₂² gives **ξ ≤ 1 always**, with equality only at x₁ = x₃ = 0. So the
+Eq. 18 gust is supercritical throughout production, approaching the cut only as
+the observer nears the blade's spanwise axis. The subcritical branch is still
+required — as the bridge's far-side anchor, and for the validation sweeps.
+
+### Latent singularities newly exposed (and why production is safe)
+
+Eq. 14 guards three denominators by clipping to 1e-10 (a pre-existing `TODO` in
+the mid-span code): `D`, `D + 2κ̄`, `D − 2κ̄`. The mid-span kernel could never
+approach any of them — at κ̄ = μ̄, `D + 2κ̄ = μ̄(3 − x₁/S0) ≥ 2μ̄`. With general κ̄
+they are reachable, and the clip produces a large spike rather than the analytic
+limit (measured |I| = 76 against a median of 0.23 at the `D + 2κ̄ = 0` pole).
+
+**They remain unreachable from production**, because the Eq. 18 selection ties ξ
+to the geometry: with κ̄ = μ̄·sqrt(x₁² + β²x₃²)/S0,
+
+    D        = (μ̄/S0)·( sqrt(x₁²+β²x₃²) − x₁ )       > 0
+    D + 2κ̄   = (μ̄/S0)·( 3·sqrt(x₁²+β²x₃²) − x₁ )     > 0
+    D − 2κ̄   = −(μ̄/S0)·( sqrt(x₁²+β²x₃²) + x₁ )      < 0
+
+strictly, since sqrt(x₁²+β²x₃²) ≥ |x₁| (all three verified over 200k random
+geometries, `tests/amiet_kernel_test.py` group 1). Only `amiet_kernel_I`, which
+drives K̄₂ free of the geometry, is off-manifold enough to cross them. The
+`bench` cut figure therefore plots x₁ ≤ 0 angles only.
+
+One consequence is pinned as a **known limitation**: when μ̄ ≤ 2κ̄_reg the
+degeneracy cap makes the bridge window wide in ξ (ξ_a = √3/2), and an
+off-manifold pole inside it drives the anchor slope to ~250 against endpoint
+values ~1, so the Hermite overshoots ~10×. Validation-only; asserted explicitly
+so a future monotone-limited interpolant fails loudly rather than silently
+changing the bridge.
+
+### Numerics
+
+`Radiation_integral2_subcrit` never forms `e^{+2κ̄′}`. The `−1` bracket is
+collapsed analytically to `(A′/A′₁)·([1−erf] − e^{−2iA′₁})`. For the F* term,
+`ζ = (1+i)sqrt(−A′₁)` satisfies `ζ² = −2iA′₁` exactly, so
+`e^{−2iA′₁}·F*(sqrt(−2iA′₁)) = e^{ζ²}erf(ζ) = e^{ζ²} − erfcx(ζ)` — both bounded.
+This needed a new CoDiPack external function `erfcxFunc` (same
+`StatementPushHelper` pattern as `errFunc`; `d/dz erfcx = 2z·erfcx − 2/√π`), via
+the `Faddeeva::erfcx` already in the repo — no new dependency. Without it the
+kernel returns NaN for κ̄′ ≳ 350, which the validation entry point reaches; with
+it, |I| is finite and monotone to κ̄′ = 19010 (ξ = 200), tested.
+
+### Mid-span reduction (the primary gate)
+
+`tests/midspan_reduction_check.py` compares the general kernel at x₂ = 0 against
+the pre-change build (42 spectra × 64 frequencies: 5 WPS models, 6 observers,
+BL-state and custom-WPS paths): **worst relative error 8.6e-15**, limit 1e-13.
+**Not bit-identical**, and precisely why: 45% of the 2688 values are exact.
+`S0` and `l_y` were deliberately written to reduce bit-identically (`+β²y²`
+appended so it is exactly `+0.0` at y=0; `l_y = l_c/(1 + (K₂l_c)²)` so K₂=0 is a
+division by exactly 1.0), and `Radiation_integral1`/`κ̄(ξ=0) = μ̄` are exact. The
+residual comes solely from `Radiation_integral2_general`'s `D`, `Y²` and
+`coeffI`, which are algebraically identical at κ̄ = μ̄ but differently associated
+— the paper's general forms cannot be written to re-associate to the factored
+mid-span ones. Chasing that would have meant obfuscating the physics for a
+metric the gate does not require.
+
+### Known divergence: `fwd_run` vs `noise_run` off mid-span
+
+`fwd_run`/`calc_OASPL` (taped, fixed-Nsound) remains the **mid-span** kernel;
+`noise_run` (`_vec`) is now **general**. For a mid-span observer they agree to
+the 8.6e-15 above. Off mid-span they deliberately differ — `noise_run` is right
+and `fwd_run` is not. Acceptable because the optimisation observers are mid-span
+and generalising the taped path would change the tape (and thus every AD
+golden) for no gradient benefit. Revisit if off-midspan observers ever enter an
+objective.
+
+### Tests
+
+* **NEW** `tests/amiet_kernel_test.py` (29 checks) — algebra identities
+  (ξ = β|x₂|/S0, κ̄ = μ̄√(1−ξ²), the three denominator signs, l_y reduction /
+  positivity / monotonicity / evenness), cut behaviour (unbridged dip present
+  10/10; bridge seam-exact to 5.9e-8; end tangents match the outer-branch FD to
+  1.5e-4; subcritical decay monotone with slopes −0.403/−0.419, steeper at the
+  higher frequency; no overflow at κ̄′ = 19010), and a golden.
+* **NEW** goldens: `tests/golden/amiet_kernel_scalars.json` (56 sweeps × 12
+  frequencies, both branches and the bridge, rtol 1e-10), created the moment the
+  mid-span gate passed and before any further tuning.
+* **NEW** `tests/midspan_reduction_check.py` — the before/after gate above.
+* `tests/rotor_noise_test.py` 41 → 44 checks: group 10 pins the directivity
+  ordering. The **phase-1 static anchor passes unmodified, still at
+  `max_rel_err = 0.000e+00`**.
+* **Rotor golden regenerated** — `tests/golden/rotor_noise_scalars.json`.
+  Justification: the Amiet kernel's physics changed (the spanwise observer
+  coordinate is now consumed), which is exactly the "underlying kernel changes"
+  case the file's own header calls a physics change requiring a recorded reason.
+  Off-axis observers moved 4–6% in OASPL; the on-axis observer moved 1.3e-4,
+  consistent with the directivity finding.
+
+### Validation entry point
+
+`gfoil_cpp.amiet_kernel_I` — **validation only, no production path uses it**.
+Evaluates |I(ω, K̄₂)| with K̄₂ free, bypassing the Eq. 18 selection, and echoes
+ξ, μ̄, κ̄ (signed: <0 flags subcritical −κ̄′), the bridge window and l_y. Chosen
+over restoring the pre-audit `Ky` parameter because the audit-era interface
+carried `Ky` through `TE_noise_outer` into production; keeping the free-K̄₂ path
+in a separate, clearly-named hook keeps production honest about Eq. 18.
+
+`bench/rotor_noise_paper_check.py` refreshed: the phase-1 inversion narrative is
+kept as history and marked resolved, figures regenerated, and a second figure
+`bench/results/rotor_noise_cut.png` added (unbridged vs bridged |I(ξ)| at the
+Fig. 11 conditions, plus the full sweep showing the subcritical decay).
+
+---
+
+## Rotor TE noise post-processing — `GFoil/rotor_noise.py` (July 2026)
+
+**What.** New pure-Python module predicting the time-averaged far-field
+broadband trailing-edge-noise PSD and OASPL of a **rotor**, by wrapping the
+acoustics-only `noise_run` in the corrected Schlinker–Amiet rotating-blade
+procedure of Sinayoko, Kingan & Agarwal (2013), *Proc. R. Soc. A* 469:20130065,
+"Trailing edge noise theory for rotating blades in uniform flow". Public API:
+`RotorConfig`, `RotorStrip`, `RotorNoiseResult`, `rotor_noise_run`,
+`strip_relative_speed`, exported from `GFoil/__init__.py`.
+
+Per (strip, azimuth, observer): solve the emission time, form the convected and
+present source positions (Eq. 4.1), form the Doppler ratio (Eq. 4.10), rotate
+the observer into the blade section frame (Eq. 4.9 + App. B), evaluate the
+fixed-aerofoil PSD there at the Doppler-shifted **source** frequencies, weight
+by `(ω′/ω)²` and average over azimuth (Eq. 4.12); strips sum incoherently,
+blades multiply by `B`. The paper's far-field emission-time closed form
+(Eq. 4.6) is **generalised**: we solve the exact quadratic with the source
+position finite, so the module holds at moderate observer distances, and it
+reduces to Eq. 4.6 as `|xo| ≫ r` (tested, converging as 1/|xo|).
+
+**Doppler exponent +2.** The weight is `(ω′/ω)²`, the paper's headline
+correction to Schlinker & Amiet (1981) and what their §5 validation against the
+exact rotating-frame solution supports (agreement within 1 dB for `kC > 1`,
+`ω ≫ Ω`, up to chordwise Mach 0.95). Not 1, not −2.
+
+**Nothing on the AD/taped path was touched.** No C++, no CMake, no existing
+Python logic — the only edit to an existing file is the export line in
+`GFoil/__init__.py`. This module is post-processing, never differentiated. The
+48-check regression suite passes unchanged (exit 0); **no goldens regenerated**.
+
+**Frame-mapping contract with `noise_run`** (verified against
+`src/include/noise_run.hpp` lines 142–153, not assumed). All rotations happen in
+the wrapper, so every call passes `alphaDeg = 0`, at which the kernel's
+global→TE-local transform collapses to `x_loc = obsX − 0.75*chord`,
+`y_loc = obsY`, `z_loc = obsZ`. We therefore pass
+`observerXYZ = (X_c + 0.75*chord, Y_s, Z_n)` so the kernel's TE-local
+coordinates come out as exactly the paper-frame `(X_c, Y_s, Z_n)`. Verified
+numerically: observer (1,0,1), chord 1 → `obsXYZ_TElocal = (0.25, 0, 1)`. The
+kernel's `Uinf` is not an argument — it is rederived as `Re*nu/chord`, so that
+identity is the wrapper's only handle on it (`Re = U_rel*chord/nu`, round-trip
+asserted).
+
+**Undocumented `noise_run` contract found: `custom_WPS` does not free you from
+`Ue`.** Supplying `custom_WPS` skips the BL→WPS model, but the *Amiet* stage
+still reads `Ue`: `TE_noise_outer_vec` forms `U_c = 0.7*Ue` and from it the
+Corcos length `l_y = 1.47*U_c/ω` and the convective ratio `alpha = U/U_c`. So
+`Ue = 0` returns a **NaN** far field, not silence — and `np.where(Spp > 0)`
+would have floored that NaN to −200 dB and reported a quiet observer (the same
+silent blank failure the forward path names `acoustic_nan`). Caught by the
+validation script, which initially produced a uniformly −200 dB directivity.
+Fixed two ways: `RotorStrip.Ue_custom` (defaulting to `U_rel`, mirroring
+`noise_run.hpp`'s own skipped-surface fallback `Ue_top = upper_skip ? Uinf :
+Ue[0]`), and an explicit finiteness check on every kernel result that raises
+rather than floors. Both regression-tested. `noise_run`'s own docstring still
+says only that custom_WPS makes it skip "the BL->WPS path", which is true but
+incomplete — left unedited here (no changes to existing Python).
+
+**Phase-1 limitation, quantified: the mid-span kernel breaks rotor
+directivity.** `newAmiet.hpp` sets `K̄₂ = 0` and never reads the spanwise
+observer coordinate — `S0 = sqrt(x² + β²z²)`, `y` unused. So the
+source–observer distance it uses is `sqrt(X_c² + Z_n²)`, not `|X|`. For a rotor
+this is not a corner case: an observer in any plane containing the rotor axis
+crosses each blade's spanwise direction twice per revolution, and at those
+azimuths nearly the whole separation sits in `Y_s` and is discarded. Measured on
+the paper's Table 2 wind-turbine element with a 1000 m rotor-plane observer: at
+the worst azimuth the kernel places them at **5 m** — a 231× under-estimate,
+inflating that azimuth's PSD (~1/S0⁴) by **~95 dB**. Those azimuths then
+dominate the azimuthal average. Consequence: the validation script's polar
+directivity comes out **inverted** — rotor plane ~21 dB *louder* than the axis,
+where the physics (edge dipole, normal ≈ rotor axis at χ = 10°) demands the
+opposite. Reported as `diagnostics["spanwise_neglect_ratio"]` (max over strip ×
+azimuth × observer of `|X| / sqrt(X_c² + Z_n²)`; 1.0 = exact, error ≈
+`40·log10(ratio)` dB), warning above 2.0. **Restoring the general-K̄₂
+(finite-span, oblique-gust, incl. subcritical) path in the `_vec` overloads is a
+precondition for rotor directivity, not a refinement.** The wrapper already
+stores the signed spanwise coordinate correctly, so that kernel will consume it
+unchanged. Phase-1 results are trustworthy only with the observer away from
+every blade's spanwise axis (near-axial observers).
+
+Other phase-1 limitations: axial inflow only (no cross-flow/shaft angle, so
+section relative Mach is azimuth-independent and one BL state per strip is
+reused at every azimuth; the paper's App.-D azimuth-dependent `M_X` is
+deferred); kernel `c0` fixed at 340 m/s (`RotorConfig.c0` drives all
+wrapper-side kinematics but cannot reach the kernel — mismatch > 1 m/s warns);
+no A-weighting. Section AoA χ does not enter the rotation, only the supplied BL
+states — matching GFoil's chord-aligned Amiet frame, and second-order-equivalent
+to the paper's App.-D `cos χ` projection at small AoA.
+
+**Prompt-vs-physics conflicts found and resolved in favour of the equation**
+(recorded so the next reader does not "fix" them back):
+- The implementation prompt's sanity note for Eq. 4.10 claimed `doppler =
+  1 ± |M_BO|` for `M_FO = 0`. The equation it quotes gives `1 + M/(1−M) =
+  1/(1−M)` — the textbook moving-source factor; `1 ± M` is only its first-order
+  expansion. Implemented and tested against the equation.
+- The prompt gave `f_kC1 = c0/(π·C)` and then, parenthetically, the correct
+  derivation `kC > 1 ⟺ f > c0/(2π·C)`. The first is a factor 2 out (it is the
+  `kC = 2` frequency). Implemented `c0/(2π·C)`, unit-tested both ways.
+- The prompt's static-anchor sketch assumed the single azimuth is γ = π/2, but
+  `γ_j = 2π j/N_γ` gives γ = 0 for `N_γ = 1`. Test uses the grid the module
+  actually generates and inverts the resulting `Rz(π/2)` analytically.
+
+**Tests.** `tests/rotor_noise_test.py` (plain script, repo convention; 41
+checks, exit 0). Deterministic and self-contained — synthetic TE BL states or an
+analytic custom WPS, no aero solve. Covers: rotation matrices; emission-time
+(zero-flow exactness, quadratic residual < 1e-12·R over 200 random subsonic
+cases, exact reproduction of Eq. 4.6 at `xe = 0` and 1/|xo| convergence with
+`xe` finite); Doppler limits and positivity guards; **static anchor** — with
+`Ω = 0` the wrapper reduces to a bare `noise_run` call, which passes at
+`max_rel_err = 0.0` (bit-identical, tolerance was 1e-12); azimuth convergence
+(72 vs 144: 1.2e-4 dB); spherical spreading (−6.0206 dB per doubling); blade
+count (exact to 8.9e-16); the kC crossover; the custom-WPS path (source-frequency
+evaluation, full assembly reconstruction pinning exponent +2 / 1/N_γ / B / the
+0.75c offset, and the `Ue` trap); and a golden case,
+`tests/golden/rotor_noise_scalars.json` (3-strip, 3-observer, `rtol = 1e-10`) —
+regeneration requires justification here, same rule as the other goldens.
+
+**Validation (not gated).** `bench/rotor_noise_paper_check.py` — placed in
+`bench/` rather than a new top-level `validation/` to match the repo's existing
+location for standalone non-gated scripts (and because `bench/` is already in
+`pyproject.toml`'s `sdist.exclude`). Implements the paper's Chou & George (1984)
+wall-pressure model (Eqs. 3.9–3.11) via `custom_WPS_func`, runs the Table 2
+wind-turbine element at `kC ≈ 5`, and writes a polar directivity to
+`bench/results/rotor_noise_directivity.png` normalised to 1 m (their Fig. 9b).
+Chou & George's `Sqq` is `Pa²·s ≡ Pa²/(rad/s)`, already `noise_run`'s
+`custom_WPS` convention, so it passes through with no conversion (assumed
+one-sided; that sets the absolute level, not the shape). **Its documented
+conclusion is a negative result** — the directivity is inverted by the
+spanwise-neglect artifact above — and the figure annotates the artifact on its
+face so it cannot be quoted out of context.
+
+---
+
 ## AD formulation audit — gradients verified correct (July 2026)
 
 Full audit of the two-pass adjoint formulation

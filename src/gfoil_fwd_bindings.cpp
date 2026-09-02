@@ -240,6 +240,88 @@ py::dict run_noise_py(py::dict inp) {
     return result;
 }
 
+// ── VALIDATION-ONLY entry point — not used by any production path ────────────
+//
+// Evaluates the Roger & Moreau radiation integral |I(omega, K2_bar)| with
+// K2_bar as a FREE parameter, bypassing the Eq. 18 geometric gust selection
+// K2_bar = k_bar*x2/S0 that TE_noise_outer_vec applies. That selection makes
+// xi = beta*|x2|/S0 < 1 always, so production never reaches the subcritical
+// branch except through the near-cutoff bridge; driving K2_bar independently is
+// the only way to exercise the cut, as the paper's Figs. 9-11 do.
+//
+// The observer here is mid-span (S0 = sqrt(x^2 + beta^2 z^2)); K2_bar is
+// supplied, not derived from it. Exposed as gfoil_cpp.amiet_kernel_I.
+py::dict amiet_kernel_I_py(py::dict inp) {
+    const double chord = inp["chord"].cast<double>();
+    const double M     = inp["M"].cast<double>();
+    const double Ue    = inp["Ue"].cast<double>();
+    const double x     = inp["x"].cast<double>();
+    const double z     = inp["z"].cast<double>();
+    const bool bridged = inp["bridged"].cast<bool>();
+    auto freqs  = inp["freqs_Hz"].cast<std::vector<double>>();
+    auto K2_bar = inp["K2_bar"].cast<std::vector<double>>();
+
+    if (freqs.size() != K2_bar.size())
+        throw std::runtime_error("amiet_kernel_I: freqs_Hz and K2_bar must be "
+                                 "the same length (they are paired per sample)");
+
+    Real::getTape().reset();   // errFunc pushes statements; never evaluated here
+
+    const double c0 = 340.0;
+    const Real b     = Real(chord / 2.0);
+    const Real U     = Real(M * c0);
+    const Real beta  = std::sqrt(Real(1.0) - Real(M)*Real(M));
+    const Real S0    = std::sqrt(Real(x)*Real(x) + beta*beta*Real(z)*Real(z));
+    const Real alpha = U / (Real(0.7) * Real(Ue));
+
+    const std::size_t N = freqs.size();
+    std::vector<double> I_abs(N), xi_out(N), kappa_out(N), mu_out(N);
+    std::vector<double> xi_a_out(N), xi_b_out(N), l_y_out(N);
+
+    for (std::size_t i = 0; i < N; ++i) {
+        Real omega   = Real(2.0 * M_PI * freqs[i]);
+        Real K_bar   = (omega / U) * b;
+        Real mu_bar  = K_bar * Real(M) / (beta*beta);
+        Real K_1_bar = alpha * K_bar;
+        Real C       = K_1_bar - mu_bar * (Real(x)/S0 - Real(M));
+        Real xi      = std::abs(Real(K2_bar[i])) / (beta * mu_bar);
+
+        Real Iabs = bridged
+            ? Amiet_I_abs<Real>(xi, mu_bar, K_bar, K_1_bar, C, S0,
+                                Real(x), Real(M), alpha)
+            : Amiet_I_abs_raw<Real>(xi, mu_bar, K_bar, K_1_bar, C, S0,
+                                    Real(x), Real(M), alpha);
+
+        // Echo the bridge window so tests can check endpoint slope matching.
+        Real kr = Real(AMIET_KAPPA_REG);
+        if (mu_bar <= 2.0*AMIET_KAPPA_REG) kr = 0.5*mu_bar;
+        Real t = kr / mu_bar;
+
+        // Corcos length at the dimensional K₂ = K̄₂/b implied by this sample.
+        l_y_out[i] = corcos_l_y<Real>(Real(K2_bar[i]) / b, omega, Real(1.47),
+                                      Real(0.7) * Real(Ue)).getValue();
+
+        I_abs[i]    = Iabs.getValue();
+        xi_out[i]   = xi.getValue();
+        mu_out[i]   = mu_bar.getValue();
+        kappa_out[i] = (xi < 1.0)
+            ? (mu_bar * std::sqrt(1.0 - xi*xi)).getValue()
+            : -(mu_bar * std::sqrt(xi*xi - 1.0)).getValue();   // <0 flags kappa'
+        xi_a_out[i] = std::sqrt(1.0 - t*t).getValue();
+        xi_b_out[i] = std::sqrt(1.0 + t*t).getValue();
+    }
+
+    py::dict r;
+    r["I_abs"]  = I_abs;
+    r["xi"]     = xi_out;
+    r["mu_bar"] = mu_out;
+    r["kappa"]  = kappa_out;    // >0 supercritical kappa_bar, <0 subcritical -kappa'
+    r["xi_a"]   = xi_a_out;
+    r["xi_b"]   = xi_b_out;
+    r["l_y"]    = l_y_out;      // R&M Eq. 19 at K_2 = K2_bar/b
+    return r;
+}
+
 PYBIND11_MODULE(gfoil_cpp, m) {
     m.def("run_forward", &run_forward_py,
           py::arg("input_dict"),
@@ -251,4 +333,9 @@ PYBIND11_MODULE(gfoil_cpp, m) {
           py::arg("input_dict"),
           "Acoustics-only forward run (no aero solve, never AD'd). Returns raw "
           "linear Pa^2/omega WPS and far-field spectra for arbitrary-length freqs.");
+    m.def("amiet_kernel_I", &amiet_kernel_I_py,
+          py::arg("input_dict"),
+          "VALIDATION ONLY. |I(omega, K2_bar)| from the general Roger & Moreau "
+          "radiation integral, with K2_bar a free parameter (bypasses the Eq. 18 "
+          "geometric selection). Not used by any production path.");
 }
